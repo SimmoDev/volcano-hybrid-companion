@@ -1,0 +1,26 @@
+# Minimal example: proves the `volcano` external component can be loaded
+# and compiled for the Phase 1 development board (ADR-0004). It exposes no
+# sensors/entities and has no BLE, Home Assistant, or UI logic -- see
+# components/volcano/README.md and ADR-0002/ADR-0003 for the architecture
+# this scaffold follows.
+
+esphome:
+  name: volcano-dev-scaffold
+
+esp32:
+  board: esp32-s3-devkitc-1
+  variant: esp32s3
+  flash_size: 16MB
+  framework:
+    type: esp-idf
+
+psram:
+  mode: octal
+  speed: 80MHz
+
+external_components:
+  - source:
+      type: local
+      path: ../components
+
+volcano:
