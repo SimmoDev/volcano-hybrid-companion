@@ -6,14 +6,14 @@ This document defines the conventions that all documentation, protocol notes, so
 
 These terms are used consistently across the project. Definitions here are summaries for quick reference — see the referenced ADRs and design documents for the full reasoning and implementation details behind each concept.
 
-- **Volcano component** — owns the device communication domain, comprising the Volcano abstraction layer and the BLE communication layer it contains, and exposes a hardware-independent interface to control surfaces. See [ADR-0002](decisions/ADR-0002-volcano-component-architecture.md).
+- **Volcano component** — owns the device communication domain, comprising the Volcano abstraction layer and the BLE communication layer it contains, and exposes a hardware-independent interface to control interfaces. See [ADR-0002](decisions/ADR-0002-volcano-component-architecture.md).
 - **Volcano abstraction layer** — the part of the Volcano component that exposes Volcano domain concepts (temperature, heater, valve, state) to control interfaces, without exposing BLE details. See [ADR-0002](decisions/ADR-0002-volcano-component-architecture.md).
 - **BLE communication layer** — the part of the Volcano component that owns the actual BLE connection, services, characteristics, and wire protocol encoding/decoding. See [ADR-0002](decisions/ADR-0002-volcano-component-architecture.md).
 - **Control interface** — any consumer of the Volcano abstraction layer's interface: the M5Stack Dial local UI, Home Assistant, or direct ESPHome API/automation control. See [ADR-0001](decisions/ADR-0001-project-vision.md) and [ADR-0002](decisions/ADR-0002-volcano-component-architecture.md).
 - **State model** — the Volcano component's single authoritative record of device state (current/target temperature, heater state, valve state, connection state, etc.), which control interfaces read from rather than maintaining their own copies. See [ADR-0002](decisions/ADR-0002-volcano-component-architecture.md).
 - **Protocol finding** — a structured, recorded protocol entry under `docs/protocol/`, capturing an observation, its supporting evidence, an interpretation, and a confidence classification. See [ADR-0005](decisions/ADR-0005-volcano-ble-discovery-methodology.md) and [ADR-0006](decisions/ADR-0006-protocol-documentation-structure.md).
 
-Use these terms as defined here rather than introducing synonyms (e.g. don't call the Volcano abstraction layer a "driver" or the BLE communication layer a "transport" — pick the established term).
+Use these terms as defined here rather than introducing synonyms for the architectural components themselves (e.g. don't call the Volcano abstraction layer a "driver" or the BLE communication layer a "transport" — pick the established term). "Control interface" is the canonical term for that architectural component. Descriptive terms such as "control path" or "control surface" are fine when describing a flow or user-facing route (e.g. "three control paths a command can arrive through"), but must not be used in place of "control interface" when naming the component itself.
 
 ## Spelling
 

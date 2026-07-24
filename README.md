@@ -25,7 +25,7 @@ ESPHome provides the firmware framework this project is built on, and also provi
 **Phase 1 — BLE foundation (current)**
 - Develop on an ESP32-S3-WROOM-1-N16R8 development board.
 - Use ESPHome as the firmware framework.
-- Document and implement the Volcano Hybrid BLE protocol through observation and testing.
+- Document and validate the Volcano Hybrid BLE protocol through observation and testing.
 - Implement a hardware-independent Volcano communication/abstraction layer.
 - Expose that layer as an ESPHome external component.
 
