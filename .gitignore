@@ -1,0 +1,34 @@
+# ESPHome build output and local cache
+.esphome/
+esphome/.esphome/
+
+# ESPHome secrets (WiFi credentials, API keys, etc.) — never commit
+secrets.yaml
+
+# PlatformIO build artifacts (used internally by ESPHome/Arduino builds)
+.pio/
+.pioenvs/
+.piolibdeps/
+
+# Compiled firmware and build output
+*.bin
+*.elf
+*.map
+*.hex
+*.a
+*.o
+build/
+
+# Python virtual environments / caches (ESPHome is Python-based)
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# VS Code editor files
+.vscode/
+
+# OS metadata
+.DS_Store
+Thumbs.db
+Desktop.ini
