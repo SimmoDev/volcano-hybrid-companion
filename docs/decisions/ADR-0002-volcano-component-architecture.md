@@ -75,7 +75,7 @@ Commands issued by control interfaces are requests, not authoritative state chan
 **Trade-offs**
 
 - Every capability a control surface needs must first be exposed by the Volcano component's interface; a UI feature that needs a device value the component doesn't yet expose requires extending the component first, not just the UI.
-- The interface must be designed generically enough to serve all three control paths, which takes more upfront design care than optimizing it for whichever surface is built first.
+- The interface must be designed generically enough to serve all three control paths, which takes more upfront design care than optimising it for whichever surface is built first.
 - Enforcing the boundary is a code-review and structure concern, not something a compiler guarantees on its own; discipline is required to keep BLE details from leaking upward over time.
 
 ## Alternatives considered

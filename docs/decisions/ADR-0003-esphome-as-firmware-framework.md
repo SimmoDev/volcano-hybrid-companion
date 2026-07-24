@@ -36,7 +36,7 @@ ESPHome is a configuration-driven firmware framework for ESP32/ESP8266 devices t
 **Trade-offs**
 
 - Dependency on ESPHome's architecture and release cadence: the project inherits ESPHome's update cycle, breaking changes, and component API conventions rather than controlling its own foundation entirely.
-- Limitations imposed by framework conventions: ESPHome's YAML-driven configuration and component lifecycle model constrain how the Volcano component is structured and initialized, compared to a bespoke application with full control over program flow.
+- Limitations imposed by framework conventions: ESPHome's YAML-driven configuration and component lifecycle model constrain how the Volcano component is structured and initialised, compared to a bespoke application with full control over program flow.
 - Possible need to work around ESPHome abstractions for specialised hardware behaviour: if the Volcano BLE protocol requires connection handling or timing that doesn't fit ESPHome's existing BLE client assumptions, the project may need to work within or extend those abstractions rather than implementing whatever is most direct.
 
 ## Alternatives considered
