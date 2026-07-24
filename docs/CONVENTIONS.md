@@ -48,7 +48,7 @@ Formatting expectations will be defined concretely once source code exists (this
 
 ## Naming conventions — protocol findings and capture files
 
-- **Finding IDs**: `<area>-NNN`, where `<area>` matches the document the finding lives in (e.g. `SVC-001` for a `gatt-services.md` finding, `CMD-014` for a `commands.md` finding, `STATE-003` for a `state-model.md` finding). IDs are never reused, even if a finding is later superseded.
+- **Finding IDs**: `<area>-NNN`, where `<area>` matches the document the finding lives in (e.g. `SVC-001` for a `gatt-services.md` finding, `CHAR-001` for a `characteristics.md` finding, `CMD-014` for a `commands.md` finding, `STATE-003` for a `state-model.md` finding). IDs are never reused, even if a finding is later superseded.
 - **Capture files**: `YYYY-MM-DD-<short-description>.<ext>` (e.g. `2026-08-03-set-target-temp-notification.pcap`), stored under `docs/protocol/captures/`. The date reflects when the capture was taken, and the description should be specific enough to distinguish it from other captures on the same day.
 - Every finding's **Capture references** field (per [ADR-0006](decisions/ADR-0006-protocol-documentation-structure.md)) must use these exact capture filenames, so findings and evidence stay unambiguously linked.
 
