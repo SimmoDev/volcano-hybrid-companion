@@ -6,7 +6,7 @@ Accepted
 
 ## Context
 
-[ADR-0001](ADR-0001-project-vision.md) commits the project to an ESP32-S3-based standalone controller, and [ADR-0002](ADR-0002-volcano-component-architecture.md) defines the Volcano component as an independent abstraction layer that control interfaces depend on, never the other way around. Neither decision specifies what firmware platform the device actually runs on. That choice needs to be made deliberately, since it shapes how the Volcano component is packaged, how BLE and networking are accessed, and how Home Assistant integration is eventually wired in — all without being allowed to compromise the boundary ADR-0002 already established.
+[ADR-0001](ADR-0001-project-vision.md) commits the project to an ESP32-S3-based standalone controller, and [ADR-0002](ADR-0002-volcano-component-architecture.md) defines the Volcano component, whose abstraction layer control interfaces depend on, never the other way around. Neither decision specifies what firmware platform the device actually runs on. That choice needs to be made deliberately, since it shapes how the Volcano component is packaged, how BLE and networking are accessed, and how Home Assistant integration is eventually wired in — all without being allowed to compromise the boundary ADR-0002 already established.
 
 A firmware framework decision is needed now, before any BLE or component code is written, because the framework determines the shape of the code from the very first line: how the project is structured, how configuration is expressed, and what "an external component" even means in this codebase.
 

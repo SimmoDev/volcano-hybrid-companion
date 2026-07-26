@@ -8,7 +8,7 @@ Accepted
 
 The project depends on communicating with the Volcano Hybrid over Bluetooth Low Energy, but the protocol is not currently documented by this project. [ADR-0001](ADR-0001-project-vision.md) already establishes that protocol behaviour must be discovered through observation and testing rather than assumed, and [ADR-0002](ADR-0002-volcano-component-architecture.md) establishes that all BLE details belong inside the Volcano component and must never leak into control interfaces. Neither ADR defines *how* that discovery actually happens — what gets recorded, how confidence in a finding is tracked, or what is and isn't allowed to become implementation before it's verified. [ADR-0004](ADR-0004-development-hardware-strategy.md) gives this discovery work a home (the ESP32-S3 dev board, before any UI work begins), but not a process.
 
-BLE protocol discovery requires a defined process because without one, discovery quietly turns into guesswork: a value observed once gets treated as "how the protocol works," a plausible-looking byte layout gets hardcoded because it seemed to work in one test, and there is no record afterward of whether a given piece of implementation is something the project actually verified or something someone assumed under time pressure. Assumptions are risky here specifically because the Volcano Hybrid is a real consumer device with real heating and airflow behaviour — an incorrect assumption about a command's meaning doesn't just produce a wrong log line, it can produce wrong physical behaviour on the device, and a wrong assumption baked into the Volcano component (per ADR-0002) becomes wrong behaviour for every control surface at once.
+BLE protocol discovery requires a defined process because without one, discovery quietly turns into guesswork: a value observed once gets treated as "how the protocol works," a plausible-looking byte layout gets hardcoded because it seemed to work in one test, and there is no record afterward of whether a given piece of implementation is something the project actually verified or something someone assumed under time pressure. Assumptions are risky here specifically because the Volcano Hybrid is a real consumer device with real heating and airflow behaviour — an incorrect assumption about a command's meaning doesn't just produce a wrong log line, it can produce wrong physical behaviour on the device, and a wrong assumption baked into the Volcano component (per ADR-0002) becomes wrong behaviour for every control interface at once.
 
 Evidence-driven development matters because it keeps the codebase honest about what it actually knows. A behaviour with supporting evidence can be trusted, re-verified, and debugged by returning to that evidence; a behaviour based on an unrecorded guess can only be re-examined by guessing again. Protocol understanding has to come before optimisation — there is nothing to optimise until the underlying behaviour is actually understood, and optimising an assumption just produces a more efficient wrong implementation.
 
@@ -17,7 +17,7 @@ Evidence-driven development matters because it keeps the codebase honest about w
 ### Discovery process
 
 - Observe existing Volcano Hybrid behaviour directly: interact with the device (official app, physical controls, or direct BLE tooling) while watching what it does.
-- Capture BLE traffic and device behaviour for each observation session — e.g. BLE sniffer/logging output, GATT service and characteristic dumps, and notes on what physical action on the device produced what traffic.
+- Capture BLE traffic and device behaviour for each observation session — e.g. BLE sniffer/logging output, GATT service and characteristic dumps, and notes on what physical action on the device produced what traffic. Captures are working material rather than a repository artefact: what survives into `docs/protocol/` is the finding they support, stated so that it can be re-observed against hardware.
 - Record services, characteristics, notifications, commands, and state changes as they are identified, rather than only the final conclusion drawn from them.
 - Maintain a protocol documentation record (a living document under `docs/protocol/`, separate from these ADRs) that accumulates these findings over time as the single reference for what is known about the protocol so far.
 
@@ -39,9 +39,8 @@ Every protocol finding has a current confidence classification from the followin
 
 Each protocol finding recorded in the protocol documentation record must include:
 
-- **Observation conditions** — what hardware, firmware/app version, and sequence of actions produced this observation.
-- **Evidence collected** — the actual captured data (traffic logs, characteristic values, screenshots of official app state, etc.), or a reference to where it's stored.
-- **Interpretation** — what the evidence is understood to mean in Volcano domain terms (e.g. "this characteristic write raises target temperature").
+- **Observation** — what was actually seen happening, including a concise account of what supports the conclusion where that isn't self-evident.
+- **Interpretation** — what the observation is understood to mean in Volcano domain terms (e.g. "this characteristic write raises target temperature").
 - **Confidence level** — one of Confirmed, Probable, or Unknown, per the classification above.
 
 ## Consequences

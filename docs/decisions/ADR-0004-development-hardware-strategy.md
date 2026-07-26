@@ -18,7 +18,7 @@ BLE discovery should happen before UI development because it is the riskiest and
 
 **The M5Stack Dial is the Phase 2 target hardware** and the intended user-facing remote platform. It is not used for initial BLE/component development.
 
-**The communication layer and the user interface layer are developed as separate concerns on separate schedules.** Per [ADR-0002](ADR-0002-volcano-component-architecture.md), the Volcano component is already hardware-independent by design; this ADR adds the practical consequence that it can and should be built and validated entirely on the dev board, with no dependency on Dial-specific hardware (display, touch, encoder) existing yet.
+**The Volcano component and the Dial's user-facing hardware are developed as separate concerns on separate schedules.** Per [ADR-0002](ADR-0002-volcano-component-architecture.md), the Volcano component is already hardware-independent by design; this ADR adds the practical consequence that it can and should be built and validated entirely on the dev board, with no dependency on Dial-specific hardware (display, touch, encoder) existing yet.
 
 **Hardware-specific UI work must not begin until the BLE/component foundation is validated.** Phase 2 does not start until the Volcano component's BLE communication and state model have been verified working against the real Volcano Hybrid device on the dev board. Migrating to the Dial means porting an already-working component to new hardware, not developing BLE and UI simultaneously.
 
