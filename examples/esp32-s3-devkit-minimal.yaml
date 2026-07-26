@@ -7,6 +7,10 @@
 esphome:
   name: volcano-dev-scaffold
 
+# Enables the scaffold's only observable behaviour: the component's
+# dump_config() output on boot.
+logger:
+
 esp32:
   board: esp32-s3-devkitc-1
   variant: esp32s3

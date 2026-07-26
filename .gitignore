@@ -2,6 +2,10 @@
 .esphome/
 esphome/.esphome/
 
+# ESPHome writes its own .gitignore alongside any config it compiles. It only
+# repeats what this file already covers, so it is ignored rather than committed.
+examples/.gitignore
+
 # ESPHome secrets (WiFi credentials, API keys, etc.) — never commit
 secrets.yaml
 
