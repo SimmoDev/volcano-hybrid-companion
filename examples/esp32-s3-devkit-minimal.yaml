@@ -1,7 +1,8 @@
-# Minimal example: exercises the `volcano` external component's first
-# working increment -- a read-only BLE connection that logs decoded heater
-# and pump state -- on the Phase 1 development board (ADR-0004). It exposes
-# no sensors/entities and has no Home Assistant or UI logic; see
+# Minimal example: exercises the `volcano` external component's read-only
+# BLE connection -- decoded heater/pump and auto-shutoff countdown state to
+# the log -- plus a manually-triggered auto-shutoff duration command, on the
+# Phase 1 development board (ADR-0004). It exposes no sensors/entities of
+# its own and has no Home Assistant or UI logic; see
 # components/volcano/README.md and ADR-0002/ADR-0003/ADR-0007 for the
 # architecture this follows.
 #
@@ -38,4 +39,30 @@ ble_client:
     id: volcano_ble_client
 
 volcano:
+  id: volcano_component
   ble_client_id: volcano_ble_client
+
+# Manual trigger for set_auto_shutoff_duration_seconds(), via the devkit's
+# BOOT button (GPIO0), standing in for a real control interface until one
+# exists (ADR-0002 defers that to Phase 2/3). Sets the auto-shutoff
+# duration to 60s -- the floor CMD-003 confirms the device honours; the
+# component itself refuses anything shorter, since that's unverified and
+# 0 in particular may mean "disabled" (see components/volcano/volcano.h).
+#
+# Per STATE-005, a duration write only takes effect at the *next arming* --
+# it does not reload a countdown already running. To see the new duration
+# take effect, the device must be fully idle (heater off, pump off,
+# countdown at 0) *before* pressing the button; pressing it mid-countdown
+# writes the value but visibly does nothing until the next heater/pump-on.
+binary_sensor:
+  - platform: gpio
+    pin:
+      number: GPIO0
+      mode:
+        input: true
+        pullup: true
+      inverted: true
+    name: "Set auto-shutoff duration to 60s"
+    on_press:
+      - lambda: |-
+          id(volcano_component).set_auto_shutoff_duration_seconds(60);

@@ -1,6 +1,11 @@
 # Volcano component
 
-This is the `volcano` ESPHome external component. It is a `ble_client` node ([ADR-0007](../../docs/decisions/ADR-0007-ble-connection-lifecycle.md)) that currently implements a first, read-only increment: on each connection it resolves the status/flags register (`CHAR-008`) by UUID, subscribes, reads its initial value, decodes heater and pump state, and logs them. It issues no writes to any characteristic. See `volcano.h` for the `TODO` markers showing where the remaining protocol coverage and the Volcano abstraction layer ([ADR-0002](../../docs/decisions/ADR-0002-volcano-component-architecture.md)) belong.
+This is the `volcano` ESPHome external component. It is a `ble_client` node ([ADR-0007](../../docs/decisions/ADR-0007-ble-connection-lifecycle.md)) that currently implements:
+
+- **Read-only state**: on each connection it resolves the status/flags register (`CHAR-008`) and the auto-shutoff countdown (`CHAR-016`) by UUID, subscribes, reads their initial values, decodes heater/pump state and the countdown, and logs them.
+- **One write**: `set_auto_shutoff_duration_seconds()` writes the auto-shutoff duration (`CHAR-017`), refusing anything below 60 seconds — the floor CMD-003 confirms the device accepts, loads at the next arming, and honours through to an actual expiry. Values below that are unverified and are not written.
+
+No other write exists, and nothing here can actuate the heater or pump. See `volcano.h` for the `TODO` markers showing where the remaining protocol coverage and the Volcano abstraction layer ([ADR-0002](../../docs/decisions/ADR-0002-volcano-component-architecture.md)) belong.
 
 Protocol behaviour to implement here is recorded in [`docs/protocol/`](../../docs/protocol/README.md). Per [ADR-0005](../../docs/decisions/ADR-0005-volcano-ble-discovery-methodology.md), only findings classified **Confirmed** back default production behaviour; Probable findings belong behind clearly marked experimental code, and Unknown behaviour must not be encoded as an assumption.
 
