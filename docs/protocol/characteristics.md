@@ -113,7 +113,7 @@ Each notify-capable characteristic's Client Characteristic Configuration descrip
 - **UUID**: `10100015-5354-4f52-5a26-4249434b454c`
 - **Service**: SVC-005
 - **Properties**: Read
-- **Observation**: 16-byte value; read as ASCII, a repeating `"61"` text pattern followed by zero-character text padding (not raw null bytes). The value is stable: read repeatedly across pump activations, heating cycles, target changes, reconnections and changes to both settings the app exposes, all 16 bytes were identical every time.
+- **Observation**: 16-byte value; read as ASCII, a repeating `"61"` text pattern followed by zero-character text padding (not raw null bytes). The value is stable: read repeatedly across pump activations, heating cycles, target changes, reconnections, an auto-shutoff expiry, and changes to every setting the app exposes — vibration, display on cooling, LED brightness and auto-shutoff duration — all 16 bytes were identical every time.
 - **Interpretation**: A third-party source (unverified) names this HIST1. The name suggests an accumulating history, but nothing a user can do moves it, so it may equally be a fixed per-device characteristic — see [`open-questions.md`](open-questions.md).
 - **Confidence**: Confirmed (value, and that it is unmoved by every action the app can perform); Unknown (meaning)
 - **Implementation status**: Not implemented
@@ -124,7 +124,7 @@ Each notify-capable characteristic's Client Characteristic Configuration descrip
 - **UUID**: `10100016-5354-4f52-5a26-4249434b454c`
 - **Service**: SVC-005
 - **Properties**: Read
-- **Observation**: 16-byte value; read as ASCII, all zero-character text (not raw null bytes). Like [CHAR-011](#char-011--unknown-value-hist1), the value is stable: read repeatedly across pump activations, heating cycles, target changes, reconnections and changes to both settings the app exposes, it never left this state.
+- **Observation**: 16-byte value; read as ASCII, all zero-character text (not raw null bytes). Like [CHAR-011](#char-011--unknown-value-hist1), the value is stable: across the same range of device activity and settings changes, it never left this state.
 - **Interpretation**: A third-party source (unverified) names this HIST2 — see [`open-questions.md`](open-questions.md) for the unresolved lead.
 - **Confidence**: Confirmed (value, and that it is unmoved by every action the app can perform); Unknown (meaning)
 - **Implementation status**: Not implemented
