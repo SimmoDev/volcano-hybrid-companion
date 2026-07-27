@@ -85,7 +85,7 @@ Each notify-capable characteristic's Client Characteristic Configuration descrip
 - **Properties**: Read/Notify
 - **Observation**: 4-byte value carrying heater on/off, pump-active, and vibration-motor-activation flags — see [STATE-008](state-model.md#state-008--statusflags-register-partial).
 - **Confidence**: Confirmed (identity, partial bit layout, behaviour); Unknown (full bit layout — see [`open-questions.md`](open-questions.md))
-- **Implementation status**: Not implemented
+- **Implementation status**: Implemented (read-only) in `components/volcano/volcano.cpp` — resolved by UUID, subscribed, initial value read explicitly, decoded on both the initial read and subsequent notifications. Verified against real hardware, including panel-originated heater/pump toggles.
 
 ## CHAR-009 — Display on cooling / units register
 

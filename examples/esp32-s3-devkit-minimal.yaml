@@ -1,14 +1,20 @@
-# Minimal example: proves the `volcano` external component can be loaded
-# and compiled for the Phase 1 development board (ADR-0004). It exposes no
-# sensors/entities and has no BLE, Home Assistant, or UI logic -- see
-# components/volcano/README.md and ADR-0002/ADR-0003 for the architecture
-# this scaffold follows.
+# Minimal example: exercises the `volcano` external component's first
+# working increment -- a read-only BLE connection that logs decoded heater
+# and pump state -- on the Phase 1 development board (ADR-0004). It exposes
+# no sensors/entities and has no Home Assistant or UI logic; see
+# components/volcano/README.md and ADR-0002/ADR-0003/ADR-0007 for the
+# architecture this follows.
+#
+# The Volcano's BLE MAC address is unique per unit and deliberately not
+# recorded in this repository (see docs/protocol/README.md). Copy
+# secrets.yaml.example to secrets.yaml alongside it and set your device's
+# address as `volcano_mac_address`.
 
 esphome:
   name: volcano-dev-scaffold
 
-# Enables the scaffold's only observable behaviour: the component's
-# dump_config() output on boot.
+# Shows the component's connection lifecycle and decoded state on boot and
+# as they change.
 logger:
 
 esp32:
@@ -27,4 +33,9 @@ external_components:
       type: local
       path: ../components
 
+ble_client:
+  - mac_address: !secret volcano_mac_address
+    id: volcano_ble_client
+
 volcano:
+  ble_client_id: volcano_ble_client
