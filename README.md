@@ -99,7 +99,7 @@ volcano-hybrid-companion/
 
 ## Contributing
 
-Not yet open for contributions — the project is still defining its foundations. This will be updated once there is working code to contribute to.
+Not yet open for contributions — the project is still early: only a partial BLE implementation exists, and there's no hardware-independent interface yet for a contributor to build against. This will be revisited as the foundations mature.
 
 ## Licence
 
