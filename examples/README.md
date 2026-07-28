@@ -4,11 +4,11 @@ Example ESPHome configurations that exercise the components in this repository. 
 
 ## `esp32-s3-devkit-minimal.yaml`
 
-Targets the Phase 1 development board ([ADR-0004](../docs/decisions/ADR-0004-development-hardware-strategy.md)) and exercises the `volcano` component's current BLE implementation — see [`components/volcano/README.md`](../components/volcano/README.md) for what it does. Its only entities are the command buttons described in "Sending commands" below, and it has no Home Assistant integration.
+Targets the Phase 1 development board ([ADR-0004](../docs/decisions/ADR-0004-development-hardware-strategy.md)) and exercises the `volcano` component's current BLE implementation — see [`components/volcano/README.md`](../components/volcano/README.md) for what it does. Its only entities are the command controls described in "Sending commands" below, and it has no Home Assistant integration.
 
 It needs a real Volcano's BLE MAC address to connect to anything. Copy [`secrets.yaml.example`](secrets.yaml.example) to `secrets.yaml` alongside it (not committed — see the repository's `.gitignore`) and set `volcano_mac_address` to your device's actual address. A placeholder value is fine for `esphome config`/`esphome compile`, but flashing it to hardware needs the real one to see anything happen.
 
-It also joins your WiFi network — set `wifi_ssid`/`wifi_password` in the same `secrets.yaml` — so a browser on that network can reach the command buttons described in "Sending commands" below. The `volcano` component itself is BLE-only and has no WiFi dependency; WiFi exists in this example purely to serve that page.
+It also joins your WiFi network — set `wifi_ssid`/`wifi_password` in the same `secrets.yaml` — so a browser on that network can reach the command controls described in "Sending commands" below. The `volcano` component itself is BLE-only and has no WiFi dependency; WiFi exists in this example purely to serve that page.
 
 ## Flashing and watching logs
 
@@ -31,9 +31,11 @@ Watch for the `[volcano]` log tag: it logs heater/pump state, the auto-shutoff c
 
 ## Sending commands
 
-Once connected to WiFi, the device serves a local page with a button per command the component currently exposes — heater on/off, pump on/off, and setting the auto-shutoff duration to 60s — at `http://<device-ip-or-hostname>/` (`volcano-dev-scaffold.local` by default, or check `esphome logs` for the IP it picked up on connect). The page has no authentication and no TLS; fine on a trusted home network for this development example, not something to expose beyond it.
+Once connected to WiFi, the device serves a local page with a control per command the component currently exposes — heater on/off, pump on/off, setting the auto-shutoff duration to 60s, and a target-temperature number field — at `http://<device-ip-or-hostname>/` (`volcano-dev-scaffold.local` by default, or check `esphome logs` for the IP it picked up on connect). The page has no authentication and no TLS; fine on a trusted home network for this development example, not something to expose beyond it.
 
 Per [STATE-005](../docs/protocol/state-model.md#state-005--auto-shutoff-countdown), the duration write only takes effect at the *next* arming, not on a countdown already running: to see 60s take effect, press that button while the device is fully idle (heater off, pump off, countdown at 0), not mid-countdown.
+
+The target-temperature field spans 30–240 °C — wider than the 40.0–230.0 °C range [CMD-001](../docs/protocol/commands.md#cmd-001--set-target-temperature) confirms the device accepts — so it can also exercise the component's own refusal of an out-of-range value: entering one logs a warning and writes nothing, rather than sending an unverified value to the device.
 
 ### Troubleshooting
 

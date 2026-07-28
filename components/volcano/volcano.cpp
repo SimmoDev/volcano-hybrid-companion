@@ -30,8 +30,7 @@ static const char *const COUNTDOWN_CHARACTERISTIC_UUID = "1011000c-5354-4f52-5a2
 static const char *const DURATION_CHARACTERISTIC_UUID = "1011000d-5354-4f52-5a26-4249434b454c";
 // CHAR-013: current (actual) temperature (SVC-006).
 static const char *const CURRENT_TEMP_CHARACTERISTIC_UUID = "10110001-5354-4f52-5a26-4249434b454c";
-// CHAR-014: target temperature (SVC-006). Only the read/notify side is used
-// here; writing it is CMD-001 and not yet implemented.
+// CHAR-014: target temperature (SVC-006).
 static const char *const TARGET_TEMP_CHARACTERISTIC_UUID = "10110003-5354-4f52-5a26-4249434b454c";
 // CHAR-018/CMD-006: heater on trigger (SVC-006).
 static const char *const HEATER_ON_CHARACTERISTIC_UUID = "1011000f-5354-4f52-5a26-4249434b454c";
@@ -56,6 +55,14 @@ static const uint16_t STATUS_BIT_PUMP_ON = 0x1000;
 // refuses them rather than writing an untested value (ADR-0005).
 static const uint16_t MIN_AUTO_SHUTOFF_DURATION_SECONDS = 60;
 
+// CMD-001: the official app's UI spans 40.0-230.0 degC (400-2300 in this
+// characteristic's deci-degrees-Celsius encoding); that is the only range
+// Confirmed accepted. What the device does with a value outside it is
+// Unknown, so set_target_temperature_decidegrees() refuses them rather than
+// writing an untested value (ADR-0005).
+static const uint16_t MIN_TARGET_TEMPERATURE_DECIDEGREES = 400;
+static const uint16_t MAX_TARGET_TEMPERATURE_DECIDEGREES = 2300;
+
 static void subscribe(esphome::ble_client::BLEClient *client, uint16_t handle, const char *name) {
   auto status = esp_ble_gattc_register_for_notify(client->get_gattc_if(), client->get_remote_bda(), handle);
   if (status) {
@@ -76,9 +83,11 @@ void VolcanoComponent::loop() {}
 void VolcanoComponent::dump_config() {
   ESP_LOGCONFIG(TAG, "Volcano:");
   ESP_LOGCONFIG(TAG, "  Read-only: status/flags register (CHAR-008), auto-shutoff countdown (CHAR-016),");
-  ESP_LOGCONFIG(TAG, "    current temperature (CHAR-013), target temperature (CHAR-014).");
+  ESP_LOGCONFIG(TAG, "    current temperature (CHAR-013).");
   ESP_LOGCONFIG(TAG, "  Write: auto-shutoff duration (CHAR-017), minimum %u s;", MIN_AUTO_SHUTOFF_DURATION_SECONDS);
-  ESP_LOGCONFIG(TAG, "    heater on/off (CHAR-018/019), pump on/off (CHAR-020/021).");
+  ESP_LOGCONFIG(TAG, "    heater on/off (CHAR-018/019), pump on/off (CHAR-020/021);");
+  ESP_LOGCONFIG(TAG, "    target temperature (CHAR-014), %.1f-%.1f C.", MIN_TARGET_TEMPERATURE_DECIDEGREES / 10.0f,
+                MAX_TARGET_TEMPERATURE_DECIDEGREES / 10.0f);
 }
 
 void VolcanoComponent::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if,
@@ -294,6 +303,20 @@ void VolcanoComponent::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
           ESP_LOGW(TAG, "Trigger write to handle 0x%04x failed, status=%d", param->write.handle,
                    param->write.status);
         }
+      } else if (param->write.handle == this->target_temp_handle_) {
+        if (param->write.status != ESP_GATT_OK) {
+          ESP_LOGW(TAG, "Target temperature write failed, status=%d", param->write.status);
+          break;
+        }
+        // Read-back for the same reason as the auto-shutoff duration above.
+        // Per STATE-013, this project's own writes are almost never echoed
+        // by a notification, so an explicit read is what actually confirms
+        // it here.
+        auto status = esp_ble_gattc_read_char(this->parent()->get_gattc_if(), this->parent()->get_conn_id(),
+                                              this->target_temp_handle_, ESP_GATT_AUTH_REQ_NONE);
+        if (status) {
+          ESP_LOGW(TAG, "esp_ble_gattc_read_char(target temperature) failed, status=%d", status);
+        }
       }
       break;
     }
@@ -408,6 +431,36 @@ void VolcanoComponent::turn_heater_off() {
 void VolcanoComponent::turn_pump_on() { write_trigger(this->parent(), this->pump_on_handle_, "Turning pump on"); }
 
 void VolcanoComponent::turn_pump_off() { write_trigger(this->parent(), this->pump_off_handle_, "Turning pump off"); }
+
+void VolcanoComponent::set_target_temperature_decidegrees(uint16_t decidegrees) {
+  if (decidegrees < MIN_TARGET_TEMPERATURE_DECIDEGREES || decidegrees > MAX_TARGET_TEMPERATURE_DECIDEGREES) {
+    ESP_LOGW(TAG,
+             "Refusing to set target temperature to %.1f C: outside the %.1f-%.1f C range confirmed accepted "
+             "(CMD-001)",
+             decidegrees / 10.0f, MIN_TARGET_TEMPERATURE_DECIDEGREES / 10.0f,
+             MAX_TARGET_TEMPERATURE_DECIDEGREES / 10.0f);
+    return;
+  }
+  if (this->target_temp_handle_ == 0) {
+    ESP_LOGW(TAG, "Target temperature characteristic not resolved; not connected?");
+    return;
+  }
+  // CMD-001's confirmed encoding: 4-byte little-endian deci-degrees Celsius,
+  // matching the read-side encoding decode_decidegrees_c() above decodes.
+  uint8_t payload[4] = {
+      static_cast<uint8_t>(decidegrees & 0xFF),
+      static_cast<uint8_t>((decidegrees >> 8) & 0xFF),
+      0,
+      0,
+  };
+  ESP_LOGI(TAG, "Setting target temperature to %.1f C", decidegrees / 10.0f);
+  auto status = esp_ble_gattc_write_char(this->parent()->get_gattc_if(), this->parent()->get_conn_id(),
+                                         this->target_temp_handle_, sizeof(payload), payload, ESP_GATT_WRITE_TYPE_RSP,
+                                         ESP_GATT_AUTH_REQ_NONE);
+  if (status) {
+    ESP_LOGW(TAG, "esp_ble_gattc_write_char failed, status=%d", status);
+  }
+}
 
 }  // namespace volcano
 }  // namespace esphome

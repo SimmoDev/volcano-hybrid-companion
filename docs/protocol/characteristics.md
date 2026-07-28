@@ -147,7 +147,7 @@ Each notify-capable characteristic's Client Characteristic Configuration descrip
 - **Properties**: Read/Write/Notify
 - **Observation**: See [CMD-001](commands.md#cmd-001--set-target-temperature) for the write side and [STATE-013](state-model.md#state-013--target-temperature-notifications) for the notify side. Reads back in the same 4-byte, 0.1 °C encoding as CHAR-013; once the heater has brought the device to a whole-degree target, the two characteristics read the same value.
 - **Confidence**: Confirmed
-- **Implementation status**: Implemented (read/notify side only) in `components/volcano/volcano.cpp`, verified against real hardware. The write side (CMD-001) is not implemented.
+- **Implementation status**: Implemented, including the write side (CMD-001), in `components/volcano/volcano.cpp`. Verified against real hardware.
 
 ## CHAR-015 — LED brightness
 

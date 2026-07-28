@@ -43,6 +43,12 @@ namespace volcano {
 // actuate the heater, which is why the auto-shutoff floor above matters here
 // specifically.
 //
+// set_target_temperature_decidegrees() writes the target temperature
+// (CHAR-014, CMD-001). Only the 40.0-230.0 degC range the official app's UI
+// exposes is Confirmed as accepted; what the device does with a value
+// outside it is Unknown, so this refuses anything outside that range rather
+// than writing an untested value (ADR-0005).
+//
 // Connection lifecycle follows ADR-0007
 // (docs/decisions/ADR-0007-ble-connection-lifecycle.md): the parent
 // ble_client holds a persistent connection and reconnects on its own, so
@@ -77,6 +83,11 @@ class VolcanoComponent : public Component, public ble_client::BLEClientNode {
   void turn_heater_off();
   void turn_pump_on();
   void turn_pump_off();
+
+  // Writes CMD-001's confirmed 4-byte-deci-degrees-Celsius encoding to the
+  // target temperature characteristic (see the class comment above for the
+  // confirmed range this refuses to go outside of).
+  void set_target_temperature_decidegrees(uint16_t decidegrees);
 
  protected:
   void decode_status_(const uint8_t *value, uint16_t value_len);
