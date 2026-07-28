@@ -26,4 +26,4 @@ The Volcano's BLE address is unique per unit and is deliberately never recorded 
 
 ## Building / validating
 
-See [`docs/DEVELOPMENT.md`](../../docs/DEVELOPMENT.md#validating-the-current-scaffold) for how to validate this component against the example configuration.
+See [`docs/DEVELOPMENT.md`](../../docs/DEVELOPMENT.md#validating-the-component-locally) for how to validate this component against the example configuration.

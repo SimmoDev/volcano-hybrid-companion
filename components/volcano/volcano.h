@@ -48,7 +48,8 @@ namespace volcano {
 // TODO(volcano-component): the remaining characteristics, the full Volcano
 // device state model, and the hardware-independent interface for control
 // interfaces (all per ADR-0002) are not yet implemented -- this component
-// currently only logs decoded state.
+// currently only logs decoded state and writes the one characteristic
+// documented above.
 class VolcanoComponent : public Component, public ble_client::BLEClientNode {
  public:
   void setup() override;

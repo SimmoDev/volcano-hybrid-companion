@@ -6,13 +6,13 @@ This project is **not affiliated with, endorsed by, or supported by Storz & Bick
 
 ## Status
 
-Early development. No firmware or BLE protocol implementation exists yet; the `volcano` ESPHome component is a scaffold with no device logic. BLE protocol discovery is underway — see [`docs/protocol/`](docs/protocol/README.md) for recorded findings.
+Early development. The `volcano` ESPHome component's BLE communication layer connects to the device and implements read-only status, auto-shutoff countdown, and temperature reporting, plus one write (auto-shutoff duration) — all verified against real hardware. It does not yet control the heater or pump, and the hardware-independent Volcano abstraction layer that control interfaces will depend on doesn't exist yet. BLE protocol discovery is ongoing — see [`docs/protocol/`](docs/protocol/README.md) for recorded findings.
 
 Initial development is taking place on an ESP32-S3-WROOM-1-N16R8 development board. Once the BLE implementation is mature, development will move to the M5Stack Dial for the user interface.
 
 ## Documentation
 
-- [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) — how the repository is laid out and how to validate the current scaffold locally.
+- [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) — how the repository is laid out and how to validate the component locally.
 - [`docs/protocol/`](docs/protocol/README.md) — what is known about the Volcano Hybrid's BLE protocol, and what is still open.
 - [`docs/decisions/`](docs/decisions/) — the ADR series recording each architectural decision and its reasoning.
 - [`docs/CONVENTIONS.md`](docs/CONVENTIONS.md) — terminology, spelling, Markdown and naming conventions, and commit message style.
