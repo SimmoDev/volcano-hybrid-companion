@@ -28,6 +28,11 @@ static const char *const STATUS_CHARACTERISTIC_UUID = "1010000c-5354-4f52-5a26-4
 static const char *const COUNTDOWN_CHARACTERISTIC_UUID = "1011000c-5354-4f52-5a26-4249434b454c";
 // CHAR-017: auto-shutoff duration (SVC-006).
 static const char *const DURATION_CHARACTERISTIC_UUID = "1011000d-5354-4f52-5a26-4249434b454c";
+// CHAR-013: current (actual) temperature (SVC-006).
+static const char *const CURRENT_TEMP_CHARACTERISTIC_UUID = "10110001-5354-4f52-5a26-4249434b454c";
+// CHAR-014: target temperature (SVC-006). Only the read/notify side is used
+// here; writing it is CMD-001 and not yet implemented.
+static const char *const TARGET_TEMP_CHARACTERISTIC_UUID = "10110003-5354-4f52-5a26-4249434b454c";
 
 // STATE-008: bit 5 is set whenever the heater is on, clear when off.
 static const uint16_t STATUS_BIT_HEATER_ON = 0x0020;
@@ -62,7 +67,8 @@ void VolcanoComponent::loop() {}
 
 void VolcanoComponent::dump_config() {
   ESP_LOGCONFIG(TAG, "Volcano:");
-  ESP_LOGCONFIG(TAG, "  Read-only: status/flags register (CHAR-008), auto-shutoff countdown (CHAR-016).");
+  ESP_LOGCONFIG(TAG, "  Read-only: status/flags register (CHAR-008), auto-shutoff countdown (CHAR-016),");
+  ESP_LOGCONFIG(TAG, "    current temperature (CHAR-013), target temperature (CHAR-014).");
   ESP_LOGCONFIG(TAG, "  Write: auto-shutoff duration (CHAR-017), minimum %u s.", MIN_AUTO_SHUTOFF_DURATION_SECONDS);
 }
 
@@ -74,8 +80,10 @@ void VolcanoComponent::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
       this->status_handle_ = 0;
       this->countdown_handle_ = 0;
       this->duration_handle_ = 0;
+      this->current_temp_handle_ = 0;
+      this->target_temp_handle_ = 0;
       this->pending_subscriptions_ = 0;
-      ESP_LOGI(TAG, "Disconnected; heater/pump/countdown state unknown");
+      ESP_LOGI(TAG, "Disconnected; heater/pump/countdown/temperature state unknown");
       break;
     }
     case ESP_GATTC_SEARCH_CMPL_EVT: {
@@ -122,6 +130,26 @@ void VolcanoComponent::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
         this->duration_handle_ = duration_chr->handle;
       }
 
+      auto *current_temp_chr = this->parent()->get_characteristic(
+          control_service, espbt::ESPBTUUID::from_raw(CURRENT_TEMP_CHARACTERISTIC_UUID));
+      if (current_temp_chr == nullptr) {
+        ESP_LOGW(TAG, "Current temperature (CHAR-013) not found on device");
+      } else {
+        this->current_temp_handle_ = current_temp_chr->handle;
+        this->pending_subscriptions_++;
+        subscribe(this->parent(), this->current_temp_handle_, "current temperature");
+      }
+
+      auto *target_temp_chr = this->parent()->get_characteristic(
+          control_service, espbt::ESPBTUUID::from_raw(TARGET_TEMP_CHARACTERISTIC_UUID));
+      if (target_temp_chr == nullptr) {
+        ESP_LOGW(TAG, "Target temperature (CHAR-014) not found on device");
+      } else {
+        this->target_temp_handle_ = target_temp_chr->handle;
+        this->pending_subscriptions_++;
+        subscribe(this->parent(), this->target_temp_handle_, "target temperature");
+      }
+
       // Nothing to subscribe to: nothing else will ever drive node_state to
       // ESTABLISHED for this connection, so declare it done here instead of
       // leaving the parent waiting on a subscription that will never arrive.
@@ -132,7 +160,8 @@ void VolcanoComponent::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
     }
     case ESP_GATTC_REG_FOR_NOTIFY_EVT: {
       uint16_t handle = param->reg_for_notify.handle;
-      if (handle != this->status_handle_ && handle != this->countdown_handle_)
+      if (handle != this->status_handle_ && handle != this->countdown_handle_ &&
+          handle != this->current_temp_handle_ && handle != this->target_temp_handle_)
         break;
 
       // node_state must not become ESTABLISHED until every subscription
@@ -176,6 +205,10 @@ void VolcanoComponent::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
           uint16_t seconds = encode_uint16(param->read.value[1], param->read.value[0]);
           ESP_LOGI(TAG, "Auto-shutoff duration confirmed: %u s", seconds);
         }
+      } else if (param->read.handle == this->current_temp_handle_) {
+        this->decode_current_temperature_(param->read.value, param->read.value_len);
+      } else if (param->read.handle == this->target_temp_handle_) {
+        this->decode_target_temperature_(param->read.value, param->read.value_len);
       }
       break;
     }
@@ -184,6 +217,10 @@ void VolcanoComponent::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
         this->decode_status_(param->notify.value, param->notify.value_len);
       } else if (param->notify.handle == this->countdown_handle_) {
         this->decode_countdown_(param->notify.value, param->notify.value_len);
+      } else if (param->notify.handle == this->current_temp_handle_) {
+        this->decode_current_temperature_(param->notify.value, param->notify.value_len);
+      } else if (param->notify.handle == this->target_temp_handle_) {
+        this->decode_target_temperature_(param->notify.value, param->notify.value_len);
       }
       break;
     }
@@ -227,6 +264,41 @@ void VolcanoComponent::decode_countdown_(const uint8_t *value, uint16_t value_le
   }
   uint16_t seconds = encode_uint16(value[1], value[0]);
   ESP_LOGI(TAG, "Auto-shutoff countdown: %u s", seconds);
+}
+
+// STATE-007/CMD-001: both temperature characteristics share a 4-byte
+// little-endian encoding in units of 0.1 degC.
+static bool decode_decidegrees_c(const uint8_t *value, uint16_t value_len, uint32_t *out_raw) {
+  if (value_len < 4) {
+    return false;
+  }
+  *out_raw = encode_uint32(value[3], value[2], value[1], value[0]);
+  return true;
+}
+
+void VolcanoComponent::decode_current_temperature_(const uint8_t *value, uint16_t value_len) {
+  uint32_t raw;
+  if (!decode_decidegrees_c(value, value_len, &raw)) {
+    ESP_LOGW(TAG, "Current temperature value too short (%u bytes)", value_len);
+    return;
+  }
+  // STATE-012: 0 means no reading available -- the device stops reporting
+  // current temperature below 40 degC whenever the heater is off -- not a
+  // true 0 degC reading, so it must never be logged as a temperature.
+  if (raw == 0) {
+    ESP_LOGI(TAG, "Current temperature: no reading (below 40 C, heater off)");
+  } else {
+    ESP_LOGI(TAG, "Current temperature: %.1f C", raw / 10.0f);
+  }
+}
+
+void VolcanoComponent::decode_target_temperature_(const uint8_t *value, uint16_t value_len) {
+  uint32_t raw;
+  if (!decode_decidegrees_c(value, value_len, &raw)) {
+    ESP_LOGW(TAG, "Target temperature value too short (%u bytes)", value_len);
+    return;
+  }
+  ESP_LOGI(TAG, "Target temperature: %.1f C", raw / 10.0f);
 }
 
 void VolcanoComponent::set_auto_shutoff_duration_seconds(uint16_t seconds) {

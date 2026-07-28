@@ -18,9 +18,13 @@ namespace volcano {
 // following the connect / resolve / subscribe / read / decode path proved
 // by the first increment on a growing set of characteristics: the
 // status/flags register (CHAR-008, decoded in
-// docs/protocol/state-model.md#state-008-statusflags-register-partial) and
+// docs/protocol/state-model.md#state-008-statusflags-register-partial),
 // the auto-shutoff countdown (CHAR-016, decoded in
-// docs/protocol/state-model.md#state-005--auto-shutoff-countdown).
+// docs/protocol/state-model.md#state-005--auto-shutoff-countdown), and
+// current/target temperature (CHAR-013/CHAR-014, decoded in
+// docs/protocol/state-model.md#state-007--current-actual-temperature).
+// Current temperature reads `0` whenever the heater is off below 40 degC
+// (STATE-012); that is logged as "no reading", never as a temperature.
 //
 // It also carries the first production write: set_auto_shutoff_duration_seconds()
 // writes the auto-shutoff duration (CHAR-017, CMD-003 in
@@ -63,12 +67,16 @@ class VolcanoComponent : public Component, public ble_client::BLEClientNode {
  protected:
   void decode_status_(const uint8_t *value, uint16_t value_len);
   void decode_countdown_(const uint8_t *value, uint16_t value_len);
+  void decode_current_temperature_(const uint8_t *value, uint16_t value_len);
+  void decode_target_temperature_(const uint8_t *value, uint16_t value_len);
 
   // Handles resolved by UUID after each connection. Zero while
   // unresolved/disconnected.
-  uint16_t status_handle_{0};     // CHAR-008: status/flags register.
-  uint16_t countdown_handle_{0};  // CHAR-016: auto-shutoff countdown.
-  uint16_t duration_handle_{0};   // CHAR-017: auto-shutoff duration.
+  uint16_t status_handle_{0};         // CHAR-008: status/flags register.
+  uint16_t countdown_handle_{0};      // CHAR-016: auto-shutoff countdown.
+  uint16_t duration_handle_{0};       // CHAR-017: auto-shutoff duration.
+  uint16_t current_temp_handle_{0};   // CHAR-013: current (actual) temperature.
+  uint16_t target_temp_handle_{0};    // CHAR-014: target temperature.
 
   // Number of ESP_GATTC_REG_FOR_NOTIFY_EVT callbacks still outstanding.
   // node_state must not become ESTABLISHED until this reaches zero: the
