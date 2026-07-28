@@ -20,7 +20,7 @@ At this stage:
 ## Repository structure
 
 - **`components/volcano/`** — the Volcano ESPHome external component. See [`components/volcano/README.md`](../components/volcano/README.md) for its current implementation status and component-specific build notes.
-- **`examples/`** — example ESPHome YAML configurations that exercise the components in this repository. These prove that a configuration loads, registers the component correctly, and compiles; they are not production device firmware.
+- **`examples/`** — example ESPHome YAML configurations that exercise the components in this repository; they are not production device firmware. See [`examples/README.md`](../examples/README.md) for what each one does and how to flash it to real hardware.
 - **`docs/decisions/`** — the ADR series. Each ADR records one architectural decision and its reasoning; see [ADR-0001](decisions/ADR-0001-project-vision.md) onward for the full set.
 - **`docs/protocol/`** — Volcano BLE protocol findings, recorded per [ADR-0006](decisions/ADR-0006-protocol-documentation-structure.md).
 - **`docs/CONVENTIONS.md`** — the living reference for terminology, spelling, Markdown/naming conventions, and commit message style used across this repository.
@@ -40,3 +40,5 @@ esphome compile examples/esp32-s3-devkit-minimal.yaml
 ```
 
 Both commands should complete without errors. `esphome compile` is the closest available check that the component's C++ actually builds; it requires no physical ESP32-S3 hardware.
+
+To flash this example to real hardware and watch its logs, see [`examples/README.md`](../examples/README.md).
