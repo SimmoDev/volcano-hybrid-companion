@@ -33,6 +33,14 @@ static const char *const CURRENT_TEMP_CHARACTERISTIC_UUID = "10110001-5354-4f52-
 // CHAR-014: target temperature (SVC-006). Only the read/notify side is used
 // here; writing it is CMD-001 and not yet implemented.
 static const char *const TARGET_TEMP_CHARACTERISTIC_UUID = "10110003-5354-4f52-5a26-4249434b454c";
+// CHAR-018/CMD-006: heater on trigger (SVC-006).
+static const char *const HEATER_ON_CHARACTERISTIC_UUID = "1011000f-5354-4f52-5a26-4249434b454c";
+// CHAR-019/CMD-007: heater off trigger (SVC-006).
+static const char *const HEATER_OFF_CHARACTERISTIC_UUID = "10110010-5354-4f52-5a26-4249434b454c";
+// CHAR-020/CMD-008: pump on trigger (SVC-006).
+static const char *const PUMP_ON_CHARACTERISTIC_UUID = "10110013-5354-4f52-5a26-4249434b454c";
+// CHAR-021/CMD-009: pump off trigger (SVC-006).
+static const char *const PUMP_OFF_CHARACTERISTIC_UUID = "10110014-5354-4f52-5a26-4249434b454c";
 
 // STATE-008: bit 5 is set whenever the heater is on, clear when off.
 static const uint16_t STATUS_BIT_HEATER_ON = 0x0020;
@@ -69,7 +77,8 @@ void VolcanoComponent::dump_config() {
   ESP_LOGCONFIG(TAG, "Volcano:");
   ESP_LOGCONFIG(TAG, "  Read-only: status/flags register (CHAR-008), auto-shutoff countdown (CHAR-016),");
   ESP_LOGCONFIG(TAG, "    current temperature (CHAR-013), target temperature (CHAR-014).");
-  ESP_LOGCONFIG(TAG, "  Write: auto-shutoff duration (CHAR-017), minimum %u s.", MIN_AUTO_SHUTOFF_DURATION_SECONDS);
+  ESP_LOGCONFIG(TAG, "  Write: auto-shutoff duration (CHAR-017), minimum %u s;", MIN_AUTO_SHUTOFF_DURATION_SECONDS);
+  ESP_LOGCONFIG(TAG, "    heater on/off (CHAR-018/019), pump on/off (CHAR-020/021).");
 }
 
 void VolcanoComponent::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if,
@@ -82,6 +91,10 @@ void VolcanoComponent::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
       this->duration_handle_ = 0;
       this->current_temp_handle_ = 0;
       this->target_temp_handle_ = 0;
+      this->heater_on_handle_ = 0;
+      this->heater_off_handle_ = 0;
+      this->pump_on_handle_ = 0;
+      this->pump_off_handle_ = 0;
       this->pending_subscriptions_ = 0;
       ESP_LOGI(TAG, "Disconnected; heater/pump/countdown/temperature state unknown");
       break;
@@ -148,6 +161,42 @@ void VolcanoComponent::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
         this->target_temp_handle_ = target_temp_chr->handle;
         this->pending_subscriptions_++;
         subscribe(this->parent(), this->target_temp_handle_, "target temperature");
+      }
+
+      // CHAR-018 through CHAR-021: one-byte Read/Write trigger
+      // characteristics (CMD-006 through CMD-009), not Notify-capable, so
+      // resolved here like the duration characteristic above and not
+      // counted in pending_subscriptions_.
+      auto *heater_on_chr = this->parent()->get_characteristic(
+          control_service, espbt::ESPBTUUID::from_raw(HEATER_ON_CHARACTERISTIC_UUID));
+      if (heater_on_chr == nullptr) {
+        ESP_LOGW(TAG, "Heater on trigger (CHAR-018) not found on device");
+      } else {
+        this->heater_on_handle_ = heater_on_chr->handle;
+      }
+
+      auto *heater_off_chr = this->parent()->get_characteristic(
+          control_service, espbt::ESPBTUUID::from_raw(HEATER_OFF_CHARACTERISTIC_UUID));
+      if (heater_off_chr == nullptr) {
+        ESP_LOGW(TAG, "Heater off trigger (CHAR-019) not found on device");
+      } else {
+        this->heater_off_handle_ = heater_off_chr->handle;
+      }
+
+      auto *pump_on_chr = this->parent()->get_characteristic(
+          control_service, espbt::ESPBTUUID::from_raw(PUMP_ON_CHARACTERISTIC_UUID));
+      if (pump_on_chr == nullptr) {
+        ESP_LOGW(TAG, "Pump on trigger (CHAR-020) not found on device");
+      } else {
+        this->pump_on_handle_ = pump_on_chr->handle;
+      }
+
+      auto *pump_off_chr = this->parent()->get_characteristic(
+          control_service, espbt::ESPBTUUID::from_raw(PUMP_OFF_CHARACTERISTIC_UUID));
+      if (pump_off_chr == nullptr) {
+        ESP_LOGW(TAG, "Pump off trigger (CHAR-021) not found on device");
+      } else {
+        this->pump_off_handle_ = pump_off_chr->handle;
       }
 
       // Nothing to subscribe to: nothing else will ever drive node_state to
@@ -225,16 +274,26 @@ void VolcanoComponent::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
       break;
     }
     case ESP_GATTC_WRITE_CHAR_EVT: {
-      if (param->write.handle != this->duration_handle_)
-        break;
-      if (param->write.status != ESP_GATT_OK) {
-        ESP_LOGW(TAG, "Auto-shutoff duration write failed, status=%d", param->write.status);
-        break;
-      }
-      auto status = esp_ble_gattc_read_char(this->parent()->get_gattc_if(), this->parent()->get_conn_id(),
-                                            this->duration_handle_, ESP_GATT_AUTH_REQ_NONE);
-      if (status) {
-        ESP_LOGW(TAG, "esp_ble_gattc_read_char(duration) failed, status=%d", status);
+      if (param->write.handle == this->duration_handle_) {
+        if (param->write.status != ESP_GATT_OK) {
+          ESP_LOGW(TAG, "Auto-shutoff duration write failed, status=%d", param->write.status);
+          break;
+        }
+        auto status = esp_ble_gattc_read_char(this->parent()->get_gattc_if(), this->parent()->get_conn_id(),
+                                              this->duration_handle_, ESP_GATT_AUTH_REQ_NONE);
+        if (status) {
+          ESP_LOGW(TAG, "esp_ble_gattc_read_char(duration) failed, status=%d", status);
+        }
+      } else if (param->write.handle == this->heater_on_handle_ || param->write.handle == this->heater_off_handle_ ||
+                 param->write.handle == this->pump_on_handle_ || param->write.handle == this->pump_off_handle_) {
+        // Per the trigger-characteristics note in docs/protocol/commands.md,
+        // reading one of these back always returns 0x00 regardless of
+        // effect, so it cannot confirm the action -- only the status/flags
+        // register notification (STATE-008) does that.
+        if (param->write.status != ESP_GATT_OK) {
+          ESP_LOGW(TAG, "Trigger write to handle 0x%04x failed, status=%d", param->write.handle,
+                   param->write.status);
+        }
       }
       break;
     }
@@ -321,6 +380,34 @@ void VolcanoComponent::set_auto_shutoff_duration_seconds(uint16_t seconds) {
     ESP_LOGW(TAG, "esp_ble_gattc_write_char failed, status=%d", status);
   }
 }
+
+// CMD-006 through CMD-009: every trigger characteristic accepts only the
+// single value 0x00 -- the only value ever observed written to any of them
+// (see the trigger-characteristics note in docs/protocol/commands.md) -- so
+// this writes nothing else.
+static void write_trigger(esphome::ble_client::BLEClient *client, uint16_t handle, const char *name) {
+  if (handle == 0) {
+    ESP_LOGW(TAG, "%s trigger characteristic not resolved; not connected?", name);
+    return;
+  }
+  uint8_t payload = 0x00;
+  ESP_LOGI(TAG, "%s", name);
+  auto status = esp_ble_gattc_write_char(client->get_gattc_if(), client->get_conn_id(), handle, sizeof(payload),
+                                         &payload, ESP_GATT_WRITE_TYPE_RSP, ESP_GATT_AUTH_REQ_NONE);
+  if (status) {
+    ESP_LOGW(TAG, "esp_ble_gattc_write_char(%s) failed, status=%d", name, status);
+  }
+}
+
+void VolcanoComponent::turn_heater_on() { write_trigger(this->parent(), this->heater_on_handle_, "Turning heater on"); }
+
+void VolcanoComponent::turn_heater_off() {
+  write_trigger(this->parent(), this->heater_off_handle_, "Turning heater off");
+}
+
+void VolcanoComponent::turn_pump_on() { write_trigger(this->parent(), this->pump_on_handle_, "Turning pump on"); }
+
+void VolcanoComponent::turn_pump_off() { write_trigger(this->parent(), this->pump_off_handle_, "Turning pump off"); }
 
 }  // namespace volcano
 }  // namespace esphome

@@ -2,7 +2,7 @@
 
 Write-triggered behaviour. Format per [ADR-0006](../decisions/ADR-0006-protocol-documentation-structure.md); confidence per [ADR-0005](../decisions/ADR-0005-volcano-ble-discovery-methodology.md). Third-party sources cited below are listed in [`README.md`](README.md#third-party-sources).
 
-**Provenance of these findings.** Every write documented below was observed by capturing the official Storz & Bickel web app's BLE traffic while operating the device, then correlating it against the resulting physical behaviour. Each write's encoding and effect is Confirmed on that basis. None has yet been issued from this project's own ESP32/ESPHome client, whose MTU negotiation, write pacing and queueing differ from a browser's, so every finding here carries an **Implementation status** of *Not implemented*. Write type and the absence of a pairing requirement are covered by [CONN-001](gatt-services.md#conn-001--connection-security-and-subscription-procedure); [`open-questions.md`](open-questions.md) tracks what remains open about the connection.
+**Provenance of these findings.** Every write documented below was observed by capturing the official Storz & Bickel web app's BLE traffic while operating the device, then correlating it against the resulting physical behaviour. Each write's encoding and effect is Confirmed on that basis, independent of whether this project's own ESP32/ESPHome client — whose MTU negotiation, write pacing and queueing differ from a browser's — has issued it; each finding's own **Implementation status** records that separately. Write type and the absence of a pairing requirement are covered by [CONN-001](gatt-services.md#conn-001--connection-security-and-subscription-procedure); [`open-questions.md`](open-questions.md) tracks what remains open about the connection.
 
 ## CMD-001 — Set target temperature
 
@@ -64,28 +64,28 @@ Note the polarity is inverted for both documented settings: the bit **clear** me
 - **Handle**: `0x005c`
 - **Observation**: Writing value `00` triggers the action. Reproduced across multiple sessions. Reading this handle returns `0x00` — see the note below.
 - **Confidence**: Confirmed (that a write of `00` switches the heater on); Unknown (whether any other value is accepted — only `00` has ever been written — see [`open-questions.md`](open-questions.md))
-- **Implementation status**: Not implemented
+- **Implementation status**: Implemented in `components/volcano/volcano.cpp` (`turn_heater_on()`). Verified against real hardware, including that the status/flags register reflects the change (STATE-008) and the auto-shutoff countdown arms accordingly (STATE-005).
 
 ## CMD-007 — Heater off
 
 - **Handle**: `0x005e`
 - **Observation**: Writing value `00` triggers the action, mirroring CMD-006's pairing shape (and the pump on/off pairing, CMD-008/CMD-009). Reproduced across multiple sessions. Reading this handle returns `0x00` — see the note below.
 - **Confidence**: Confirmed (that a write of `00` switches the heater off); Unknown (whether any other value is accepted — only `00` has ever been written — see [`open-questions.md`](open-questions.md))
-- **Implementation status**: Not implemented
+- **Implementation status**: Implemented in `components/volcano/volcano.cpp` (`turn_heater_off()`). Verified against real hardware, including that the status/flags register reflects the change (STATE-008) and the auto-shutoff countdown resets to idle accordingly (STATE-005).
 
 ## CMD-008 — Pump on
 
 - **Handle**: `0x0064`
 - **Observation**: Writing value `00` triggers the action. Reproduced across repeated pump toggles performed in isolation, with heater state held constant. Reading this handle returns `0x00` — see the note below.
 - **Confidence**: Confirmed (that a write of `00` switches the pump on); Unknown (whether any other value is accepted — only `00` has ever been written — see [`open-questions.md`](open-questions.md))
-- **Implementation status**: Not implemented
+- **Implementation status**: Implemented in `components/volcano/volcano.cpp` (`turn_pump_on()`). Verified against real hardware, including that the status/flags register reflects the change (STATE-008, `0x3000` with the heater off) and the auto-shutoff countdown arms accordingly (STATE-005).
 
 ## CMD-009 — Pump off
 
 - **Handle**: `0x0066`
 - **Observation**: Writing value `00` triggers the action. Reproduced across repeated pump toggles performed in isolation, with heater state held constant. Reading this handle returns `0x00` — see the note below.
 - **Confidence**: Confirmed (that a write of `00` switches the pump off); Unknown (whether any other value is accepted — only `00` has ever been written — see [`open-questions.md`](open-questions.md))
-- **Implementation status**: Not implemented
+- **Implementation status**: Implemented in `components/volcano/volcano.cpp` (`turn_pump_off()`). Verified against real hardware, including that the status/flags register reflects the change (STATE-008) and the auto-shutoff countdown resets to idle accordingly (STATE-005).
 
 ### Note: the trigger characteristics
 

@@ -1,15 +1,16 @@
 # Minimal example: exercises the `volcano` external component's read-only
 # BLE connection -- decoded heater/pump and auto-shutoff countdown state to
-# the log -- plus a manually-triggered auto-shutoff duration command, on the
-# Phase 1 development board (ADR-0004). It exposes no sensors/entities of
-# its own and has no Home Assistant or UI logic; see
-# components/volcano/README.md and ADR-0002/ADR-0003/ADR-0007 for the
-# architecture this follows.
+# the log -- plus manually-triggered commands (auto-shutoff duration,
+# heater/pump on/off), on the Phase 1 development board (ADR-0004). It has
+# no Home Assistant integration; see components/volcano/README.md and
+# ADR-0002/ADR-0003/ADR-0007 for the architecture this follows.
 #
 # The Volcano's BLE MAC address is unique per unit and deliberately not
 # recorded in this repository (see docs/protocol/README.md). Copy
 # secrets.yaml.example to secrets.yaml alongside it and set your device's
-# address as `volcano_mac_address`.
+# address as `volcano_mac_address`, and your WiFi credentials as
+# `wifi_ssid`/`wifi_password` (needed for the web-based command buttons
+# below -- see the comment above `web_server`).
 
 esphome:
   name: volcano-dev-scaffold
@@ -42,26 +43,50 @@ volcano:
   id: volcano_component
   ble_client_id: volcano_ble_client
 
-# Manual trigger for set_auto_shutoff_duration_seconds(), via the devkit's
-# BOOT button (GPIO0), standing in for a real control interface until one
-# exists (ADR-0002 defers that to Phase 2/3). Sets the auto-shutoff
-# duration to 60s -- the floor CMD-003 confirms the device honours; the
-# component itself refuses anything shorter, since that's unverified and
-# 0 in particular may mean "disabled" (see components/volcano/volcano.h).
-#
-# Per STATE-005, a duration write only takes effect at the *next arming* --
-# it does not reload a countdown already running. To see the new duration
-# take effect, the device must be fully idle (heater off, pump off,
-# countdown at 0) *before* pressing the button; pressing it mid-countdown
-# writes the value but visibly does nothing until the next heater/pump-on.
-binary_sensor:
-  - platform: gpio
-    pin:
-      number: GPIO0
-      mode:
-        input: true
-        pullup: true
-      inverted: true
+# WiFi is needed only for web_server below, to reach the command buttons
+# from a browser -- the volcano component itself is BLE-only and has no
+# dependency on it. Credentials come from secrets.yaml, not committed.
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+# Serves a local page with a button per command below, for manual testing
+# without extra hardware. It listens on this device's local IP with no
+# authentication and no TLS -- fine on a trusted home network for this
+# development example, but not something to expose beyond it.
+web_server:
+  port: 80
+  local: true
+
+button:
+  - platform: template
+    name: "Heater on"
+    on_press:
+      - lambda: |-
+          id(volcano_component).turn_heater_on();
+  - platform: template
+    name: "Heater off"
+    on_press:
+      - lambda: |-
+          id(volcano_component).turn_heater_off();
+  - platform: template
+    name: "Pump on"
+    on_press:
+      - lambda: |-
+          id(volcano_component).turn_pump_on();
+  - platform: template
+    name: "Pump off"
+    on_press:
+      - lambda: |-
+          id(volcano_component).turn_pump_off();
+  # CMD-003's confirmed floor: the lowest duration verified accepted, read
+  # back unchanged, loaded at the next arming, and honoured through to an
+  # actual expiry -- the component itself refuses anything shorter (see
+  # components/volcano/volcano.h). Per STATE-005, a duration write only
+  # takes effect at the *next arming*, not on a countdown already running:
+  # to see it take effect, the device must be fully idle (heater off, pump
+  # off, countdown at 0) *before* pressing this, not mid-countdown.
+  - platform: template
     name: "Set auto-shutoff duration to 60s"
     on_press:
       - lambda: |-

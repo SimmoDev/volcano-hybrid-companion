@@ -12,7 +12,7 @@ The project is in **Phase 1**: establishing the BLE foundation and the Volcano c
 
 At this stage:
 
-- **The Volcano BLE protocol is being implemented incrementally.** The `volcano` component currently connects, resolves five characteristics by UUID — the status/flags register, the auto-shutoff countdown and duration, and current/target temperature — subscribes to the notify-capable ones, reads and decodes their values, and logs them. It also writes the auto-shutoff duration, refusing values below a hardware-verified floor. See `components/volcano/volcano.h` for the `TODO` markers showing where the remaining characteristics, the device state model, and domain commands will go.
+- **The Volcano BLE protocol is being implemented incrementally.** The `volcano` component currently connects, resolves nine characteristics by UUID — the status/flags register, the auto-shutoff countdown and duration, current/target temperature, and the heater/pump on/off triggers — subscribes to the notify-capable ones, reads and decodes their values, and logs them. It also writes the auto-shutoff duration, refusing values below a hardware-verified floor, and the heater/pump on/off triggers. See `components/volcano/volcano.h` for the `TODO` markers showing where the remaining characteristics, the device state model, and the hardware-independent interface for control interfaces will go.
 - **Protocol discovery is underway and follows [ADR-0005](decisions/ADR-0005-volcano-ble-discovery-methodology.md)**: findings are evidence-driven and classified Confirmed/Probable/Unknown, and only Confirmed findings back default implementation. See [`docs/protocol/`](protocol/README.md) for recorded findings.
 - **The Volcano component's internal architecture follows [ADR-0002](decisions/ADR-0002-volcano-component-architecture.md)**: BLE details stay inside the component, control interfaces depend on a hardware-independent interface, and the component owns the device state model.
 - **ESPHome is the firmware framework**, per [ADR-0003](decisions/ADR-0003-esphome-as-firmware-framework.md). The `volcano` component is implemented as an ESPHome external component, and Home Assistant integration (when it exists, in Phase 3) will be an optional consumer of it, not a dependency.
@@ -27,7 +27,7 @@ At this stage:
 
 ## Validating the component locally
 
-The current example configuration is [`examples/esp32-s3-devkit-minimal.yaml`](../examples/esp32-s3-devkit-minimal.yaml). It loads the `volcano` component and targets the Phase 1 development board; it exposes no sensors or entities. It reads a BLE MAC address from `examples/secrets.yaml` (not committed — copy it from [`examples/secrets.yaml.example`](../examples/secrets.yaml.example)), but `esphome config`/`esphome compile` below need only a placeholder value, not a real device.
+The current example configuration is [`examples/esp32-s3-devkit-minimal.yaml`](../examples/esp32-s3-devkit-minimal.yaml). It loads the `volcano` component and targets the Phase 1 development board; its only entities are manual command-trigger buttons — see [`examples/README.md`](../examples/README.md) for what they do. It reads a BLE MAC address from `examples/secrets.yaml` (not committed — copy it from [`examples/secrets.yaml.example`](../examples/secrets.yaml.example)), but `esphome config`/`esphome compile` below need only a placeholder value, not a real device.
 
 Requires the [ESPHome CLI](https://esphome.io/) installed locally. From the repository root:
 

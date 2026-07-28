@@ -14,9 +14,9 @@ namespace volcano {
 // VolcanoComponent is the root of the Volcano component defined in
 // ADR-0002 (docs/decisions/ADR-0002-volcano-component-architecture.md).
 //
-// This is the read-only foundation of the BLE communication layer,
-// following the connect / resolve / subscribe / read / decode path proved
-// by the first increment on a growing set of characteristics: the
+// This is the BLE communication layer's foundation, following the
+// connect / resolve / subscribe / read / decode path proved by the first
+// increment on a growing set of characteristics: the
 // status/flags register (CHAR-008, decoded in
 // docs/protocol/state-model.md#state-008-statusflags-register-partial),
 // the auto-shutoff countdown (CHAR-016, decoded in
@@ -26,16 +26,22 @@ namespace volcano {
 // Current temperature reads `0` whenever the heater is off below 40 degC
 // (STATE-012); that is logged as "no reading", never as a temperature.
 //
-// It also carries the first production write: set_auto_shutoff_duration_seconds()
+// It also carries the first production writes. set_auto_shutoff_duration_seconds()
 // writes the auto-shutoff duration (CHAR-017, CMD-003 in
 // docs/protocol/commands.md). CMD-003 is Confirmed down to 60 seconds --
 // accepted, read back unchanged, loaded at the next arming, and honoured
 // through to an actual expiry -- so this refuses anything below that floor
 // rather than writing an untested value: 0 in particular is unverified and
 // may mean "disabled" on this device, which would silently remove the only
-// backstop ADR-0007's persistent-connection design relies on. No other
-// write, and nothing that can actuate the heater or pump, exists anywhere
-// here.
+// backstop ADR-0007's persistent-connection design relies on.
+//
+// turn_heater_on()/turn_heater_off()/turn_pump_on()/turn_pump_off() write the
+// four one-byte trigger characteristics (CHAR-018 through CHAR-021,
+// CMD-006 through CMD-009), each Confirmed to accept the single value `0x00`
+// -- the only value ever observed written to them -- so that is the only
+// value these write. This is the first code in this component that can
+// actuate the heater, which is why the auto-shutoff floor above matters here
+// specifically.
 //
 // Connection lifecycle follows ADR-0007
 // (docs/decisions/ADR-0007-ble-connection-lifecycle.md): the parent
@@ -48,7 +54,7 @@ namespace volcano {
 // TODO(volcano-component): the remaining characteristics, the full Volcano
 // device state model, and the hardware-independent interface for control
 // interfaces (all per ADR-0002) are not yet implemented -- this component
-// currently only logs decoded state and writes the one characteristic
+// currently only logs decoded state and writes the characteristics
 // documented above.
 class VolcanoComponent : public Component, public ble_client::BLEClientNode {
  public:
@@ -65,6 +71,13 @@ class VolcanoComponent : public Component, public ble_client::BLEClientNode {
   // below that floor or no connection is established.
   void set_auto_shutoff_duration_seconds(uint16_t seconds);
 
+  // CMD-006 through CMD-009: each writes `0x00` to its trigger
+  // characteristic. A no-op, logged, if no connection is established.
+  void turn_heater_on();
+  void turn_heater_off();
+  void turn_pump_on();
+  void turn_pump_off();
+
  protected:
   void decode_status_(const uint8_t *value, uint16_t value_len);
   void decode_countdown_(const uint8_t *value, uint16_t value_len);
@@ -78,6 +91,10 @@ class VolcanoComponent : public Component, public ble_client::BLEClientNode {
   uint16_t duration_handle_{0};       // CHAR-017: auto-shutoff duration.
   uint16_t current_temp_handle_{0};   // CHAR-013: current (actual) temperature.
   uint16_t target_temp_handle_{0};    // CHAR-014: target temperature.
+  uint16_t heater_on_handle_{0};      // CHAR-018: heater on trigger.
+  uint16_t heater_off_handle_{0};     // CHAR-019: heater off trigger.
+  uint16_t pump_on_handle_{0};        // CHAR-020: pump on trigger.
+  uint16_t pump_off_handle_{0};       // CHAR-021: pump off trigger.
 
   // Number of ESP_GATTC_REG_FOR_NOTIFY_EVT callbacks still outstanding.
   // node_state must not become ESTABLISHED until this reaches zero: the

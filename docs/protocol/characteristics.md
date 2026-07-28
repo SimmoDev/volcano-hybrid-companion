@@ -187,7 +187,7 @@ Each notify-capable characteristic's Client Characteristic Configuration descrip
 - **Properties**: Read/Write
 - **Observation**: See [CMD-006](commands.md#cmd-006--heater-on). Reading returns `0x00`.
 - **Confidence**: Confirmed
-- **Implementation status**: Not implemented
+- **Implementation status**: Implemented in `components/volcano/volcano.cpp`. Verified against real hardware.
 
 ## CHAR-019 — Heater off trigger
 
@@ -197,7 +197,7 @@ Each notify-capable characteristic's Client Characteristic Configuration descrip
 - **Properties**: Read/Write
 - **Observation**: See [CMD-007](commands.md#cmd-007--heater-off). Reading returns `0x00`.
 - **Confidence**: Confirmed
-- **Implementation status**: Not implemented
+- **Implementation status**: Implemented in `components/volcano/volcano.cpp`. Verified against real hardware.
 
 ## CHAR-020 — Pump on trigger
 
@@ -207,7 +207,7 @@ Each notify-capable characteristic's Client Characteristic Configuration descrip
 - **Properties**: Read/Write
 - **Observation**: See [CMD-008](commands.md#cmd-008--pump-on). Reading returns `0x00`.
 - **Confidence**: Confirmed
-- **Implementation status**: Not implemented
+- **Implementation status**: Implemented in `components/volcano/volcano.cpp`. Verified against real hardware.
 
 ## CHAR-021 — Pump off trigger
 
@@ -217,7 +217,7 @@ Each notify-capable characteristic's Client Characteristic Configuration descrip
 - **Properties**: Read/Write
 - **Observation**: See [CMD-009](commands.md#cmd-009--pump-off). Reading returns `0x00`.
 - **Confidence**: Confirmed
-- **Implementation status**: Not implemented
+- **Implementation status**: Implemented in `components/volcano/volcano.cpp`. Verified against real hardware.
 
 ## CHAR-022 — Hours of Operation
 

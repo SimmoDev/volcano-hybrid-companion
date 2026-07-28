@@ -3,9 +3,9 @@
 This is the `volcano` ESPHome external component. It is a `ble_client` node ([ADR-0007](../../docs/decisions/ADR-0007-ble-connection-lifecycle.md)) that currently implements:
 
 - **Read-only state**: on each connection it resolves the status/flags register (`CHAR-008`), the auto-shutoff countdown (`CHAR-016`), and current/target temperature (`CHAR-013`/`CHAR-014`) by UUID, subscribes, reads their initial values, decodes them, and logs them. Current temperature's sub-40 °C "no reading" gate (STATE-012) is decoded explicitly rather than logged as a false `0.0` reading.
-- **One write**: `set_auto_shutoff_duration_seconds()` writes the auto-shutoff duration (`CHAR-017`), refusing anything below 60 seconds — the floor CMD-003 confirms the device accepts, loads at the next arming, and honours through to an actual expiry. Values below that are unverified and are not written.
+- **Writes**: `set_auto_shutoff_duration_seconds()` writes the auto-shutoff duration (`CHAR-017`), refusing anything below 60 seconds — the floor CMD-003 confirms the device accepts, loads at the next arming, and honours through to an actual expiry. Values below that are unverified and are not written. `turn_heater_on()`/`turn_heater_off()`/`turn_pump_on()`/`turn_pump_off()` write the four one-byte trigger characteristics (`CHAR-018`–`CHAR-021`), each with the single value CMD-006 through CMD-009 confirm those characteristics accept.
 
-No other write exists, and nothing here can actuate the heater or pump. See `volcano.h` for the `TODO` markers showing where the remaining protocol coverage and the Volcano abstraction layer ([ADR-0002](../../docs/decisions/ADR-0002-volcano-component-architecture.md)) belong.
+See `volcano.h` for the `TODO` markers showing where the remaining protocol coverage and the Volcano abstraction layer ([ADR-0002](../../docs/decisions/ADR-0002-volcano-component-architecture.md)) belong.
 
 Protocol behaviour to implement here is recorded in [`docs/protocol/`](../../docs/protocol/README.md). Per [ADR-0005](../../docs/decisions/ADR-0005-volcano-ble-discovery-methodology.md), only findings classified **Confirmed** back default production behaviour; Probable findings belong behind clearly marked experimental code, and Unknown behaviour must not be encoded as an assumption.
 

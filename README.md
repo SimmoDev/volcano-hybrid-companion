@@ -6,7 +6,7 @@ This project is **not affiliated with, endorsed by, or supported by Storz & Bick
 
 ## Status
 
-Early development. The `volcano` ESPHome component's BLE communication layer connects to the device and implements read-only status, auto-shutoff countdown, and temperature reporting, plus one write (auto-shutoff duration) — all verified against real hardware. It does not yet control the heater or pump, and the hardware-independent Volcano abstraction layer that control interfaces will depend on doesn't exist yet. BLE protocol discovery is ongoing — see [`docs/protocol/`](docs/protocol/README.md) for recorded findings.
+Early development. The `volcano` ESPHome component's BLE communication layer connects to the device and implements read-only status, auto-shutoff countdown, and temperature reporting, plus writes for the auto-shutoff duration and heater/pump on/off — all verified against real hardware. The hardware-independent Volcano abstraction layer that control interfaces will depend on doesn't exist yet. BLE protocol discovery is ongoing — see [`docs/protocol/`](docs/protocol/README.md) for recorded findings.
 
 Initial development is taking place on an ESP32-S3-WROOM-1-N16R8 development board. Once the BLE implementation is mature, development will move to the M5Stack Dial for the user interface.
 
