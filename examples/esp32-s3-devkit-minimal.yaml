@@ -43,6 +43,18 @@ ble_client:
 volcano:
   id: volcano_component
   ble_client_id: volcano_ble_client
+  # Optional -- publishes decoded state so it shows on the web_server page
+  # below alongside the command controls, including on-panel changes.
+  current_temperature:
+    name: "Current temperature"
+  target_temperature:
+    name: "Target temperature"
+  auto_shutoff_countdown:
+    name: "Auto-shutoff countdown"
+  heater:
+    name: "Heater"
+  pump:
+    name: "Pump"
 
 # WiFi is needed only for web_server below, to reach the command buttons
 # from a browser -- the volcano component itself is BLE-only and has no

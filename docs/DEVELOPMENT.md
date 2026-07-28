@@ -27,7 +27,7 @@ At this stage:
 
 ## Validating the component locally
 
-The current example configuration is [`examples/esp32-s3-devkit-minimal.yaml`](../examples/esp32-s3-devkit-minimal.yaml). It loads the `volcano` component and targets the Phase 1 development board; its only entities are manual command-trigger buttons — see [`examples/README.md`](../examples/README.md) for what they do. It reads a BLE MAC address from `examples/secrets.yaml` (not committed — copy it from [`examples/secrets.yaml.example`](../examples/secrets.yaml.example)), but `esphome config`/`esphome compile` below need only a placeholder value, not a real device.
+The current example configuration is [`examples/esp32-s3-devkit-minimal.yaml`](../examples/esp32-s3-devkit-minimal.yaml). It loads the `volcano` component and targets the Phase 1 development board, with manual command-trigger controls and state sensors — see [`examples/README.md`](../examples/README.md) for what they do. It reads a BLE MAC address from `examples/secrets.yaml` (not committed — copy it from [`examples/secrets.yaml.example`](../examples/secrets.yaml.example)), but `esphome config`/`esphome compile` below need only a placeholder value, not a real device.
 
 Requires the [ESPHome CLI](https://esphome.io/) installed locally. From the repository root:
 

@@ -5,6 +5,8 @@
 #include "esphome/core/helpers.h"
 #include "esphome/core/log.h"
 
+#include <cmath>
+
 namespace esphome {
 namespace volcano {
 
@@ -106,6 +108,9 @@ void VolcanoComponent::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
       this->pump_off_handle_ = 0;
       this->pending_subscriptions_ = 0;
       ESP_LOGI(TAG, "Disconnected; heater/pump/countdown/temperature state unknown");
+      // Any configured sensor/binary_sensor keeps its last published value
+      // here rather than going unavailable -- there is no ESPHome API this
+      // component can use to mark one unavailable from custom C++ code.
       break;
     }
     case ESP_GATTC_SEARCH_CMPL_EVT: {
@@ -336,6 +341,10 @@ void VolcanoComponent::decode_status_(const uint8_t *value, uint16_t value_len) 
   bool heater_on = (status & STATUS_BIT_HEATER_ON) != 0;
   bool pump_on = (status & STATUS_BIT_PUMP_ON) != 0;
   ESP_LOGI(TAG, "Heater %s, pump %s (status=0x%04x)", heater_on ? "on" : "off", pump_on ? "on" : "off", status);
+  if (this->heater_binary_sensor_ != nullptr)
+    this->heater_binary_sensor_->publish_state(heater_on);
+  if (this->pump_binary_sensor_ != nullptr)
+    this->pump_binary_sensor_->publish_state(pump_on);
 }
 
 void VolcanoComponent::decode_countdown_(const uint8_t *value, uint16_t value_len) {
@@ -346,6 +355,8 @@ void VolcanoComponent::decode_countdown_(const uint8_t *value, uint16_t value_le
   }
   uint16_t seconds = encode_uint16(value[1], value[0]);
   ESP_LOGI(TAG, "Auto-shutoff countdown: %u s", seconds);
+  if (this->auto_shutoff_countdown_sensor_ != nullptr)
+    this->auto_shutoff_countdown_sensor_->publish_state(seconds);
 }
 
 // STATE-007/CMD-001: both temperature characteristics share a 4-byte
@@ -366,11 +377,16 @@ void VolcanoComponent::decode_current_temperature_(const uint8_t *value, uint16_
   }
   // STATE-012: 0 means no reading available -- the device stops reporting
   // current temperature below 40 degC whenever the heater is off -- not a
-  // true 0 degC reading, so it must never be logged as a temperature.
+  // true 0 degC reading, so it must never be logged, or published, as a
+  // temperature. NAN is the ESPHome convention for "no valid reading".
   if (raw == 0) {
     ESP_LOGI(TAG, "Current temperature: no reading (below 40 C, heater off)");
+    if (this->current_temperature_sensor_ != nullptr)
+      this->current_temperature_sensor_->publish_state(NAN);
   } else {
     ESP_LOGI(TAG, "Current temperature: %.1f C", raw / 10.0f);
+    if (this->current_temperature_sensor_ != nullptr)
+      this->current_temperature_sensor_->publish_state(raw / 10.0f);
   }
 }
 
@@ -381,6 +397,8 @@ void VolcanoComponent::decode_target_temperature_(const uint8_t *value, uint16_t
     return;
   }
   ESP_LOGI(TAG, "Target temperature: %.1f C", raw / 10.0f);
+  if (this->target_temperature_sensor_ != nullptr)
+    this->target_temperature_sensor_->publish_state(raw / 10.0f);
 }
 
 void VolcanoComponent::set_auto_shutoff_duration_seconds(uint16_t seconds) {

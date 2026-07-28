@@ -5,6 +5,8 @@
 #ifdef USE_ESP32
 
 #include "esphome/components/ble_client/ble_client.h"
+#include "esphome/components/binary_sensor/binary_sensor.h"
+#include "esphome/components/sensor/sensor.h"
 
 #include <esp_gattc_api.h>
 
@@ -57,11 +59,18 @@ namespace volcano {
 // state carries over, and treats heater/pump state as unknown while
 // disconnected.
 //
+// Every decoded value above is also published to an optional ESPHome
+// sensor/binary_sensor, configured directly under the `volcano:` block (see
+// __init__.py), if one is configured for it -- e.g. so it can show on an
+// ESPHome web_server page, per components/volcano/README.md. This is a
+// stopgap: it exposes decoded state, not a hardware-independent Volcano
+// domain interface, which is still the TODO below.
+//
 // TODO(volcano-component): the remaining characteristics, the full Volcano
 // device state model, and the hardware-independent interface for control
 // interfaces (all per ADR-0002) are not yet implemented -- this component
-// currently only logs decoded state and writes the characteristics
-// documented above.
+// currently only logs and optionally publishes decoded state, and writes
+// the characteristics documented above.
 class VolcanoComponent : public Component, public ble_client::BLEClientNode {
  public:
   void setup() override;
@@ -89,6 +98,15 @@ class VolcanoComponent : public Component, public ble_client::BLEClientNode {
   // confirmed range this refuses to go outside of).
   void set_target_temperature_decidegrees(uint16_t decidegrees);
 
+  // Optional sinks for decoded state, set by __init__.py from the `volcano:`
+  // block's optional sensor/binary_sensor sub-schemas. Each is published to
+  // from the corresponding decode_*_() method below when configured.
+  void set_current_temperature_sensor(sensor::Sensor *s) { current_temperature_sensor_ = s; }
+  void set_target_temperature_sensor(sensor::Sensor *s) { target_temperature_sensor_ = s; }
+  void set_auto_shutoff_countdown_sensor(sensor::Sensor *s) { auto_shutoff_countdown_sensor_ = s; }
+  void set_heater_binary_sensor(binary_sensor::BinarySensor *s) { heater_binary_sensor_ = s; }
+  void set_pump_binary_sensor(binary_sensor::BinarySensor *s) { pump_binary_sensor_ = s; }
+
  protected:
   void decode_status_(const uint8_t *value, uint16_t value_len);
   void decode_countdown_(const uint8_t *value, uint16_t value_len);
@@ -106,6 +124,14 @@ class VolcanoComponent : public Component, public ble_client::BLEClientNode {
   uint16_t heater_off_handle_{0};     // CHAR-019: heater off trigger.
   uint16_t pump_on_handle_{0};        // CHAR-020: pump on trigger.
   uint16_t pump_off_handle_{0};       // CHAR-021: pump off trigger.
+
+  // Optional publish targets set via the set_*_sensor() methods above.
+  // Null unless configured in YAML.
+  sensor::Sensor *current_temperature_sensor_{nullptr};
+  sensor::Sensor *target_temperature_sensor_{nullptr};
+  sensor::Sensor *auto_shutoff_countdown_sensor_{nullptr};
+  binary_sensor::BinarySensor *heater_binary_sensor_{nullptr};
+  binary_sensor::BinarySensor *pump_binary_sensor_{nullptr};
 
   // Number of ESP_GATTC_REG_FOR_NOTIFY_EVT callbacks still outstanding.
   // node_state must not become ESTABLISHED until this reaches zero: the
