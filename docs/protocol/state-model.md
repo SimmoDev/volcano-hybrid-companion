@@ -47,7 +47,7 @@ Readable/notified device state. Format per [ADR-0006](../decisions/ADR-0006-prot
   The load, the decrement rate, and the reset on returning to idle have each been reproduced across separate heating cycles and separate pump-only runs, and a full expiry has been observed end to end across many separate sessions.
 - **Interpretation**: Live "time remaining until the device shuts its actuators off", armed by activity rather than free-running, and snapshotted at the moment of arming rather than tracking the configured duration continuously. Because pump-on arms it too, it is a general unattended-operation backstop rather than a heater-specific one.
 - **Confidence**: Confirmed (encoding, load on heater-on and on pump-on, decrement rate, reset on return to idle, reload-in-full on each arming, indifference to a pump toggle mid-run, that a duration change does not reload a running countdown, and that reaching zero switches off whichever actuators are running)
-- **Implementation status**: Not implemented
+- **Implementation status**: Implemented (the value's read and decode) in `components/volcano/volcano.cpp`. Verified against real hardware, including the load at arming, the per-second decrement, and the reset on returning to idle. The component reports the countdown rather than acting on it: none of the arming, reload or expiry behaviour documented above is encoded as logic.
 
 ## STATE-006 — Minutes of Operation
 

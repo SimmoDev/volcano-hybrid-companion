@@ -167,7 +167,7 @@ Each notify-capable characteristic's Client Characteristic Configuration descrip
 - **Properties**: Read/Notify
 - **Observation**: 2-byte value in seconds — see [STATE-005](state-model.md#state-005--auto-shutoff-countdown). Behaves as a live countdown, decreasing at very close to one unit per elapsed second.
 - **Confidence**: Confirmed
-- **Implementation status**: Not implemented
+- **Implementation status**: Implemented (read-only) in `components/volcano/volcano.cpp` — resolved by UUID, subscribed, initial value read explicitly, decoded on both the initial read and subsequent notifications. Verified against real hardware.
 
 ## CHAR-017 — Auto-shutoff duration
 
@@ -177,7 +177,7 @@ Each notify-capable characteristic's Client Characteristic Configuration descrip
 - **Properties**: Read/Write
 - **Observation**: See [CMD-003](commands.md#cmd-003--set-auto-shutoff-duration). Read value uses the same 2-byte-seconds encoding as the write.
 - **Confidence**: Confirmed
-- **Implementation status**: Not implemented
+- **Implementation status**: Implemented in `components/volcano/volcano.cpp`, both the write (CMD-003) and the read-back that confirms it. Verified against real hardware.
 
 ## CHAR-018 — Heater on trigger
 
