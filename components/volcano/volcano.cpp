@@ -65,6 +65,8 @@ static const char *const LED_BRIGHTNESS_CHARACTERISTIC_UUID = "10110005-5354-4f5
 // CHAR-010/CMD-004: vibration setting (SVC-005). Note the "10100" prefix:
 // this is a settings-service register, not one of the SVC-006 controls.
 static const char *const VIBRATION_CHARACTERISTIC_UUID = "1010000e-5354-4f52-5a26-4249434b454c";
+// CHAR-009/CMD-005: display-on-cooling and units register (SVC-005).
+static const char *const DISPLAY_REGISTER_CHARACTERISTIC_UUID = "1010000d-5354-4f52-5a26-4249434b454c";
 
 // STATE-008: bit 5 is set whenever the heater is on, clear when off.
 static const uint16_t STATUS_BIT_HEATER_ON = 0x0020;
@@ -111,6 +113,17 @@ static const uint8_t MAX_LED_BRIGHTNESS_PERCENT = 100;
 // new bit's polarity has to be established rather than assumed from this one.
 static const uint32_t VIBRATION_BIT_DISABLED = 0x0400;
 
+// CHAR-009/CMD-005: the display-on-cooling bit within its register, with the
+// same inverted polarity as the vibration bit above -- clear means the
+// device shows current temperature while cooling, set means it shows none.
+//
+// The register carries more than this: the Celsius/Fahrenheit units bit
+// (STATE-010) and a bit that pulses on every 1 degC change of current
+// temperature (STATE-009), plus bits still unidentified. None of those is
+// decoded, and the mask-and-action write form names only the bit below, so
+// writing this setting cannot disturb them.
+static const uint32_t DISPLAY_ON_COOLING_BIT_DISABLED = 0x1000;
+
 static void subscribe(esphome::ble_client::BLEClient *client, uint16_t handle, const char *name) {
   auto status = esp_ble_gattc_register_for_notify(client->get_gattc_if(), client->get_remote_bda(), handle);
   if (status) {
@@ -141,7 +154,8 @@ void VolcanoComponent::dump_config() {
   ESP_LOGCONFIG(TAG, "    heater on/off (CHAR-018/019), pump on/off (CHAR-020/021);");
   ESP_LOGCONFIG(TAG, "    target temperature (CHAR-014), %.1f-%.1f C;", MIN_TARGET_TEMPERATURE_DECIDEGREES / 10.0f,
                 MAX_TARGET_TEMPERATURE_DECIDEGREES / 10.0f);
-  ESP_LOGCONFIG(TAG, "    LED brightness (CHAR-015), 0-%u%%; vibration (CHAR-010).", MAX_LED_BRIGHTNESS_PERCENT);
+  ESP_LOGCONFIG(TAG, "    LED brightness (CHAR-015), 0-%u%%; vibration (CHAR-010);", MAX_LED_BRIGHTNESS_PERCENT);
+  ESP_LOGCONFIG(TAG, "    display on cooling (CHAR-009).");
 }
 
 void VolcanoComponent::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if,
@@ -167,6 +181,8 @@ void VolcanoComponent::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
       this->minutes_handle_ = 0;
       this->led_brightness_handle_ = 0;
       this->vibration_handle_ = 0;
+      this->display_register_handle_ = 0;
+      this->display_on_cooling_state_ = -1;
       this->pending_subscriptions_ = 0;
       this->static_read_count_ = 0;
       this->static_read_index_ = 0;
@@ -209,6 +225,16 @@ void VolcanoComponent::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
         this->vibration_handle_ = vibration_chr->handle;
         this->pending_subscriptions_++;
         subscribe(this->parent(), this->vibration_handle_, "vibration setting");
+      }
+
+      auto *display_register_chr = this->parent()->get_characteristic(
+          settings_service, espbt::ESPBTUUID::from_raw(DISPLAY_REGISTER_CHARACTERISTIC_UUID));
+      if (display_register_chr == nullptr) {
+        ESP_LOGW(TAG, "Display/units register (CHAR-009) not found on device");
+      } else {
+        this->display_register_handle_ = display_register_chr->handle;
+        this->pending_subscriptions_++;
+        subscribe(this->parent(), this->display_register_handle_, "display/units register");
       }
 
       auto *countdown_chr = this->parent()->get_characteristic(
@@ -358,7 +384,7 @@ void VolcanoComponent::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
       if (handle != this->status_handle_ && handle != this->countdown_handle_ &&
           handle != this->current_temp_handle_ && handle != this->target_temp_handle_ &&
           handle != this->hours_handle_ && handle != this->minutes_handle_ &&
-          handle != this->vibration_handle_)
+          handle != this->vibration_handle_ && handle != this->display_register_handle_)
         break;
 
       // node_state must not become ESTABLISHED until every subscription
@@ -425,6 +451,8 @@ void VolcanoComponent::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
         this->decode_current_temperature_(param->read.value, param->read.value_len);
       } else if (param->read.handle == this->target_temp_handle_) {
         this->decode_target_temperature_(param->read.value, param->read.value_len);
+      } else if (param->read.handle == this->display_register_handle_) {
+        this->decode_display_register_(param->read.value, param->read.value_len);
       } else if (param->read.handle == this->vibration_handle_) {
         this->decode_vibration_(param->read.value, param->read.value_len);
       } else if (param->read.handle == this->led_brightness_handle_) {
@@ -470,6 +498,8 @@ void VolcanoComponent::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
         this->decode_current_temperature_(param->notify.value, param->notify.value_len);
       } else if (param->notify.handle == this->target_temp_handle_) {
         this->decode_target_temperature_(param->notify.value, param->notify.value_len);
+      } else if (param->notify.handle == this->display_register_handle_) {
+        this->decode_display_register_(param->notify.value, param->notify.value_len);
       } else if (param->notify.handle == this->vibration_handle_) {
         this->decode_vibration_(param->notify.value, param->notify.value_len);
       } else if (param->notify.handle == this->hours_handle_) {
@@ -495,6 +525,11 @@ void VolcanoComponent::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
         if (param->write.status != ESP_GATT_OK) {
           ESP_LOGW(TAG, "Trigger write to handle 0x%04x failed, status=%d", param->write.handle,
                    param->write.status);
+        }
+      } else if (param->write.handle == this->display_register_handle_) {
+        // Notifies, so no read-back: decode_display_register_() publishes.
+        if (param->write.status != ESP_GATT_OK) {
+          ESP_LOGW(TAG, "Display-on-cooling write failed, status=%d", param->write.status);
         }
       } else if (param->write.handle == this->vibration_handle_) {
         // No read-back here: unlike the write-only-readable settings,
@@ -623,6 +658,28 @@ void VolcanoComponent::decode_vibration_(const uint8_t *value, uint16_t value_le
   ESP_LOGI(TAG, "Vibration %s (register=0x%08x)", enabled ? "on" : "off", reg);
   if (this->vibration_switch_ != nullptr)
     this->vibration_switch_->publish_state(enabled);
+}
+
+void VolcanoComponent::decode_display_register_(const uint8_t *value, uint16_t value_len) {
+  if (value_len < 4) {
+    ESP_LOGW(TAG, "Display/units register value too short (%u bytes)", value_len);
+    return;
+  }
+  uint32_t reg = encode_uint32(value[3], value[2], value[1], value[0]);
+  // Inverted, as for vibration: the bit being clear is what means enabled.
+  bool enabled = (reg & DISPLAY_ON_COOLING_BIT_DISABLED) == 0;
+
+  // This register notifies on every 1 degC change of current temperature
+  // (STATE-009), so it arrives every few seconds throughout a run while
+  // this setting has not moved at all. Log only actual changes; publishing
+  // an unchanged state is harmless, but a log line every few seconds is not.
+  int8_t state = enabled ? 1 : 0;
+  if (state != this->display_on_cooling_state_) {
+    ESP_LOGI(TAG, "Display on cooling %s (register=0x%08x)", enabled ? "on" : "off", reg);
+    this->display_on_cooling_state_ = state;
+  }
+  if (this->display_on_cooling_switch_ != nullptr)
+    this->display_on_cooling_switch_->publish_state(enabled);
 }
 
 void VolcanoComponent::decode_hours_(const uint8_t *value, uint16_t value_len) {
@@ -785,6 +842,29 @@ void VolcanoComponent::set_vibration(bool enabled) {
   }
 }
 
+void VolcanoComponent::set_display_on_cooling(bool enabled) {
+  if (this->display_register_handle_ == 0) {
+    ESP_LOGW(TAG, "Display/units register not resolved; not connected?");
+    return;
+  }
+  // CMD-005's confirmed mask-and-action form, identical in shape to CMD-004
+  // and naming only the display-on-cooling bit -- so the units bit and the
+  // register's unidentified bits are left alone.
+  uint8_t payload[4] = {
+      static_cast<uint8_t>(DISPLAY_ON_COOLING_BIT_DISABLED & 0xFF),
+      static_cast<uint8_t>((DISPLAY_ON_COOLING_BIT_DISABLED >> 8) & 0xFF),
+      static_cast<uint8_t>(enabled ? 0x00 : 0x01),
+      0x00,
+  };
+  ESP_LOGI(TAG, "Turning display on cooling %s", enabled ? "on" : "off");
+  auto status = esp_ble_gattc_write_char(this->parent()->get_gattc_if(), this->parent()->get_conn_id(),
+                                         this->display_register_handle_, sizeof(payload), payload,
+                                         ESP_GATT_WRITE_TYPE_RSP, ESP_GATT_AUTH_REQ_NONE);
+  if (status) {
+    ESP_LOGW(TAG, "esp_ble_gattc_write_char failed, status=%d", status);
+  }
+}
+
 // CMD-006 through CMD-009: every trigger characteristic accepts only the
 // single value 0x00 -- the only value ever observed written to any of them
 // (see the trigger-characteristics note in docs/protocol/commands.md) -- so
@@ -859,6 +939,8 @@ void VolcanoTargetTemperatureNumber::control(float value) {
 }
 
 void VolcanoVibrationSwitch::write_state(bool state) { this->parent_->set_vibration(state); }
+
+void VolcanoDisplayOnCoolingSwitch::write_state(bool state) { this->parent_->set_display_on_cooling(state); }
 
 void VolcanoLedBrightnessNumber::control(float value) {
   long percent = lroundf(value);

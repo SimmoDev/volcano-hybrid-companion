@@ -56,6 +56,7 @@ CONF_SERIAL_NUMBER = "serial_number"
 CONF_POWER_SUPPLY = "power_supply"
 CONF_PRODUCT_LINE = "product_line"
 CONF_VIBRATION = "vibration"
+CONF_DISPLAY_ON_COOLING = "display_on_cooling"
 CONF_LED_BRIGHTNESS = "led_brightness"
 CONF_HOURS_OF_OPERATION = "hours_of_operation"
 CONF_MINUTES_OF_OPERATION = "minutes_of_operation"
@@ -75,6 +76,9 @@ VolcanoLedBrightnessNumber = volcano_ns.class_(
 )
 VolcanoVibrationSwitch = volcano_ns.class_(
     "VolcanoVibrationSwitch", switch.Switch, cg.Parented.template(VolcanoComponent)
+)
+VolcanoDisplayOnCoolingSwitch = volcano_ns.class_(
+    "VolcanoDisplayOnCoolingSwitch", switch.Switch, cg.Parented.template(VolcanoComponent)
 )
 VolcanoHeaterSwitch = volcano_ns.class_(
     "VolcanoHeaterSwitch", switch.Switch, cg.Parented.template(VolcanoComponent)
@@ -202,6 +206,12 @@ CONFIG_SCHEMA = (
                 entity_category=ENTITY_CATEGORY_CONFIG,
                 default_restore_mode="DISABLED",
             ),
+            cv.Optional(CONF_DISPLAY_ON_COOLING): switch.switch_schema(
+                VolcanoDisplayOnCoolingSwitch,
+                icon="mdi:snowflake",
+                entity_category=ENTITY_CATEGORY_CONFIG,
+                default_restore_mode="DISABLED",
+            ),
             # Device information: fixed per unit, read once per connection,
             # never written. Diagnostic rather than primary state, so they
             # do not sit alongside the controls by default.
@@ -299,6 +309,11 @@ async def to_code(config):
         sw = await switch.new_switch(vibration_config)
         await cg.register_parented(sw, var)
         cg.add(var.set_vibration_switch(sw))
+
+    if display_config := config.get(CONF_DISPLAY_ON_COOLING):
+        sw = await switch.new_switch(display_config)
+        await cg.register_parented(sw, var)
+        cg.add(var.set_display_on_cooling_switch(sw))
 
     for key, setter in (
         (CONF_FIRMWARE_VERSION, var.set_firmware_version_text_sensor),

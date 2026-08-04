@@ -101,6 +101,13 @@ volcano:
     name: "Vibration"
     web_server:
       sorting_weight: 80
+  # Whether the device shows current temperature on its own display while
+  # cooling. Display-only: current temperature keeps notifying over BLE
+  # regardless, so nothing this component reads is affected.
+  display_on_cooling:
+    name: "Display on cooling"
+    web_server:
+      sorting_weight: 90
   # CMD-002 records a 0-100 scale, which is the default range here.
   led_brightness:
     name: "LED brightness"

@@ -95,6 +95,19 @@ class VolcanoVibrationSwitch : public switch_::Switch, public Parented<VolcanoCo
   void write_state(bool state) override;
 };
 
+// Display-on-cooling setting (CHAR-009, CMD-005): whether the device shows
+// the current temperature on its own display while cooling. Display-only --
+// current temperature keeps notifying over BLE either way -- so it affects
+// nothing this component reads.
+//
+// Its bit is inverted like the vibration setting's, and it shares a register
+// with the display units bit (STATE-010) and the temperature-step pulse
+// (STATE-009), neither of which is decoded here.
+class VolcanoDisplayOnCoolingSwitch : public switch_::Switch, public Parented<VolcanoComponent> {
+ protected:
+  void write_state(bool state) override;
+};
+
 // VolcanoComponent is the root of the Volcano component defined in
 // ADR-0002 (docs/decisions/ADR-0002-volcano-component-architecture.md).
 //
@@ -206,6 +219,11 @@ class VolcanoComponent : public Component, public ble_client::BLEClientNode {
   // inverse, per CHAR-010's inverted polarity.
   void set_vibration(bool enabled);
 
+  // Writes CMD-005's confirmed mask-and-action form to the display/units
+  // register, naming only the display-on-cooling bit. `enabled` is the
+  // user-facing sense; the bit written is its inverse.
+  void set_display_on_cooling(bool enabled);
+
   // Optional sinks for decoded state, set by __init__.py from the `volcano:`
   // block's optional entity sub-schemas. Each is published to from the
   // corresponding decode_*_() method below when configured. The two number
@@ -218,6 +236,7 @@ class VolcanoComponent : public Component, public ble_client::BLEClientNode {
   void set_heater_switch(VolcanoHeaterSwitch *s) { heater_switch_ = s; }
   void set_pump_switch(VolcanoPumpSwitch *s) { pump_switch_ = s; }
   void set_vibration_switch(VolcanoVibrationSwitch *s) { vibration_switch_ = s; }
+  void set_display_on_cooling_switch(VolcanoDisplayOnCoolingSwitch *s) { display_on_cooling_switch_ = s; }
   void set_firmware_version_text_sensor(text_sensor::TextSensor *s) { firmware_version_text_sensor_ = s; }
   void set_ble_firmware_version_text_sensor(text_sensor::TextSensor *s) { ble_firmware_version_text_sensor_ = s; }
   void set_serial_number_text_sensor(text_sensor::TextSensor *s) { serial_number_text_sensor_ = s; }
@@ -258,6 +277,7 @@ class VolcanoComponent : public Component, public ble_client::BLEClientNode {
   uint16_t minutes_handle_{0};               // CHAR-023: minutes of operation.
   uint16_t led_brightness_handle_{0};        // CHAR-015: LED brightness.
   uint16_t vibration_handle_{0};             // CHAR-010: vibration setting.
+  uint16_t display_register_handle_{0};      // CHAR-009: display/units register.
 
   // Reads CHAR-017, whose value nothing else would otherwise reveal: it has
   // no notify, so without this the configured duration is unknown until
@@ -267,6 +287,7 @@ class VolcanoComponent : public Component, public ble_client::BLEClientNode {
   void read_auto_shutoff_duration_();
 
   void decode_vibration_(const uint8_t *value, uint16_t value_len);
+  void decode_display_register_(const uint8_t *value, uint16_t value_len);
   void decode_hours_(const uint8_t *value, uint16_t value_len);
   void decode_minutes_(const uint8_t *value, uint16_t value_len);
   void decode_text_(const uint8_t *value, uint16_t value_len, text_sensor::TextSensor *sensor, const char *name);
@@ -293,6 +314,14 @@ class VolcanoComponent : public Component, public ble_client::BLEClientNode {
   VolcanoHeaterSwitch *heater_switch_{nullptr};
   VolcanoPumpSwitch *pump_switch_{nullptr};
   VolcanoVibrationSwitch *vibration_switch_{nullptr};
+  VolcanoDisplayOnCoolingSwitch *display_on_cooling_switch_{nullptr};
+
+  // Last decoded display-on-cooling state, or -1 before the first read.
+  // Its register notifies on every 1 degC change of current temperature
+  // (STATE-009), not only when the setting changes, so this exists to
+  // keep the log to actual changes rather than a line every few seconds
+  // throughout a heating or cooling run.
+  int8_t display_on_cooling_state_{-1};
   text_sensor::TextSensor *firmware_version_text_sensor_{nullptr};
   text_sensor::TextSensor *ble_firmware_version_text_sensor_{nullptr};
   text_sensor::TextSensor *serial_number_text_sensor_{nullptr};

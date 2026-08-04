@@ -56,8 +56,10 @@ Write-triggered behaviour. Format per [ADR-0006](../decisions/ADR-0006-protocol-
   Bit 16 (`0x10000`) of the notified value moves with this setting: every value seen while the setting is off carries both bit 12 and bit 16, and every value seen while it is on carries neither. The register is therefore wider than the 16 bits its other documented fields occupy.
 
   The setting is display-only. Current temperature continues to notify over BLE unchanged while the display shows nothing, so a controller reading `0x0047` is unaffected by it.
-- **Confidence**: Confirmed (write encoding, reproduced in both directions; that the setting governs whether current temperature is displayed while cooling; that bits 12 and 16 of the notified value track it together; and that BLE notification is unaffected); Unknown (what bit 16 represents beyond tracking this setting)
-- **Implementation status**: Not implemented
+
+  Its visible effect is bounded by [STATE-012](state-model.md#state-012--sub-40-c-reporting-and-the-idle-display-state): below 40 °C with the heater off the device shows no temperature whatever this setting says, so the two states are only distinguishable while cooling above 40 °C.
+- **Confidence**: Confirmed (write encoding, reproduced in both directions; that the setting governs whether current temperature is displayed while cooling; that bits 12 and 16 of the notified value track it together; that BLE notification is unaffected; and that its visible effect is confined to temperatures above the STATE-012 threshold); Unknown (what bit 16 represents beyond tracking this setting)
+- **Implementation status**: Implemented in `components/volcano/volcano.cpp` (`set_display_on_cooling()`), using the same mask-and-action form as [CMD-004](#cmd-004--set-vibration) and naming only this bit, so the register's units bit and unidentified bits are untouched. Verified against real hardware against the device's own display in both states.
 
 ### Note: setting-bit writes
 
