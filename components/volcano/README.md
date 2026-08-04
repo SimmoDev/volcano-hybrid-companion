@@ -75,7 +75,17 @@ The heater and pump entities are named "Heat" and "Air" above to match the label
 
 The two numbers accept `min_value`, `max_value` and `step`, defaulting to the ranges the protocol documentation records as confirmed accepted (40–230 °C and 1–360 minutes). Widening them does not widen what reaches the device: the component checks every write against the confirmed range itself and refuses anything outside it, whatever the entity advertises.
 
-`hours_of_operation` and `minutes_of_operation` are the two halves of one meter: minutes counts 0–59 and carries into hours, and both advance only while the heater is on rather than tracking wall-clock time. The five device-information entities and the two meters default to the diagnostic entity category, so they group separately from the controls.
+`hours_of_operation` and `minutes_of_operation` are the two halves of one meter: minutes counts 0–59 and carries into hours, and both advance only while the heater is on rather than tracking wall-clock time.
+
+Entities default to an entity category reflecting what they are, so a UI can group them:
+
+| Category | Entities |
+|---|---|
+| *(none)* | `heater`, `pump`, `current_temperature`, `target_temperature`, `auto_shutoff_countdown` — live state and primary control |
+| `config` | `auto_shutoff_duration`, `led_brightness` — settings that configure how the device behaves |
+| `diagnostic` | `hours_of_operation`, `minutes_of_operation` and the five device-information strings — information about the device |
+
+`auto_shutoff_countdown` sits with the controls rather than the diagnostics despite being read-only: it is live operational state that changes every second, and it is the backstop against the heater running unattended, so it belongs where the actuator state is read. The lifetime meters alongside it in `diagnostic` change too slowly to inform anything in the moment. Every category can be overridden per entity in YAML.
 
 The two switches never publish optimistically — the state shown is the one the device reported, not the one that was requested — and their restore mode is fixed to `DISABLED`. Restoring a remembered state would actuate the heater or pump at boot, before the device has said what it is actually doing.
 

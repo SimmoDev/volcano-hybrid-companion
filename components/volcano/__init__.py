@@ -12,6 +12,7 @@ from esphome.const import (
     DEVICE_CLASS_DURATION,
     DEVICE_CLASS_SWITCH,
     DEVICE_CLASS_TEMPERATURE,
+    ENTITY_CATEGORY_CONFIG,
     ENTITY_CATEGORY_DIAGNOSTIC,
     ICON_BLUETOOTH,
     ICON_CHIP,
@@ -19,6 +20,7 @@ from esphome.const import (
     ICON_BRIGHTNESS_5,
     ICON_POWER,
     ICON_RADIATOR,
+    ICON_THERMOMETER,
     ICON_TIMER,
     STATE_CLASS_MEASUREMENT,
     STATE_CLASS_TOTAL_INCREASING,
@@ -104,6 +106,7 @@ CONFIG_SCHEMA = (
             cv.GenerateID(): cv.declare_id(VolcanoComponent),
             cv.Optional(CONF_CURRENT_TEMPERATURE): sensor.sensor_schema(
                 unit_of_measurement=UNIT_CELSIUS,
+                icon=ICON_THERMOMETER,
                 accuracy_decimals=1,
                 device_class=DEVICE_CLASS_TEMPERATURE,
                 state_class=STATE_CLASS_MEASUREMENT,
@@ -111,17 +114,22 @@ CONFIG_SCHEMA = (
             cv.Optional(CONF_TARGET_TEMPERATURE): number.number_schema(
                 VolcanoTargetTemperatureNumber,
                 unit_of_measurement=UNIT_CELSIUS,
+                icon="mdi:thermostat",
                 device_class=DEVICE_CLASS_TEMPERATURE,
             ).extend(
                 _number_range_schema(
                     DEFAULT_TARGET_TEMPERATURE_MIN, DEFAULT_TARGET_TEMPERATURE_MAX
                 )
             ),
+            # Settings rather than live control: they configure how the
+            # device behaves rather than commanding it, so they default to
+            # the config entity category and group away from the controls.
             cv.Optional(CONF_AUTO_SHUTOFF_DURATION): number.number_schema(
                 VolcanoAutoShutoffDurationNumber,
                 unit_of_measurement=UNIT_MINUTE,
                 icon=ICON_TIMER,
                 device_class=DEVICE_CLASS_DURATION,
+                entity_category=ENTITY_CATEGORY_CONFIG,
             ).extend(
                 _number_range_schema(
                     DEFAULT_AUTO_SHUTOFF_DURATION_MIN, DEFAULT_AUTO_SHUTOFF_DURATION_MAX
@@ -131,6 +139,7 @@ CONFIG_SCHEMA = (
                 VolcanoLedBrightnessNumber,
                 unit_of_measurement=UNIT_PERCENT,
                 icon=ICON_BRIGHTNESS_5,
+                entity_category=ENTITY_CATEGORY_CONFIG,
             ).extend(
                 _number_range_schema(
                     DEFAULT_LED_BRIGHTNESS_MIN, DEFAULT_LED_BRIGHTNESS_MAX
