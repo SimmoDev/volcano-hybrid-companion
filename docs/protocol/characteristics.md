@@ -55,7 +55,7 @@ Each notify-capable characteristic's Client Characteristic Configuration descrip
 - **Properties**: Read
 - **Observation**: See [STATE-003](state-model.md#state-003--firmware-version).
 - **Confidence**: Confirmed
-- **Implementation status**: Not implemented
+- **Implementation status**: Implemented (read-only) in `components/volcano/volcano.cpp`, read once per connection. Verified against real hardware, returning the value recorded above.
 
 ## CHAR-006 — Firmware BLE version
 
@@ -65,7 +65,7 @@ Each notify-capable characteristic's Client Characteristic Configuration descrip
 - **Properties**: Read
 - **Observation**: See [STATE-004](state-model.md#state-004--firmware-ble-version).
 - **Confidence**: Confirmed
-- **Implementation status**: Not implemented
+- **Implementation status**: Implemented (read-only) in `components/volcano/volcano.cpp`, read once per connection. Verified against real hardware, returning the value recorded above.
 
 ## CHAR-007 — Serial number
 
@@ -75,7 +75,7 @@ Each notify-capable characteristic's Client Characteristic Configuration descrip
 - **Properties**: Read/Write
 - **Observation**: 10-byte ASCII string, unique per device — see [STATE-002](state-model.md#state-002--serial-number). The characteristic is writable, and overwriting it would replace a real device's serial number, so it must not be written.
 - **Confidence**: Confirmed
-- **Implementation status**: Not implemented
+- **Implementation status**: Implemented (read-only) in `components/volcano/volcano.cpp`, read once per connection. Verified against real hardware. The characteristic is never written: doing so would replace a real unit's serial number.
 
 ## CHAR-008 — Status/flags register
 
@@ -227,7 +227,7 @@ Each notify-capable characteristic's Client Characteristic Configuration descrip
 - **Properties**: Read/Notify
 - **Observation**: See [STATE-001](state-model.md#state-001--hours-of-operation).
 - **Confidence**: Confirmed
-- **Implementation status**: Not implemented
+- **Implementation status**: Implemented (read-only) in `components/volcano/volcano.cpp` — subscribed, initial value read explicitly, decoded on both. Verified against real hardware for the value itself; the carry from [CHAR-023](#char-023--minutes-of-operation) wrapping has not been observed directly, since it arrives only once an hour of heater-on time.
 
 ## CHAR-023 — Minutes of Operation
 
@@ -237,7 +237,7 @@ Each notify-capable characteristic's Client Characteristic Configuration descrip
 - **Properties**: Read/Notify
 - **Observation**: See [STATE-006](state-model.md#state-006--minutes-of-operation). Confirmed as a 2-byte value.
 - **Confidence**: Confirmed
-- **Implementation status**: Not implemented
+- **Implementation status**: Implemented (read-only) in `components/volcano/volcano.cpp` — subscribed, initial value read explicitly, decoded on both. Verified against real hardware, including a live tick while the heater was on.
 
 ## CHAR-024 — Power supply rating
 
@@ -248,7 +248,7 @@ Each notify-capable characteristic's Client Characteristic Configuration descrip
 - **Observation**: ASCII string `"230VAC"`.
 - **Interpretation**: Very likely a static power-supply rating string (230V AC mains), based on content alone — not corroborated by any third-party source. Likely varies by market/power variant (e.g. a 120V AC region), so this exact value should not be assumed universal.
 - **Confidence**: Confirmed (handle, UUID and value); Probable (that the value is a power-supply rating)
-- **Implementation status**: Not implemented
+- **Implementation status**: Implemented (read-only) in `components/volcano/volcano.cpp`, read once per connection. Verified against real hardware, returning the value recorded above. Never written.
 
 ## CHAR-025 — Product line name
 
@@ -259,7 +259,7 @@ Each notify-capable characteristic's Client Characteristic Configuration descrip
 - **Observation**: ASCII string `"HYBRID"`.
 - **Interpretation**: Very likely a static product-line identifier, based on content alone — not corroborated by any third-party source.
 - **Confidence**: Confirmed (handle, UUID and value); Probable (that the value is a product-line identifier)
-- **Implementation status**: Not implemented
+- **Implementation status**: Implemented (read-only) in `components/volcano/volcano.cpp`, read once per connection. Verified against real hardware, returning the value recorded above. Never written.
 
 ## CHAR-026 — Firmware-update code number
 

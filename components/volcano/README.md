@@ -2,10 +2,11 @@
 
 This is the `volcano` ESPHome external component. It is a `ble_client` node ([ADR-0007](../../docs/decisions/ADR-0007-ble-connection-lifecycle.md)) that currently implements:
 
-- **Read-only state**: on each connection it resolves the status/flags register (`CHAR-008`), the auto-shutoff countdown (`CHAR-016`), and current/target temperature (`CHAR-013`/`CHAR-014`) by UUID, subscribes, reads their initial values, decodes them, and logs them. Current temperature's sub-40 °C "no reading" gate (STATE-012) is decoded explicitly rather than logged as a false `0.0` reading.
+- **Read-only state**: on each connection it resolves the status/flags register (`CHAR-008`), the auto-shutoff countdown (`CHAR-016`), current/target temperature (`CHAR-013`/`CHAR-014`) and the heater-runtime meter (`CHAR-022`/`CHAR-023`) by UUID, subscribes, reads their initial values, decodes them, and logs them. Current temperature's sub-40 °C "no reading" gate (STATE-012) is decoded explicitly rather than logged as a false `0.0` reading.
+- **Device information**: firmware version (`CHAR-005`), firmware BLE version (`CHAR-006`), serial number (`CHAR-007`), power supply rating (`CHAR-024`) and product line name (`CHAR-025`) are read once per connection. None of them notifies, so each is read explicitly; they are read one at a time rather than all at once, since a GATT client has only a small number of outstanding reads available. Three of the five are writable on the device and none is ever written here — writing `CHAR-007` would replace a real unit's serial number.
 - **Writes**: `set_auto_shutoff_duration_seconds()` writes the auto-shutoff duration (`CHAR-017`), refusing anything outside 60–21600 seconds — the range CMD-003 confirms accepted, from the floor this project verified through to an actual expiry up to the top of the official app's own range. Values outside it are unverified and are not written. `turn_heater_on()`/`turn_heater_off()`/`turn_pump_on()`/`turn_pump_off()` write the four one-byte trigger characteristics (`CHAR-018`–`CHAR-021`), each with the single value CMD-006 through CMD-009 confirm those characteristics accept. `set_target_temperature_decidegrees()` writes the target temperature (`CHAR-014`), refusing anything outside the 40.0–230.0 °C range CMD-001 confirms the official app's UI accepts.
 
-- **Optional entities**: every value above can be exposed as a standard ESPHome entity, configured directly under the `volcano:` block — see "Configuration" below. Read-only values get a sensor; each writable one gets a single two-way entity that both reports the device's current value and sets a new one — a number for the temperatures and the duration, a switch for the heater and pump. This is a stopgap for observing and exercising state (e.g. on an ESPHome `web_server` page or in Home Assistant), not the hardware-independent Volcano domain interface control interfaces will eventually depend on.
+- **Optional entities**: every value above can be exposed as a standard ESPHome entity, configured directly under the `volcano:` block — see "Configuration" below. Read-only values get a sensor or text_sensor; each writable one gets a single two-way entity that both reports the device's current value and sets a new one — a number for the temperatures and the duration, a switch for the heater and pump. This is a stopgap for observing and exercising state (e.g. on an ESPHome `web_server` page or in Home Assistant), not the hardware-independent Volcano domain interface control interfaces will eventually depend on.
 
 See `volcano.h` for the `TODO` markers showing where the remaining protocol coverage and the Volcano abstraction layer ([ADR-0002](../../docs/decisions/ADR-0002-volcano-component-architecture.md)) belong.
 
@@ -26,7 +27,7 @@ volcano:
 
 The Volcano's BLE address is unique per unit and is deliberately never recorded in this repository (see [`docs/protocol/README.md`](../../docs/protocol/README.md)) — keep it in `secrets.yaml`, not in a committed config.
 
-Each value has a matching optional key, all omitted by default, each accepting the same options as the underlying [`sensor`](https://esphome.io/components/sensor/#config-sensor), [`number`](https://esphome.io/components/number/#config-number) or [`switch`](https://esphome.io/components/switch/#config-switch) platform (`name`, `id`, `mode`, etc.):
+Each value has a matching optional key, all omitted by default, each accepting the same options as the underlying [`sensor`](https://esphome.io/components/sensor/#config-sensor), [`text_sensor`](https://esphome.io/components/text_sensor/#config-text-sensor), [`number`](https://esphome.io/components/number/#config-number) or [`switch`](https://esphome.io/components/switch/#config-switch) platform (`name`, `id`, `mode`, etc.):
 
 ```yaml
 volcano:
@@ -36,6 +37,21 @@ volcano:
     name: "Current temperature"
   auto_shutoff_countdown:
     name: "Auto-shutoff countdown"
+  hours_of_operation:
+    name: "Hours of operation"
+  minutes_of_operation:
+    name: "Minutes of operation"
+  # Read-only (text_sensor)
+  firmware_version:
+    name: "Firmware version"
+  ble_firmware_version:
+    name: "BLE firmware version"
+  serial_number:
+    name: "Serial number"
+  power_supply:
+    name: "Power supply"
+  product_line:
+    name: "Product line"
   # Read/write (number)
   target_temperature:
     name: "Target temperature"
@@ -55,6 +71,8 @@ The heater and pump entities are named "Heat" and "Air" above to match the label
 `auto_shutoff_duration` is in **minutes**, the unit the official app presents it in, converted to the seconds `CHAR-017` encodes. It is distinct from `auto_shutoff_countdown`, which is the live time remaining and is read-only; the duration is what that countdown will load the next time it arms.
 
 The two numbers accept `min_value`, `max_value` and `step`, defaulting to the ranges the protocol documentation records as confirmed accepted (40–230 °C and 1–360 minutes). Widening them does not widen what reaches the device: the component checks every write against the confirmed range itself and refuses anything outside it, whatever the entity advertises.
+
+`hours_of_operation` and `minutes_of_operation` are the two halves of one meter: minutes counts 0–59 and carries into hours, and both advance only while the heater is on rather than tracking wall-clock time. The five device-information entities and the two meters default to the diagnostic entity category, so they group separately from the controls.
 
 The two switches never publish optimistically — the state shown is the one the device reported, not the one that was requested — and their restore mode is fixed to `DISABLED`. Restoring a remembered state would actuate the heater or pump at boot, before the device has said what it is actually doing.
 

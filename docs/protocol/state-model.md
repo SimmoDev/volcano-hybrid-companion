@@ -8,28 +8,28 @@ Readable/notified device state. Format per [ADR-0006](../decisions/ADR-0006-prot
 - **Observation**: 4-byte little-endian integer, an incrementing count of hours, paired with [STATE-006](#state-006--minutes-of-operation) for the minutes component. It counts heater-on time rather than powered-on time: it advances only while the heater is on, and notifies in the same second that the minutes counter wraps from 59 to 0. Matches the app's displayed hours value exactly, read consistently across multiple sessions.
 - **Interpretation**: An element-usage meter rather than a device-uptime meter — the pair measures how long the heater has run, not how long the device has been plugged in.
 - **Confidence**: Confirmed
-- **Implementation status**: Not implemented
+- **Implementation status**: Implemented (read-only) in `components/volcano/volcano.cpp`. Verified against real hardware for the value itself; the carry from [STATE-006](#state-006--minutes-of-operation) wrapping has not been observed directly, since it arrives only once per hour of heater-on time. The interpretation above is not encoded: the component reports the counter rather than deriving a runtime from it.
 
 ## STATE-002 — Serial Number
 
 - **Handle**: `0x0023`
 - **Observation**: 10-byte ASCII string, unique per device. The app displays a truncated 8-character prefix of it. The full 10 bytes are also broadcast in the advertising payload (see [ADV-001](gatt-services.md#adv-001--advertising-and-discovery)). Read consistently across multiple sessions.
 - **Confidence**: Confirmed
-- **Implementation status**: Not implemented
+- **Implementation status**: Implemented (read-only) in `components/volcano/volcano.cpp`, read once per connection. Verified against real hardware. Never written.
 
 ## STATE-003 — Firmware version
 
 - **Handle**: `0x0019`
 - **Observation**: ASCII string `"V01.03.00.00"`. The app displays a truncated `"V01.03.0"`. Read consistently across multiple sessions.
 - **Confidence**: Confirmed
-- **Implementation status**: Not implemented
+- **Implementation status**: Implemented (read-only) in `components/volcano/volcano.cpp`, read once per connection. Verified against real hardware.
 
 ## STATE-004 — Firmware BLE version
 
 - **Handle**: `0x001b`
 - **Observation**: ASCII string `"V01.00.00.00"`, exact match to the app's displayed value. Read consistently across multiple sessions.
 - **Confidence**: Confirmed
-- **Implementation status**: Not implemented
+- **Implementation status**: Implemented (read-only) in `components/volcano/volcano.cpp`, read once per connection. Verified against real hardware.
 
 ## STATE-005 — Auto-shutoff countdown
 
@@ -60,7 +60,7 @@ Readable/notified device state. Format per [ADR-0006](../decisions/ADR-0006-prot
   Observed across many separate heating cycles and off periods, in both directions, and confirmed as 2 bytes wide.
 - **Interpretation**: The minutes component of a heater-runtime meter, paired with [STATE-001](#state-001--hours-of-operation), ticking in real time rather than only refreshing on read. Because it is gated on heater state, an arriving tick is positive evidence that the heater is on. The inverse does not hold: ticks are 60 seconds apart, so silence is the normal condition for up to a minute of heater-on time. Bit 5 of the status/flags register ([STATE-008](#state-008--statusflags-register-partial)) gives heater state immediately and is what a controller should use.
 - **Confidence**: Confirmed
-- **Implementation status**: Not implemented
+- **Implementation status**: Implemented (read-only) in `components/volcano/volcano.cpp`. Verified against real hardware, including a live tick while the heater was on. The gating behaviour this finding documents is not encoded as logic: the component reports the counter rather than inferring heater state from it, which the interpretation above advises against anyway.
 
 ## STATE-007 — Current (actual) temperature
 

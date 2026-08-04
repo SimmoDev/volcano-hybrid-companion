@@ -1,6 +1,6 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome.components import ble_client, number, sensor, switch
+from esphome.components import ble_client, number, sensor, switch, text_sensor
 from esphome.const import (
     CONF_CURRENT_TEMPERATURE,
     CONF_HEATER,
@@ -12,11 +12,17 @@ from esphome.const import (
     DEVICE_CLASS_DURATION,
     DEVICE_CLASS_SWITCH,
     DEVICE_CLASS_TEMPERATURE,
+    ENTITY_CATEGORY_DIAGNOSTIC,
+    ICON_BLUETOOTH,
+    ICON_CHIP,
     ICON_FAN,
+    ICON_POWER,
     ICON_RADIATOR,
     ICON_TIMER,
     STATE_CLASS_MEASUREMENT,
+    STATE_CLASS_TOTAL_INCREASING,
     UNIT_CELSIUS,
+    UNIT_HOUR,
     UNIT_MINUTE,
     UNIT_SECOND,
 )
@@ -35,11 +41,18 @@ from esphome.const import (
 
 CODEOWNERS = ["@SimmoDev"]
 DEPENDENCIES = ["ble_client"]
-AUTO_LOAD = ["sensor", "number", "switch"]
+AUTO_LOAD = ["sensor", "number", "switch", "text_sensor"]
 
 CONF_PUMP = "pump"
 CONF_AUTO_SHUTOFF_COUNTDOWN = "auto_shutoff_countdown"
 CONF_AUTO_SHUTOFF_DURATION = "auto_shutoff_duration"
+CONF_FIRMWARE_VERSION = "firmware_version"
+CONF_BLE_FIRMWARE_VERSION = "ble_firmware_version"
+CONF_SERIAL_NUMBER = "serial_number"
+CONF_POWER_SUPPLY = "power_supply"
+CONF_PRODUCT_LINE = "product_line"
+CONF_HOURS_OF_OPERATION = "hours_of_operation"
+CONF_MINUTES_OF_OPERATION = "minutes_of_operation"
 
 volcano_ns = cg.esphome_ns.namespace("volcano")
 VolcanoComponent = volcano_ns.class_(
@@ -130,6 +143,52 @@ CONFIG_SCHEMA = (
                 device_class=DEVICE_CLASS_SWITCH,
                 default_restore_mode="DISABLED",
             ),
+            # The heater-runtime meter (STATE-001/STATE-006), a pair:
+            # minutes counts 0-59 and carries into hours. Both advance only
+            # while the heater is on, so neither tracks wall-clock time.
+            cv.Optional(CONF_HOURS_OF_OPERATION): sensor.sensor_schema(
+                unit_of_measurement=UNIT_HOUR,
+                icon=ICON_TIMER,
+                accuracy_decimals=0,
+                device_class=DEVICE_CLASS_DURATION,
+                state_class=STATE_CLASS_TOTAL_INCREASING,
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+            ),
+            cv.Optional(CONF_MINUTES_OF_OPERATION): sensor.sensor_schema(
+                unit_of_measurement=UNIT_MINUTE,
+                icon=ICON_TIMER,
+                accuracy_decimals=0,
+                device_class=DEVICE_CLASS_DURATION,
+                state_class=STATE_CLASS_MEASUREMENT,
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+            ),
+            # Device information: fixed per unit, read once per connection,
+            # never written. Diagnostic rather than primary state, so they
+            # do not sit alongside the controls by default.
+            cv.Optional(CONF_FIRMWARE_VERSION): text_sensor.text_sensor_schema(
+                icon=ICON_CHIP,
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+            ),
+            cv.Optional(CONF_BLE_FIRMWARE_VERSION): text_sensor.text_sensor_schema(
+                icon=ICON_BLUETOOTH,
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+            ),
+            cv.Optional(CONF_SERIAL_NUMBER): text_sensor.text_sensor_schema(
+                icon="mdi:identifier",
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+            ),
+            # CHAR-024 and CHAR-025 carry Confirmed values whose *meaning* is
+            # only Probable (see docs/protocol/characteristics.md), which is
+            # what these two key names encode. The strings themselves are
+            # exactly what the device returns.
+            cv.Optional(CONF_POWER_SUPPLY): text_sensor.text_sensor_schema(
+                icon=ICON_POWER,
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+            ),
+            cv.Optional(CONF_PRODUCT_LINE): text_sensor.text_sensor_schema(
+                icon="mdi:tag-outline",
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+            ),
         }
     )
     .extend(cv.COMPONENT_SCHEMA)
@@ -179,3 +238,19 @@ async def to_code(config):
         sw = await switch.new_switch(pump_config)
         await cg.register_parented(sw, var)
         cg.add(var.set_pump_switch(sw))
+
+    if hours_config := config.get(CONF_HOURS_OF_OPERATION):
+        cg.add(var.set_hours_sensor(await sensor.new_sensor(hours_config)))
+
+    if minutes_config := config.get(CONF_MINUTES_OF_OPERATION):
+        cg.add(var.set_minutes_sensor(await sensor.new_sensor(minutes_config)))
+
+    for key, setter in (
+        (CONF_FIRMWARE_VERSION, var.set_firmware_version_text_sensor),
+        (CONF_BLE_FIRMWARE_VERSION, var.set_ble_firmware_version_text_sensor),
+        (CONF_SERIAL_NUMBER, var.set_serial_number_text_sensor),
+        (CONF_POWER_SUPPLY, var.set_power_supply_text_sensor),
+        (CONF_PRODUCT_LINE, var.set_product_line_text_sensor),
+    ):
+        if entry := config.get(key):
+            cg.add(setter(await text_sensor.new_text_sensor(entry)))

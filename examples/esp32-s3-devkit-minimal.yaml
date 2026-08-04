@@ -94,6 +94,28 @@ volcano:
     mode: box
     web_server:
       sorting_weight: 60
+  # The heater-runtime meter: minutes counts 0-59 and carries into hours,
+  # and both advance only while the heater is on rather than tracking
+  # wall-clock time. Notify-capable, so they update live.
+  hours_of_operation:
+    name: "Hours of operation"
+  minutes_of_operation:
+    name: "Minutes of operation"
+  # Device information: fixed per unit, read once on connect, never written.
+  # Marked diagnostic, so they group separately from the controls.
+  #
+  # The serial number is unique to your device -- worth remembering before
+  # sharing a screenshot or a log, in the same way as the BLE address.
+  firmware_version:
+    name: "Firmware version"
+  ble_firmware_version:
+    name: "BLE firmware version"
+  serial_number:
+    name: "Serial number"
+  power_supply:
+    name: "Power supply"
+  product_line:
+    name: "Product line"
 
 # WiFi is needed only for web_server below, to reach the controls
 # from a browser -- the volcano component itself is BLE-only and has no

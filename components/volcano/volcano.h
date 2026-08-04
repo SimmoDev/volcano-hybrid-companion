@@ -8,7 +8,10 @@
 #include "esphome/components/number/number.h"
 #include "esphome/components/sensor/sensor.h"
 #include "esphome/components/switch/switch.h"
+#include "esphome/components/text_sensor/text_sensor.h"
 #include "esphome/core/helpers.h"
+
+#include <string>
 
 #include <esp_gattc_api.h>
 
@@ -84,6 +87,18 @@ class VolcanoPumpSwitch : public switch_::Switch, public Parented<VolcanoCompone
 // docs/protocol/state-model.md#state-007--current-actual-temperature).
 // Current temperature reads `0` whenever the heater is off below 40 degC
 // (STATE-012); that is logged as "no reading", never as a temperature.
+//
+// It also reads the heater-runtime meter -- hours and minutes of
+// operation (CHAR-022/CHAR-023, STATE-001/STATE-006), which advance
+// only while the heater is on and are subscribed like the values above.
+//
+// It also reads the device-information strings once per connection --
+// firmware version (CHAR-005, STATE-003), firmware BLE version (CHAR-006,
+// STATE-004), serial number (CHAR-007, STATE-002), power supply rating
+// (CHAR-024) and product line name (CHAR-025). None of them notify, and
+// none is expected to change while connected. Three of the five are
+// writable on the device and none is ever written here; CHAR-007 in
+// particular would overwrite a real unit's serial number.
 //
 // It also carries the first production writes. set_auto_shutoff_duration_seconds()
 // writes the auto-shutoff duration (CHAR-017, CMD-003 in
@@ -170,6 +185,13 @@ class VolcanoComponent : public Component, public ble_client::BLEClientNode {
   void set_auto_shutoff_duration_number(VolcanoAutoShutoffDurationNumber *n) { auto_shutoff_duration_number_ = n; }
   void set_heater_switch(VolcanoHeaterSwitch *s) { heater_switch_ = s; }
   void set_pump_switch(VolcanoPumpSwitch *s) { pump_switch_ = s; }
+  void set_firmware_version_text_sensor(text_sensor::TextSensor *s) { firmware_version_text_sensor_ = s; }
+  void set_ble_firmware_version_text_sensor(text_sensor::TextSensor *s) { ble_firmware_version_text_sensor_ = s; }
+  void set_serial_number_text_sensor(text_sensor::TextSensor *s) { serial_number_text_sensor_ = s; }
+  void set_power_supply_text_sensor(text_sensor::TextSensor *s) { power_supply_text_sensor_ = s; }
+  void set_product_line_text_sensor(text_sensor::TextSensor *s) { product_line_text_sensor_ = s; }
+  void set_hours_sensor(sensor::Sensor *s) { hours_sensor_ = s; }
+  void set_minutes_sensor(sensor::Sensor *s) { minutes_sensor_ = s; }
 
  protected:
   void decode_status_(const uint8_t *value, uint16_t value_len);
@@ -188,12 +210,42 @@ class VolcanoComponent : public Component, public ble_client::BLEClientNode {
   uint16_t heater_off_handle_{0};     // CHAR-019: heater off trigger.
   uint16_t pump_on_handle_{0};        // CHAR-020: pump on trigger.
   uint16_t pump_off_handle_{0};       // CHAR-021: pump off trigger.
+  // Device information, all read-only in practice. CHAR-007, CHAR-024 and
+  // CHAR-025 are writable on the device, and must never be written: CHAR-007
+  // in particular would overwrite a real unit's serial number.
+  uint16_t firmware_version_handle_{0};      // CHAR-005: firmware version.
+  uint16_t ble_firmware_version_handle_{0};  // CHAR-006: firmware BLE version.
+  uint16_t serial_number_handle_{0};         // CHAR-007: serial number.
+  uint16_t power_supply_handle_{0};          // CHAR-024: power supply rating.
+  uint16_t product_line_handle_{0};          // CHAR-025: product line name.
+  // The heater-runtime meter, notify-capable and so subscribed rather
+  // than read once. Both advance only while the heater is on.
+  uint16_t hours_handle_{0};                 // CHAR-022: hours of operation.
+  uint16_t minutes_handle_{0};               // CHAR-023: minutes of operation.
 
   // Reads CHAR-017, whose value nothing else would otherwise reveal: it has
   // no notify, so without this the configured duration is unknown until
-  // something writes one. Issued once per connection, and again after each
-  // write as the read-back that confirms it.
+  // something writes one. Issued once per connection as part of the static
+  // read sequence below, and again after each write as the read-back that
+  // confirms it.
   void read_auto_shutoff_duration_();
+
+  void decode_hours_(const uint8_t *value, uint16_t value_len);
+  void decode_minutes_(const uint8_t *value, uint16_t value_len);
+  void decode_text_(const uint8_t *value, uint16_t value_len, text_sensor::TextSensor *sensor, const char *name);
+
+  // None of the device-information characteristics notify, so each is read
+  // once per connection. They are read one at a time, each issued from the
+  // previous one's completion, rather than fired off together: a GATT client
+  // has only a small number of outstanding reads available, and this queue
+  // shares that budget with the reads the subscriptions already issue.
+  void queue_static_reads_();
+  void issue_next_static_read_();
+
+  static const uint8_t MAX_STATIC_READS = 6;
+  uint16_t static_reads_[MAX_STATIC_READS];
+  uint8_t static_read_count_{0};
+  uint8_t static_read_index_{0};
 
   // Optional publish targets set via the set_*() methods above. Null unless
   // configured in YAML.
@@ -203,6 +255,13 @@ class VolcanoComponent : public Component, public ble_client::BLEClientNode {
   VolcanoAutoShutoffDurationNumber *auto_shutoff_duration_number_{nullptr};
   VolcanoHeaterSwitch *heater_switch_{nullptr};
   VolcanoPumpSwitch *pump_switch_{nullptr};
+  text_sensor::TextSensor *firmware_version_text_sensor_{nullptr};
+  text_sensor::TextSensor *ble_firmware_version_text_sensor_{nullptr};
+  text_sensor::TextSensor *serial_number_text_sensor_{nullptr};
+  text_sensor::TextSensor *power_supply_text_sensor_{nullptr};
+  text_sensor::TextSensor *product_line_text_sensor_{nullptr};
+  sensor::Sensor *hours_sensor_{nullptr};
+  sensor::Sensor *minutes_sensor_{nullptr};
 
   // Number of ESP_GATTC_REG_FOR_NOTIFY_EVT callbacks still outstanding.
   // node_state must not become ESTABLISHED until this reaches zero: the
