@@ -62,6 +62,9 @@ static const char *const HOURS_CHARACTERISTIC_UUID = "10110015-5354-4f52-5a26-42
 static const char *const MINUTES_CHARACTERISTIC_UUID = "10110016-5354-4f52-5a26-4249434b454c";
 // CHAR-015/CMD-002: LED brightness (SVC-006).
 static const char *const LED_BRIGHTNESS_CHARACTERISTIC_UUID = "10110005-5354-4f52-5a26-4249434b454c";
+// CHAR-010/CMD-004: vibration setting (SVC-005). Note the "10100" prefix:
+// this is a settings-service register, not one of the SVC-006 controls.
+static const char *const VIBRATION_CHARACTERISTIC_UUID = "1010000e-5354-4f52-5a26-4249434b454c";
 
 // STATE-008: bit 5 is set whenever the heater is on, clear when off.
 static const uint16_t STATUS_BIT_HEATER_ON = 0x0020;
@@ -95,6 +98,19 @@ static const uint16_t MAX_TARGET_TEMPERATURE_DECIDEGREES = 2300;
 // so it is allowed, and only values above the scale are refused.
 static const uint8_t MAX_LED_BRIGHTNESS_PERCENT = 100;
 
+// CHAR-010/CMD-004: the vibration setting's bit within its register.
+//
+// The polarity is inverted, and getting it backwards would silently invert
+// the whole feature: the bit is CLEAR when vibration is ENABLED and set when
+// it is disabled. CMD-004's captured writes say the same thing from the
+// write side -- `00 04 00 00` (clear the bit) turns vibration on and
+// `00 04 01 00` (set it) turns it off.
+//
+// The inversion is a property of this setting rather than of the register:
+// the units bit on the sibling register is not inverted (STATE-010), so a
+// new bit's polarity has to be established rather than assumed from this one.
+static const uint32_t VIBRATION_BIT_DISABLED = 0x0400;
+
 static void subscribe(esphome::ble_client::BLEClient *client, uint16_t handle, const char *name) {
   auto status = esp_ble_gattc_register_for_notify(client->get_gattc_if(), client->get_remote_bda(), handle);
   if (status) {
@@ -125,7 +141,7 @@ void VolcanoComponent::dump_config() {
   ESP_LOGCONFIG(TAG, "    heater on/off (CHAR-018/019), pump on/off (CHAR-020/021);");
   ESP_LOGCONFIG(TAG, "    target temperature (CHAR-014), %.1f-%.1f C;", MIN_TARGET_TEMPERATURE_DECIDEGREES / 10.0f,
                 MAX_TARGET_TEMPERATURE_DECIDEGREES / 10.0f);
-  ESP_LOGCONFIG(TAG, "    LED brightness (CHAR-015), 0-%u%%.", MAX_LED_BRIGHTNESS_PERCENT);
+  ESP_LOGCONFIG(TAG, "    LED brightness (CHAR-015), 0-%u%%; vibration (CHAR-010).", MAX_LED_BRIGHTNESS_PERCENT);
 }
 
 void VolcanoComponent::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if,
@@ -150,6 +166,7 @@ void VolcanoComponent::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
       this->hours_handle_ = 0;
       this->minutes_handle_ = 0;
       this->led_brightness_handle_ = 0;
+      this->vibration_handle_ = 0;
       this->pending_subscriptions_ = 0;
       this->static_read_count_ = 0;
       this->static_read_index_ = 0;
@@ -180,6 +197,18 @@ void VolcanoComponent::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
         // ESP_GATTC_REG_FOR_NOTIFY_EVT case below.
         this->pending_subscriptions_++;
         subscribe(this->parent(), this->status_handle_, "status/flags register");
+      }
+
+      auto *vibration_chr = this->parent()->get_characteristic(
+          settings_service, espbt::ESPBTUUID::from_raw(VIBRATION_CHARACTERISTIC_UUID));
+      if (vibration_chr == nullptr) {
+        ESP_LOGW(TAG, "Vibration setting (CHAR-010) not found on device");
+      } else {
+        // Read/Write/Notify: subscribed like the live values rather than
+        // read once, so a change made elsewhere is picked up.
+        this->vibration_handle_ = vibration_chr->handle;
+        this->pending_subscriptions_++;
+        subscribe(this->parent(), this->vibration_handle_, "vibration setting");
       }
 
       auto *countdown_chr = this->parent()->get_characteristic(
@@ -328,7 +357,8 @@ void VolcanoComponent::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
       uint16_t handle = param->reg_for_notify.handle;
       if (handle != this->status_handle_ && handle != this->countdown_handle_ &&
           handle != this->current_temp_handle_ && handle != this->target_temp_handle_ &&
-          handle != this->hours_handle_ && handle != this->minutes_handle_)
+          handle != this->hours_handle_ && handle != this->minutes_handle_ &&
+          handle != this->vibration_handle_)
         break;
 
       // node_state must not become ESTABLISHED until every subscription
@@ -395,6 +425,8 @@ void VolcanoComponent::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
         this->decode_current_temperature_(param->read.value, param->read.value_len);
       } else if (param->read.handle == this->target_temp_handle_) {
         this->decode_target_temperature_(param->read.value, param->read.value_len);
+      } else if (param->read.handle == this->vibration_handle_) {
+        this->decode_vibration_(param->read.value, param->read.value_len);
       } else if (param->read.handle == this->led_brightness_handle_) {
         // CMD-002: 2-byte value, only the low byte significant.
         if (param->read.value_len < 2) {
@@ -438,6 +470,8 @@ void VolcanoComponent::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
         this->decode_current_temperature_(param->notify.value, param->notify.value_len);
       } else if (param->notify.handle == this->target_temp_handle_) {
         this->decode_target_temperature_(param->notify.value, param->notify.value_len);
+      } else if (param->notify.handle == this->vibration_handle_) {
+        this->decode_vibration_(param->notify.value, param->notify.value_len);
       } else if (param->notify.handle == this->hours_handle_) {
         this->decode_hours_(param->notify.value, param->notify.value_len);
       } else if (param->notify.handle == this->minutes_handle_) {
@@ -461,6 +495,13 @@ void VolcanoComponent::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
         if (param->write.status != ESP_GATT_OK) {
           ESP_LOGW(TAG, "Trigger write to handle 0x%04x failed, status=%d", param->write.handle,
                    param->write.status);
+        }
+      } else if (param->write.handle == this->vibration_handle_) {
+        // No read-back here: unlike the write-only-readable settings,
+        // this register notifies, so decode_vibration_() publishes the
+        // resulting state on its own.
+        if (param->write.status != ESP_GATT_OK) {
+          ESP_LOGW(TAG, "Vibration write failed, status=%d", param->write.status);
         }
       } else if (param->write.handle == this->led_brightness_handle_) {
         if (param->write.status != ESP_GATT_OK) {
@@ -567,6 +608,21 @@ void VolcanoComponent::decode_target_temperature_(const uint8_t *value, uint16_t
   ESP_LOGI(TAG, "Target temperature: %.1f C", raw / 10.0f);
   if (this->target_temperature_number_ != nullptr)
     this->target_temperature_number_->publish_state(raw / 10.0f);
+}
+
+void VolcanoComponent::decode_vibration_(const uint8_t *value, uint16_t value_len) {
+  // CHAR-010: reads back as a 4-byte register value, not in the
+  // mask-and-action form used to write it.
+  if (value_len < 4) {
+    ESP_LOGW(TAG, "Vibration register value too short (%u bytes)", value_len);
+    return;
+  }
+  uint32_t reg = encode_uint32(value[3], value[2], value[1], value[0]);
+  // Inverted: the bit being clear is what means enabled.
+  bool enabled = (reg & VIBRATION_BIT_DISABLED) == 0;
+  ESP_LOGI(TAG, "Vibration %s (register=0x%08x)", enabled ? "on" : "off", reg);
+  if (this->vibration_switch_ != nullptr)
+    this->vibration_switch_->publish_state(enabled);
 }
 
 void VolcanoComponent::decode_hours_(const uint8_t *value, uint16_t value_len) {
@@ -702,6 +758,33 @@ void VolcanoComponent::set_led_brightness_percent(uint8_t percent) {
   }
 }
 
+void VolcanoComponent::set_vibration(bool enabled) {
+  if (this->vibration_handle_ == 0) {
+    ESP_LOGW(TAG, "Vibration characteristic not resolved; not connected?");
+    return;
+  }
+  // CMD-004's confirmed mask-and-action form: a 2-byte little-endian bit
+  // mask, then 00 to clear that bit or 01 to set it, then a padding byte.
+  // The write names only the bit being changed, so the register's other
+  // bits -- several of which are unidentified -- are neither read first nor
+  // disturbed.
+  //
+  // Clear enables, per VIBRATION_BIT_DISABLED above.
+  uint8_t payload[4] = {
+      static_cast<uint8_t>(VIBRATION_BIT_DISABLED & 0xFF),
+      static_cast<uint8_t>((VIBRATION_BIT_DISABLED >> 8) & 0xFF),
+      static_cast<uint8_t>(enabled ? 0x00 : 0x01),
+      0x00,
+  };
+  ESP_LOGI(TAG, "Turning vibration %s", enabled ? "on" : "off");
+  auto status = esp_ble_gattc_write_char(this->parent()->get_gattc_if(), this->parent()->get_conn_id(),
+                                         this->vibration_handle_, sizeof(payload), payload, ESP_GATT_WRITE_TYPE_RSP,
+                                         ESP_GATT_AUTH_REQ_NONE);
+  if (status) {
+    ESP_LOGW(TAG, "esp_ble_gattc_write_char failed, status=%d", status);
+  }
+}
+
 // CMD-006 through CMD-009: every trigger characteristic accepts only the
 // single value 0x00 -- the only value ever observed written to any of them
 // (see the trigger-characteristics note in docs/protocol/commands.md) -- so
@@ -774,6 +857,8 @@ void VolcanoTargetTemperatureNumber::control(float value) {
   }
   this->parent_->set_target_temperature_decidegrees(static_cast<uint16_t>(decidegrees));
 }
+
+void VolcanoVibrationSwitch::write_state(bool state) { this->parent_->set_vibration(state); }
 
 void VolcanoLedBrightnessNumber::control(float value) {
   long percent = lroundf(value);

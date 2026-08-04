@@ -94,6 +94,13 @@ volcano:
     mode: box
     web_server:
       sorting_weight: 60
+  # Whether the device buzzes on reaching temperature. The register bit is
+  # inverted (clear means enabled), which the component handles -- this
+  # switch reads and writes in the obvious sense.
+  vibration:
+    name: "Vibration"
+    web_server:
+      sorting_weight: 80
   # CMD-002 records a 0-100 scale, which is the default range here.
   led_brightness:
     name: "LED brightness"

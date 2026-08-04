@@ -105,7 +105,7 @@ Each notify-capable characteristic's Client Characteristic Configuration descrip
 - **Properties**: Read/Write/Notify
 - **Observation**: Reads back as a 4-byte register value, not in the mask-and-action form used to write it ([CMD-004](commands.md#cmd-004--set-vibration)). The read carries the vibration setting at the same bit position the write names, with the same inverted polarity: reading the register with vibration enabled and then disabled changes exactly two bits, bit 10 (`0x0400`) and bit 16 (`0x10000`), both clear when the feature is on and set when it is off. Every other bit in the value is unchanged between the two states and is unidentified — see [`open-questions.md`](open-questions.md).
 - **Confidence**: Confirmed (identity, that the setting is written here per CMD-004, and that bit 10 of the read value carries the setting with inverted polarity); Unknown (the meaning of the register's other bits)
-- **Implementation status**: Not implemented
+- **Implementation status**: Implemented in `components/volcano/volcano.cpp` — subscribed, initial value read explicitly, and bit 10 decoded with its inverted polarity, alongside the write ([CMD-004](commands.md#cmd-004--set-vibration)). Verified against real hardware, including that the decoded state matches the device's actual vibration behaviour. The register's other bits are not decoded.
 
 ## CHAR-011 — Unknown value (HIST1)
 

@@ -44,7 +44,7 @@ Write-triggered behaviour. Format per [ADR-0006](../decisions/ADR-0006-protocol-
 - **Handle**: `0x0031`
 - **Observation**: 4-byte write in the register-bit form described in the note below: raw bytes `00 04 00 00` = on, `00 04 01 00` = off. The first two bytes are the bit mask `0x0400`, and the third selects clear (`00`) or set (`01`). Reproduced across repeated toggles in both directions. A third-party source states `0x000400` = on and `0x010400` = off, which matches these bytes exactly once read as a 32-bit little-endian value.
 - **Confidence**: Confirmed
-- **Implementation status**: Not implemented
+- **Implementation status**: Implemented in `components/volcano/volcano.cpp` (`set_vibration()`), the first use of the mask-and-action write form. Verified against real hardware against the physical effect rather than the register alone: with the setting written enabled and then disabled alternately, the device vibrated on reaching target only in the enabled cases. Reproduced in both directions, with each target change large enough to clear bit 10 of the status register, which [STATE-008](state-model.md#state-008--statusflags-register-partial) records as a precondition for the alert firing at all.
 
 ## CMD-005 — Set display on cooling
 

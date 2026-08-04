@@ -82,6 +82,19 @@ class VolcanoPumpSwitch : public switch_::Switch, public Parented<VolcanoCompone
   void write_state(bool state) override;
 };
 
+// Vibration setting (CHAR-010, CMD-004). A setting rather than an actuator:
+// it governs whether the device buzzes on reaching temperature, so it
+// defaults to the config entity category.
+//
+// Note the inverted polarity this hides. The register bit is *clear* when
+// vibration is enabled and set when it is disabled, so "on" here writes the
+// clear action and decodes from an absent bit. See set_vibration() and
+// decode_vibration_() in volcano.cpp.
+class VolcanoVibrationSwitch : public switch_::Switch, public Parented<VolcanoComponent> {
+ protected:
+  void write_state(bool state) override;
+};
+
 // VolcanoComponent is the root of the Volcano component defined in
 // ADR-0002 (docs/decisions/ADR-0002-volcano-component-architecture.md).
 //
@@ -188,6 +201,11 @@ class VolcanoComponent : public Component, public ble_client::BLEClientNode {
   // scale the finding records, or no connection is established.
   void set_led_brightness_percent(uint8_t percent);
 
+  // Writes CMD-004's confirmed mask-and-action form to the vibration
+  // register. `enabled` is the user-facing sense: the bit written is its
+  // inverse, per CHAR-010's inverted polarity.
+  void set_vibration(bool enabled);
+
   // Optional sinks for decoded state, set by __init__.py from the `volcano:`
   // block's optional entity sub-schemas. Each is published to from the
   // corresponding decode_*_() method below when configured. The two number
@@ -199,6 +217,7 @@ class VolcanoComponent : public Component, public ble_client::BLEClientNode {
   void set_auto_shutoff_duration_number(VolcanoAutoShutoffDurationNumber *n) { auto_shutoff_duration_number_ = n; }
   void set_heater_switch(VolcanoHeaterSwitch *s) { heater_switch_ = s; }
   void set_pump_switch(VolcanoPumpSwitch *s) { pump_switch_ = s; }
+  void set_vibration_switch(VolcanoVibrationSwitch *s) { vibration_switch_ = s; }
   void set_firmware_version_text_sensor(text_sensor::TextSensor *s) { firmware_version_text_sensor_ = s; }
   void set_ble_firmware_version_text_sensor(text_sensor::TextSensor *s) { ble_firmware_version_text_sensor_ = s; }
   void set_serial_number_text_sensor(text_sensor::TextSensor *s) { serial_number_text_sensor_ = s; }
@@ -238,6 +257,7 @@ class VolcanoComponent : public Component, public ble_client::BLEClientNode {
   uint16_t hours_handle_{0};                 // CHAR-022: hours of operation.
   uint16_t minutes_handle_{0};               // CHAR-023: minutes of operation.
   uint16_t led_brightness_handle_{0};        // CHAR-015: LED brightness.
+  uint16_t vibration_handle_{0};             // CHAR-010: vibration setting.
 
   // Reads CHAR-017, whose value nothing else would otherwise reveal: it has
   // no notify, so without this the configured duration is unknown until
@@ -246,6 +266,7 @@ class VolcanoComponent : public Component, public ble_client::BLEClientNode {
   // confirms it.
   void read_auto_shutoff_duration_();
 
+  void decode_vibration_(const uint8_t *value, uint16_t value_len);
   void decode_hours_(const uint8_t *value, uint16_t value_len);
   void decode_minutes_(const uint8_t *value, uint16_t value_len);
   void decode_text_(const uint8_t *value, uint16_t value_len, text_sensor::TextSensor *sensor, const char *name);
@@ -271,6 +292,7 @@ class VolcanoComponent : public Component, public ble_client::BLEClientNode {
   VolcanoAutoShutoffDurationNumber *auto_shutoff_duration_number_{nullptr};
   VolcanoHeaterSwitch *heater_switch_{nullptr};
   VolcanoPumpSwitch *pump_switch_{nullptr};
+  VolcanoVibrationSwitch *vibration_switch_{nullptr};
   text_sensor::TextSensor *firmware_version_text_sensor_{nullptr};
   text_sensor::TextSensor *ble_firmware_version_text_sensor_{nullptr};
   text_sensor::TextSensor *serial_number_text_sensor_{nullptr};

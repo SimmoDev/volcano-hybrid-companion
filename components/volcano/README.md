@@ -3,6 +3,7 @@
 This is the `volcano` ESPHome external component. It is a `ble_client` node ([ADR-0007](../../docs/decisions/ADR-0007-ble-connection-lifecycle.md)) that currently implements:
 
 - **Read-only state**: on each connection it resolves the status/flags register (`CHAR-008`), the auto-shutoff countdown (`CHAR-016`), current/target temperature (`CHAR-013`/`CHAR-014`) and the heater-runtime meter (`CHAR-022`/`CHAR-023`) by UUID, subscribes, reads their initial values, decodes them, and logs them. Current temperature's sub-40 °C "no reading" gate (STATE-012) is decoded explicitly rather than logged as a false `0.0` reading.
+- **Vibration**: `set_vibration()` writes the vibration setting (`CHAR-010`) — whether the device buzzes on reaching temperature — using the mask-and-action form CMD-004 confirms. The register bit is inverted (clear means enabled), which the component hides: the entity and method both read and write in the obvious sense. The register notifies, so it is subscribed rather than re-read after each write.
 - **LED brightness**: `set_led_brightness_percent()` writes the display brightness (`CHAR-015`) on the 0–100 scale CMD-002 records, read once per connection and re-read after each write. `0` switches the display off entirely rather than dimming it; any non-zero value restores it.
 - **Device information**: firmware version (`CHAR-005`), firmware BLE version (`CHAR-006`), serial number (`CHAR-007`), power supply rating (`CHAR-024`) and product line name (`CHAR-025`) are read once per connection. None of them notifies, so each is read explicitly; they are read one at a time rather than all at once, since a GATT client has only a small number of outstanding reads available. Three of the five are writable on the device and none is ever written here — writing `CHAR-007` would replace a real unit's serial number.
 - **Writes**: `set_auto_shutoff_duration_seconds()` writes the auto-shutoff duration (`CHAR-017`), refusing anything outside 60–21600 seconds — the range CMD-003 confirms accepted, from the floor this project verified through to an actual expiry up to the top of the official app's own range. Values outside it are unverified and are not written. `turn_heater_on()`/`turn_heater_off()`/`turn_pump_on()`/`turn_pump_off()` write the four one-byte trigger characteristics (`CHAR-018`–`CHAR-021`), each with the single value CMD-006 through CMD-009 confirm those characteristics accept. `set_target_temperature_decidegrees()` writes the target temperature (`CHAR-014`), refusing anything outside the 40.0–230.0 °C range CMD-001 confirms the official app's UI accepts.
@@ -61,6 +62,8 @@ volcano:
   auto_shutoff_duration:
     name: "Auto-shutoff duration"
   # Read/write (switch)
+  vibration:
+    name: "Vibration"
   heater:
     name: "Heat"
   pump:
@@ -82,7 +85,7 @@ Entities default to an entity category reflecting what they are, so a UI can gro
 | Category | Entities |
 |---|---|
 | *(none)* | `heater`, `pump`, `current_temperature`, `target_temperature`, `auto_shutoff_countdown` — live state and primary control |
-| `config` | `auto_shutoff_duration`, `led_brightness` — settings that configure how the device behaves |
+| `config` | `auto_shutoff_duration`, `led_brightness`, `vibration` — settings that configure how the device behaves |
 | `diagnostic` | `hours_of_operation`, `minutes_of_operation` and the five device-information strings — information about the device |
 
 `auto_shutoff_countdown` sits with the controls rather than the diagnostics despite being read-only: it is live operational state that changes every second, and it is the backstop against the heater running unattended, so it belongs where the actuator state is read. The lifetime meters alongside it in `diagnostic` change too slowly to inform anything in the moment. Every category can be overridden per entity in YAML.

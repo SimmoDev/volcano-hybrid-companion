@@ -55,6 +55,7 @@ CONF_BLE_FIRMWARE_VERSION = "ble_firmware_version"
 CONF_SERIAL_NUMBER = "serial_number"
 CONF_POWER_SUPPLY = "power_supply"
 CONF_PRODUCT_LINE = "product_line"
+CONF_VIBRATION = "vibration"
 CONF_LED_BRIGHTNESS = "led_brightness"
 CONF_HOURS_OF_OPERATION = "hours_of_operation"
 CONF_MINUTES_OF_OPERATION = "minutes_of_operation"
@@ -71,6 +72,9 @@ VolcanoAutoShutoffDurationNumber = volcano_ns.class_(
 )
 VolcanoLedBrightnessNumber = volcano_ns.class_(
     "VolcanoLedBrightnessNumber", number.Number, cg.Parented.template(VolcanoComponent)
+)
+VolcanoVibrationSwitch = volcano_ns.class_(
+    "VolcanoVibrationSwitch", switch.Switch, cg.Parented.template(VolcanoComponent)
 )
 VolcanoHeaterSwitch = volcano_ns.class_(
     "VolcanoHeaterSwitch", switch.Switch, cg.Parented.template(VolcanoComponent)
@@ -188,6 +192,16 @@ CONFIG_SCHEMA = (
                 state_class=STATE_CLASS_MEASUREMENT,
                 entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
             ),
+            # A setting rather than an actuator, so it groups with the
+            # other settings rather than with Heat and Air. Same DISABLED
+            # restore mode and same no-optimistic-publish rule as those:
+            # the state shown is the register's, not what was requested.
+            cv.Optional(CONF_VIBRATION): switch.switch_schema(
+                VolcanoVibrationSwitch,
+                icon="mdi:vibrate",
+                entity_category=ENTITY_CATEGORY_CONFIG,
+                default_restore_mode="DISABLED",
+            ),
             # Device information: fixed per unit, read once per connection,
             # never written. Diagnostic rather than primary state, so they
             # do not sit alongside the controls by default.
@@ -280,6 +294,11 @@ async def to_code(config):
 
     if minutes_config := config.get(CONF_MINUTES_OF_OPERATION):
         cg.add(var.set_minutes_sensor(await sensor.new_sensor(minutes_config)))
+
+    if vibration_config := config.get(CONF_VIBRATION):
+        sw = await switch.new_switch(vibration_config)
+        await cg.register_parented(sw, var)
+        cg.add(var.set_vibration_switch(sw))
 
     for key, setter in (
         (CONF_FIRMWARE_VERSION, var.set_firmware_version_text_sensor),
