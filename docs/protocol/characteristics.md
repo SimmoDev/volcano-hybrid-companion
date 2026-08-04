@@ -157,7 +157,7 @@ Each notify-capable characteristic's Client Characteristic Configuration descrip
 - **Properties**: Read/Write
 - **Observation**: Reads back as a 2-byte value on the same 0–100 scale as the write — see [CMD-002](commands.md#cmd-002--set-led-brightness).
 - **Confidence**: Confirmed
-- **Implementation status**: Not implemented
+- **Implementation status**: Implemented in `components/volcano/volcano.cpp`: the write (CMD-002), the read-back that confirms it, and a read on each connection. The last matters because this characteristic has no notify — without it the configured brightness is unknown until something writes one. Verified against real hardware.
 
 ## CHAR-016 — Auto-shutoff countdown
 

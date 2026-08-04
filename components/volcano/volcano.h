@@ -49,6 +49,15 @@ class VolcanoAutoShutoffDurationNumber : public number::Number, public Parented<
   void control(float value) override;
 };
 
+// Writable LED brightness (CHAR-015, CMD-002), on the 0-100 scale the
+// characteristic reads back and the write uses. Read/Write with no notify,
+// so this is populated by a read on each connection and refreshed by the
+// read-back after each write, like the auto-shutoff duration.
+class VolcanoLedBrightnessNumber : public number::Number, public Parented<VolcanoComponent> {
+ protected:
+  void control(float value) override;
+};
+
 // Heater and pump as one entity each, rather than a state readout plus a
 // pair of on/off triggers. Turning either on or off writes the matching
 // trigger characteristic (CMD-006 through CMD-009), and the component
@@ -174,6 +183,11 @@ class VolcanoComponent : public Component, public ble_client::BLEClientNode {
   // confirmed range this refuses to go outside of).
   void set_target_temperature_decidegrees(uint16_t decidegrees);
 
+  // Writes CMD-002's confirmed 2-byte encoding to the LED brightness
+  // characteristic. A no-op, logged, if `percent` is outside the 0-100
+  // scale the finding records, or no connection is established.
+  void set_led_brightness_percent(uint8_t percent);
+
   // Optional sinks for decoded state, set by __init__.py from the `volcano:`
   // block's optional entity sub-schemas. Each is published to from the
   // corresponding decode_*_() method below when configured. The two number
@@ -190,6 +204,7 @@ class VolcanoComponent : public Component, public ble_client::BLEClientNode {
   void set_serial_number_text_sensor(text_sensor::TextSensor *s) { serial_number_text_sensor_ = s; }
   void set_power_supply_text_sensor(text_sensor::TextSensor *s) { power_supply_text_sensor_ = s; }
   void set_product_line_text_sensor(text_sensor::TextSensor *s) { product_line_text_sensor_ = s; }
+  void set_led_brightness_number(VolcanoLedBrightnessNumber *n) { led_brightness_number_ = n; }
   void set_hours_sensor(sensor::Sensor *s) { hours_sensor_ = s; }
   void set_minutes_sensor(sensor::Sensor *s) { minutes_sensor_ = s; }
 
@@ -222,6 +237,7 @@ class VolcanoComponent : public Component, public ble_client::BLEClientNode {
   // than read once. Both advance only while the heater is on.
   uint16_t hours_handle_{0};                 // CHAR-022: hours of operation.
   uint16_t minutes_handle_{0};               // CHAR-023: minutes of operation.
+  uint16_t led_brightness_handle_{0};        // CHAR-015: LED brightness.
 
   // Reads CHAR-017, whose value nothing else would otherwise reveal: it has
   // no notify, so without this the configured duration is unknown until
@@ -242,7 +258,7 @@ class VolcanoComponent : public Component, public ble_client::BLEClientNode {
   void queue_static_reads_();
   void issue_next_static_read_();
 
-  static const uint8_t MAX_STATIC_READS = 6;
+  static const uint8_t MAX_STATIC_READS = 7;
   uint16_t static_reads_[MAX_STATIC_READS];
   uint8_t static_read_count_{0};
   uint8_t static_read_index_{0};
@@ -260,6 +276,7 @@ class VolcanoComponent : public Component, public ble_client::BLEClientNode {
   text_sensor::TextSensor *serial_number_text_sensor_{nullptr};
   text_sensor::TextSensor *power_supply_text_sensor_{nullptr};
   text_sensor::TextSensor *product_line_text_sensor_{nullptr};
+  VolcanoLedBrightnessNumber *led_brightness_number_{nullptr};
   sensor::Sensor *hours_sensor_{nullptr};
   sensor::Sensor *minutes_sensor_{nullptr};
 

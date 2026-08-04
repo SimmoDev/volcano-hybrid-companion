@@ -60,6 +60,8 @@ static const char *const SERIAL_NUMBER_CHARACTERISTIC_UUID = "10100008-5354-4f52
 static const char *const HOURS_CHARACTERISTIC_UUID = "10110015-5354-4f52-5a26-4249434b454c";
 // CHAR-023: minutes of operation (STATE-006), on SVC-006.
 static const char *const MINUTES_CHARACTERISTIC_UUID = "10110016-5354-4f52-5a26-4249434b454c";
+// CHAR-015/CMD-002: LED brightness (SVC-006).
+static const char *const LED_BRIGHTNESS_CHARACTERISTIC_UUID = "10110005-5354-4f52-5a26-4249434b454c";
 
 // STATE-008: bit 5 is set whenever the heater is on, clear when off.
 static const uint16_t STATUS_BIT_HEATER_ON = 0x0020;
@@ -86,6 +88,13 @@ static const uint16_t MAX_AUTO_SHUTOFF_DURATION_SECONDS = 21600;
 static const uint16_t MIN_TARGET_TEMPERATURE_DECIDEGREES = 400;
 static const uint16_t MAX_TARGET_TEMPERATURE_DECIDEGREES = 2300;
 
+// CMD-002: the scale the LED brightness characteristic is Confirmed to
+// use, both written and read back. 0 is a legitimate value rather than one
+// to guard against -- it switches the display off entirely rather than
+// dimming it, and any non-zero write restores it at the level written --
+// so it is allowed, and only values above the scale are refused.
+static const uint8_t MAX_LED_BRIGHTNESS_PERCENT = 100;
+
 static void subscribe(esphome::ble_client::BLEClient *client, uint16_t handle, const char *name) {
   auto status = esp_ble_gattc_register_for_notify(client->get_gattc_if(), client->get_remote_bda(), handle);
   if (status) {
@@ -107,14 +116,16 @@ void VolcanoComponent::dump_config() {
   ESP_LOGCONFIG(TAG, "Volcano:");
   ESP_LOGCONFIG(TAG, "  Read-only: status/flags register (CHAR-008), auto-shutoff countdown (CHAR-016),");
   ESP_LOGCONFIG(TAG, "    current temperature (CHAR-013), hours/minutes of operation (CHAR-022/023).");
-  ESP_LOGCONFIG(TAG, "  Read once per connection: firmware version (CHAR-005), firmware BLE version");
+  ESP_LOGCONFIG(TAG, "  Read once per connection: LED brightness (CHAR-015), firmware version (CHAR-005),");
+  ESP_LOGCONFIG(TAG, "    firmware BLE version");
   ESP_LOGCONFIG(TAG, "    (CHAR-006), serial number (CHAR-007), power supply (CHAR-024),");
   ESP_LOGCONFIG(TAG, "    product line (CHAR-025).");
   ESP_LOGCONFIG(TAG, "  Write: auto-shutoff duration (CHAR-017), %u-%u s;", MIN_AUTO_SHUTOFF_DURATION_SECONDS,
                 MAX_AUTO_SHUTOFF_DURATION_SECONDS);
   ESP_LOGCONFIG(TAG, "    heater on/off (CHAR-018/019), pump on/off (CHAR-020/021);");
-  ESP_LOGCONFIG(TAG, "    target temperature (CHAR-014), %.1f-%.1f C.", MIN_TARGET_TEMPERATURE_DECIDEGREES / 10.0f,
+  ESP_LOGCONFIG(TAG, "    target temperature (CHAR-014), %.1f-%.1f C;", MIN_TARGET_TEMPERATURE_DECIDEGREES / 10.0f,
                 MAX_TARGET_TEMPERATURE_DECIDEGREES / 10.0f);
+  ESP_LOGCONFIG(TAG, "    LED brightness (CHAR-015), 0-%u%%.", MAX_LED_BRIGHTNESS_PERCENT);
 }
 
 void VolcanoComponent::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if,
@@ -138,6 +149,7 @@ void VolcanoComponent::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
       this->product_line_handle_ = 0;
       this->hours_handle_ = 0;
       this->minutes_handle_ = 0;
+      this->led_brightness_handle_ = 0;
       this->pending_subscriptions_ = 0;
       this->static_read_count_ = 0;
       this->static_read_index_ = 0;
@@ -267,6 +279,16 @@ void VolcanoComponent::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
         this->pump_off_handle_ = pump_off_chr->handle;
       }
 
+      auto *led_brightness_chr = this->parent()->get_characteristic(
+          control_service, espbt::ESPBTUUID::from_raw(LED_BRIGHTNESS_CHARACTERISTIC_UUID));
+      if (led_brightness_chr == nullptr) {
+        ESP_LOGW(TAG, "LED brightness (CHAR-015) not found on device");
+      } else {
+        // Read/Write with no notify, so resolved here and read once per
+        // connection by the static read queue rather than subscribed.
+        this->led_brightness_handle_ = led_brightness_chr->handle;
+      }
+
       // Device information (SVC-005), none of it notify-capable, so all of
       // it is read once per connection by the static read queue rather than
       // subscribed. A missing one is logged at debug rather than warning:
@@ -373,6 +395,16 @@ void VolcanoComponent::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
         this->decode_current_temperature_(param->read.value, param->read.value_len);
       } else if (param->read.handle == this->target_temp_handle_) {
         this->decode_target_temperature_(param->read.value, param->read.value_len);
+      } else if (param->read.handle == this->led_brightness_handle_) {
+        // CMD-002: 2-byte value, only the low byte significant.
+        if (param->read.value_len < 2) {
+          ESP_LOGW(TAG, "LED brightness value too short (%u bytes)", param->read.value_len);
+        } else {
+          uint16_t percent = encode_uint16(param->read.value[1], param->read.value[0]);
+          ESP_LOGI(TAG, "LED brightness: %u%%", percent);
+          if (this->led_brightness_number_ != nullptr)
+            this->led_brightness_number_->publish_state(percent);
+        }
       } else if (param->read.handle == this->hours_handle_) {
         this->decode_hours_(param->read.value, param->read.value_len);
       } else if (param->read.handle == this->minutes_handle_) {
@@ -429,6 +461,16 @@ void VolcanoComponent::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
         if (param->write.status != ESP_GATT_OK) {
           ESP_LOGW(TAG, "Trigger write to handle 0x%04x failed, status=%d", param->write.handle,
                    param->write.status);
+        }
+      } else if (param->write.handle == this->led_brightness_handle_) {
+        if (param->write.status != ESP_GATT_OK) {
+          ESP_LOGW(TAG, "LED brightness write failed, status=%d", param->write.status);
+          break;
+        }
+        auto status = esp_ble_gattc_read_char(this->parent()->get_gattc_if(), this->parent()->get_conn_id(),
+                                              this->led_brightness_handle_, ESP_GATT_AUTH_REQ_NONE);
+        if (status) {
+          ESP_LOGW(TAG, "esp_ble_gattc_read_char(LED brightness) failed, status=%d", status);
         }
       } else if (param->write.handle == this->target_temp_handle_) {
         if (param->write.status != ESP_GATT_OK) {
@@ -559,8 +601,9 @@ void VolcanoComponent::queue_static_reads_() {
   // only one of these that affects how the device behaves, and the device
   // information after, none of which anything waits on.
   const uint16_t handles[] = {
-      this->duration_handle_,     this->firmware_version_handle_, this->ble_firmware_version_handle_,
-      this->serial_number_handle_, this->power_supply_handle_,    this->product_line_handle_,
+      this->duration_handle_,      this->led_brightness_handle_, this->firmware_version_handle_,
+      this->ble_firmware_version_handle_, this->serial_number_handle_, this->power_supply_handle_,
+      this->product_line_handle_,
   };
   this->static_read_count_ = 0;
   this->static_read_index_ = 0;
@@ -638,6 +681,27 @@ void VolcanoComponent::set_auto_shutoff_duration_seconds(uint16_t seconds) {
   }
 }
 
+void VolcanoComponent::set_led_brightness_percent(uint8_t percent) {
+  if (percent > MAX_LED_BRIGHTNESS_PERCENT) {
+    ESP_LOGW(TAG, "Refusing to set LED brightness to %u%%: outside the 0-%u scale CMD-002 records", percent,
+             MAX_LED_BRIGHTNESS_PERCENT);
+    return;
+  }
+  if (this->led_brightness_handle_ == 0) {
+    ESP_LOGW(TAG, "LED brightness characteristic not resolved; not connected?");
+    return;
+  }
+  // CMD-002's confirmed encoding: 2 bytes, only the low one significant.
+  uint8_t payload[2] = {percent, 0};
+  ESP_LOGI(TAG, "Setting LED brightness to %u%%", percent);
+  auto status = esp_ble_gattc_write_char(this->parent()->get_gattc_if(), this->parent()->get_conn_id(),
+                                         this->led_brightness_handle_, sizeof(payload), payload,
+                                         ESP_GATT_WRITE_TYPE_RSP, ESP_GATT_AUTH_REQ_NONE);
+  if (status) {
+    ESP_LOGW(TAG, "esp_ble_gattc_write_char failed, status=%d", status);
+  }
+}
+
 // CMD-006 through CMD-009: every trigger characteristic accepts only the
 // single value 0x00 -- the only value ever observed written to any of them
 // (see the trigger-characteristics note in docs/protocol/commands.md) -- so
@@ -709,6 +773,15 @@ void VolcanoTargetTemperatureNumber::control(float value) {
     return;
   }
   this->parent_->set_target_temperature_decidegrees(static_cast<uint16_t>(decidegrees));
+}
+
+void VolcanoLedBrightnessNumber::control(float value) {
+  long percent = lroundf(value);
+  if (percent < 0 || percent > UINT8_MAX) {
+    ESP_LOGW(TAG, "Ignoring LED brightness of %.0f: outside the encodable range", value);
+    return;
+  }
+  this->parent_->set_led_brightness_percent(static_cast<uint8_t>(percent));
 }
 
 // Minutes in, seconds out -- see VolcanoAutoShutoffDurationNumber in

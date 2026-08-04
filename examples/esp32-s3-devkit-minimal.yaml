@@ -94,6 +94,12 @@ volcano:
     mode: box
     web_server:
       sorting_weight: 60
+  # CMD-002 records a 0-100 scale, which is the default range here.
+  led_brightness:
+    name: "LED brightness"
+    mode: box
+    web_server:
+      sorting_weight: 70
   # The heater-runtime meter: minutes counts 0-59 and carries into hours,
   # and both advance only while the heater is on rather than tracking
   # wall-clock time. Notify-capable, so they update live.

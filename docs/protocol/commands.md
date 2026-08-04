@@ -21,8 +21,14 @@ Write-triggered behaviour. Format per [ADR-0006](../decisions/ADR-0006-protocol-
 
 - **Handle**: `0x0052`
 - **Observation**: 2-byte little-endian value (only the low byte significant), 0–100 scale (e.g. raw bytes `64 00` = 100). Observed across several distinct brightness settings, each write matching the level selected in the app.
-- **Confidence**: Confirmed
-- **Implementation status**: Not implemented
+
+  **`0` switches the display off entirely rather than dimming it.** At `0` the display shows nothing at all — no current or target temperature, and none of the Bluetooth, power or air indicators. At `1` the display is very dim but fully legible, which is what separates an off state from the bottom of the dimming range. Writing any non-zero value restores the display immediately, at the level written. Observed in both directions.
+
+  The device carries on operating normally with the display dark: BLE writes are accepted and acted on throughout, so this is a display-layer setting only.
+
+  This is a different state from the blanking in [STATE-012](state-model.md#state-012--sub-40-c-reporting-and-the-idle-display-state), which drops the temperature readout but leaves the Bluetooth and power indicators lit. Brightness `0` extinguishes those too, so the two are distinguishable by looking at the device.
+- **Confidence**: Confirmed (encoding, the 0–100 scale, that `0` switches the display off rather than dimming it, and that a non-zero write restores it)
+- **Implementation status**: Implemented in `components/volcano/volcano.cpp` (`set_led_brightness_percent()`), together with a read on each connection and the read-back that confirms each write. Verified against real hardware across the scale, including `0` and its restoration.
 
 ## CMD-003 — Set auto-shutoff duration
 

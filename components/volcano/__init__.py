@@ -16,6 +16,7 @@ from esphome.const import (
     ICON_BLUETOOTH,
     ICON_CHIP,
     ICON_FAN,
+    ICON_BRIGHTNESS_5,
     ICON_POWER,
     ICON_RADIATOR,
     ICON_TIMER,
@@ -24,6 +25,7 @@ from esphome.const import (
     UNIT_CELSIUS,
     UNIT_HOUR,
     UNIT_MINUTE,
+    UNIT_PERCENT,
     UNIT_SECOND,
 )
 
@@ -51,6 +53,7 @@ CONF_BLE_FIRMWARE_VERSION = "ble_firmware_version"
 CONF_SERIAL_NUMBER = "serial_number"
 CONF_POWER_SUPPLY = "power_supply"
 CONF_PRODUCT_LINE = "product_line"
+CONF_LED_BRIGHTNESS = "led_brightness"
 CONF_HOURS_OF_OPERATION = "hours_of_operation"
 CONF_MINUTES_OF_OPERATION = "minutes_of_operation"
 
@@ -63,6 +66,9 @@ VolcanoTargetTemperatureNumber = volcano_ns.class_(
 )
 VolcanoAutoShutoffDurationNumber = volcano_ns.class_(
     "VolcanoAutoShutoffDurationNumber", number.Number, cg.Parented.template(VolcanoComponent)
+)
+VolcanoLedBrightnessNumber = volcano_ns.class_(
+    "VolcanoLedBrightnessNumber", number.Number, cg.Parented.template(VolcanoComponent)
 )
 VolcanoHeaterSwitch = volcano_ns.class_(
     "VolcanoHeaterSwitch", switch.Switch, cg.Parented.template(VolcanoComponent)
@@ -81,6 +87,8 @@ DEFAULT_TARGET_TEMPERATURE_MIN = 40.0
 DEFAULT_TARGET_TEMPERATURE_MAX = 230.0
 DEFAULT_AUTO_SHUTOFF_DURATION_MIN = 1.0
 DEFAULT_AUTO_SHUTOFF_DURATION_MAX = 360.0
+DEFAULT_LED_BRIGHTNESS_MIN = 0.0
+DEFAULT_LED_BRIGHTNESS_MAX = 100.0
 
 
 def _number_range_schema(default_min, default_max):
@@ -117,6 +125,15 @@ CONFIG_SCHEMA = (
             ).extend(
                 _number_range_schema(
                     DEFAULT_AUTO_SHUTOFF_DURATION_MIN, DEFAULT_AUTO_SHUTOFF_DURATION_MAX
+                )
+            ),
+            cv.Optional(CONF_LED_BRIGHTNESS): number.number_schema(
+                VolcanoLedBrightnessNumber,
+                unit_of_measurement=UNIT_PERCENT,
+                icon=ICON_BRIGHTNESS_5,
+            ).extend(
+                _number_range_schema(
+                    DEFAULT_LED_BRIGHTNESS_MIN, DEFAULT_LED_BRIGHTNESS_MAX
                 )
             ),
             cv.Optional(CONF_AUTO_SHUTOFF_COUNTDOWN): sensor.sensor_schema(
@@ -224,6 +241,16 @@ async def to_code(config):
         )
         await cg.register_parented(num, var)
         cg.add(var.set_auto_shutoff_duration_number(num))
+
+    if led_config := config.get(CONF_LED_BRIGHTNESS):
+        num = await number.new_number(
+            led_config,
+            min_value=led_config[CONF_MIN_VALUE],
+            max_value=led_config[CONF_MAX_VALUE],
+            step=led_config[CONF_STEP],
+        )
+        await cg.register_parented(num, var)
+        cg.add(var.set_led_brightness_number(num))
 
     if countdown_config := config.get(CONF_AUTO_SHUTOFF_COUNTDOWN):
         sens = await sensor.new_sensor(countdown_config)
