@@ -43,84 +43,73 @@ ble_client:
 volcano:
   id: volcano_component
   ble_client_id: volcano_ble_client
-  # Optional -- publishes decoded state so it shows on the web_server page
-  # below alongside the command controls, including on-panel changes.
+  # Optional -- exposes decoded state on the web_server page below,
+  # including on-panel changes. Everything the device lets us both read
+  # and write is a single two-way control rather than a readout plus
+  # separate setters.
   current_temperature:
     name: "Current temperature"
-  target_temperature:
-    name: "Target temperature"
+    web_server:
+      sorting_weight: 30
   auto_shutoff_countdown:
     name: "Auto-shutoff countdown"
+    web_server:
+      sorting_weight: 50
+  # Heater and pump are switches: each reports the device's state and
+  # toggles it, so there is one control per actuator rather than a readout
+  # plus separate on/off triggers.
+  #
+  # Named "Heat" and "Air" to match the labels on the Volcano's own panel
+  # and in the official app, so the two read the same side by side. The
+  # keys stay `heater`/`pump`, matching this project's terminology and the
+  # device firmware's own identifiers -- see docs/CONVENTIONS.md.
   heater:
-    name: "Heater"
+    name: "Heat"
+    web_server:
+      sorting_weight: 10
   pump:
-    name: "Pump"
+    name: "Air"
+    web_server:
+      sorting_weight: 20
+  # `mode: box` on both numbers takes a typed value rather than the default
+  # slider, which also keeps the unit label aligned with the sensor rows.
+  #
+  # min/max default to the range CMD-001 confirms accepted (40.0-230.0 degC).
+  # Widened here deliberately, so this example can also exercise the
+  # component's refusal path: a value outside the confirmed range is rejected
+  # in software (logged, nothing written) and never reaches the device.
+  target_temperature:
+    name: "Target temperature"
+    mode: box
+    web_server:
+      sorting_weight: 40
+    min_value: 30
+    max_value: 240
+  # Left at the default 1-360 minutes, the range CMD-003 confirms accepted.
+  # Per STATE-005 a duration write only takes effect at the *next arming*,
+  # not on a countdown already running: to see a new value take effect, set
+  # it while the device is fully idle (heater off, pump off, countdown at 0).
+  auto_shutoff_duration:
+    name: "Auto-shutoff duration"
+    mode: box
+    web_server:
+      sorting_weight: 60
 
-# WiFi is needed only for web_server below, to reach the command buttons
+# WiFi is needed only for web_server below, to reach the controls
 # from a browser -- the volcano component itself is BLE-only and has no
 # dependency on it. Credentials come from secrets.yaml, not committed.
 wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
 
-# Serves a local page with a control per command below, for manual testing
+# Serves a local page with a control per value above, for manual testing
 # without extra hardware. It listens on this device's local IP with no
 # authentication and no TLS -- fine on a trusted home network for this
 # development example, but not something to expose beyond it.
 web_server:
   port: 80
   local: true
-
-button:
-  - platform: template
-    name: "Heater on"
-    on_press:
-      - lambda: |-
-          id(volcano_component).turn_heater_on();
-  - platform: template
-    name: "Heater off"
-    on_press:
-      - lambda: |-
-          id(volcano_component).turn_heater_off();
-  - platform: template
-    name: "Pump on"
-    on_press:
-      - lambda: |-
-          id(volcano_component).turn_pump_on();
-  - platform: template
-    name: "Pump off"
-    on_press:
-      - lambda: |-
-          id(volcano_component).turn_pump_off();
-  # CMD-003's confirmed floor: the lowest duration verified accepted, read
-  # back unchanged, loaded at the next arming, and honoured through to an
-  # actual expiry -- the component itself refuses anything shorter (see
-  # components/volcano/volcano.h). Per STATE-005, a duration write only
-  # takes effect at the *next arming*, not on a countdown already running:
-  # to see it take effect, the device must be fully idle (heater off, pump
-  # off, countdown at 0) *before* pressing this, not mid-countdown.
-  - platform: template
-    name: "Set auto-shutoff duration to 60s"
-    on_press:
-      - lambda: |-
-          id(volcano_component).set_auto_shutoff_duration_seconds(60);
-
-# A number entity rather than a fixed-value button, since CMD-001 covers a
-# whole range rather than one trigger value. min/max deliberately span
-# outside the 40.0-230.0 degC range set_target_temperature_decidegrees()
-# confirms accepted, so this can also exercise its refusal path: a value
-# outside that range is rejected in software (logged, nothing written) --
-# it never reaches the device to be tested there.
-number:
-  - platform: template
-    name: "Set target temperature"
-    unit_of_measurement: "°C"
-    min_value: 30
-    max_value: 240
-    step: 0.5
-    mode: box
-    optimistic: true
-    initial_value: 180
-    on_value:
-      - lambda: |-
-          id(volcano_component).set_target_temperature_decidegrees(static_cast<uint16_t>(x * 10 + 0.5f));
+  # Version 3 is what supports `sorting_weight` on entities, used above
+  # to group the controls by what they do rather than leaving them in
+  # the alphabetical order the page would otherwise fall back to.
+  version: 3

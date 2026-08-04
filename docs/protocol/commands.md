@@ -31,7 +31,7 @@ Write-triggered behaviour. Format per [ADR-0006](../decisions/ADR-0006-protocol-
 
   **The device accepts a duration well below the app's 30-minute floor.** Writing `3c 00` (60s) while idle was read back unchanged, loaded in full at the next heater-on rather than being clamped to 1800, decremented at the usual one-per-second rate, and reached `0`, at which point the device switched the heater off exactly as at any other expiry (see [STATE-011](state-model.md#state-011--auto-shutoff-behaviour)). Reproduced across separate connections. The app's 30-minute figure is a UI constraint, not a device-enforced minimum. Issued from this project's own ESP32/ESPHome client (`components/volcano/volcano.cpp`), not the app.
 - **Confidence**: Confirmed (encoding, that the app's UI spans that range, that the write applies at the next arming rather than reloading a running countdown, and that a 60-second duration is accepted, read back unchanged, loaded at the next arming, and honoured through to an actual expiry — see [STATE-005](state-model.md#state-005--auto-shutoff-countdown))
-- **Implementation status**: Implemented in `components/volcano/volcano.cpp` (`set_auto_shutoff_duration_seconds()`), which refuses durations below the confirmed 60s floor rather than writing an unverified value. Verified against real hardware, including a full expiry at the shorter duration.
+- **Implementation status**: Implemented in `components/volcano/volcano.cpp` (`set_auto_shutoff_duration_seconds()`), which refuses durations outside the confirmed 60–21600s range rather than writing an unverified value. Verified against real hardware, including a full expiry at the shorter duration.
 
 ## CMD-004 — Set vibration
 

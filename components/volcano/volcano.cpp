@@ -50,12 +50,15 @@ static const uint16_t STATUS_BIT_HEATER_ON = 0x0020;
 // the pump.
 static const uint16_t STATUS_BIT_PUMP_ON = 0x1000;
 
-// CMD-003: the lowest auto-shutoff duration confirmed accepted, read back
-// unchanged, loaded at the next arming, and honoured through to an actual
-// expiry. Values below this are unverified -- 0 in particular may mean
-// "disabled" on this device -- so set_auto_shutoff_duration_seconds()
-// refuses them rather than writing an untested value (ADR-0005).
+// CMD-003: the auto-shutoff duration range confirmed accepted. The floor is
+// the lowest value verified read back unchanged, loaded at the next arming,
+// and honoured through to an actual expiry; below it is unverified -- 0 in
+// particular may mean "disabled" on this device. The ceiling is the top of
+// the official app's own UI range, with writes at that end captured; above
+// it is untested. set_auto_shutoff_duration_seconds() refuses both rather
+// than writing an untested value (ADR-0005).
 static const uint16_t MIN_AUTO_SHUTOFF_DURATION_SECONDS = 60;
+static const uint16_t MAX_AUTO_SHUTOFF_DURATION_SECONDS = 21600;
 
 // CMD-001: the official app's UI spans 40.0-230.0 degC (400-2300 in this
 // characteristic's deci-degrees-Celsius encoding); that is the only range
@@ -86,7 +89,8 @@ void VolcanoComponent::dump_config() {
   ESP_LOGCONFIG(TAG, "Volcano:");
   ESP_LOGCONFIG(TAG, "  Read-only: status/flags register (CHAR-008), auto-shutoff countdown (CHAR-016),");
   ESP_LOGCONFIG(TAG, "    current temperature (CHAR-013).");
-  ESP_LOGCONFIG(TAG, "  Write: auto-shutoff duration (CHAR-017), minimum %u s;", MIN_AUTO_SHUTOFF_DURATION_SECONDS);
+  ESP_LOGCONFIG(TAG, "  Write: auto-shutoff duration (CHAR-017), %u-%u s;", MIN_AUTO_SHUTOFF_DURATION_SECONDS,
+                MAX_AUTO_SHUTOFF_DURATION_SECONDS);
   ESP_LOGCONFIG(TAG, "    heater on/off (CHAR-018/019), pump on/off (CHAR-020/021);");
   ESP_LOGCONFIG(TAG, "    target temperature (CHAR-014), %.1f-%.1f C.", MIN_TARGET_TEMPERATURE_DECIDEGREES / 10.0f,
                 MAX_TARGET_TEMPERATURE_DECIDEGREES / 10.0f);
@@ -108,9 +112,9 @@ void VolcanoComponent::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
       this->pump_off_handle_ = 0;
       this->pending_subscriptions_ = 0;
       ESP_LOGI(TAG, "Disconnected; heater/pump/countdown/temperature state unknown");
-      // Any configured sensor/binary_sensor keeps its last published value
-      // here rather than going unavailable -- there is no ESPHome API this
-      // component can use to mark one unavailable from custom C++ code.
+      // Any configured entity keeps its last published value here rather
+      // than going unavailable -- there is no ESPHome API this component
+      // can use to mark one unavailable from custom C++ code.
       break;
     }
     case ESP_GATTC_SEARCH_CMPL_EVT: {
@@ -218,6 +222,7 @@ void VolcanoComponent::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
       // leaving the parent waiting on a subscription that will never arrive.
       if (this->pending_subscriptions_ == 0) {
         this->node_state = espbt::ClientState::ESTABLISHED;
+        this->read_auto_shutoff_duration_();
       }
       break;
     }
@@ -233,8 +238,13 @@ void VolcanoComponent::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
       // early ESTABLISHED here is a use-after-free, not just a race.
       if (this->pending_subscriptions_ > 0)
         this->pending_subscriptions_--;
-      if (this->pending_subscriptions_ == 0)
+      if (this->pending_subscriptions_ == 0) {
         this->node_state = espbt::ClientState::ESTABLISHED;
+        // CHAR-017 is not notify-capable, so it is read here rather than
+        // subscribed -- once every subscription has settled, so this does
+        // not contend with the reads they each issue below.
+        this->read_auto_shutoff_duration_();
+      }
 
       if (param->reg_for_notify.status != ESP_GATT_OK) {
         ESP_LOGW(TAG, "Subscribing to handle 0x%04x failed, status=%d", handle, param->reg_for_notify.status);
@@ -266,7 +276,10 @@ void VolcanoComponent::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
           ESP_LOGW(TAG, "Auto-shutoff duration value too short (%u bytes)", param->read.value_len);
         } else {
           uint16_t seconds = encode_uint16(param->read.value[1], param->read.value[0]);
-          ESP_LOGI(TAG, "Auto-shutoff duration confirmed: %u s", seconds);
+          ESP_LOGI(TAG, "Auto-shutoff duration: %u s", seconds);
+          // Published in minutes, the unit the number entity carries.
+          if (this->auto_shutoff_duration_number_ != nullptr)
+            this->auto_shutoff_duration_number_->publish_state(seconds / 60.0f);
         }
       } else if (param->read.handle == this->current_temp_handle_) {
         this->decode_current_temperature_(param->read.value, param->read.value_len);
@@ -293,11 +306,7 @@ void VolcanoComponent::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
           ESP_LOGW(TAG, "Auto-shutoff duration write failed, status=%d", param->write.status);
           break;
         }
-        auto status = esp_ble_gattc_read_char(this->parent()->get_gattc_if(), this->parent()->get_conn_id(),
-                                              this->duration_handle_, ESP_GATT_AUTH_REQ_NONE);
-        if (status) {
-          ESP_LOGW(TAG, "esp_ble_gattc_read_char(duration) failed, status=%d", status);
-        }
+        this->read_auto_shutoff_duration_();
       } else if (param->write.handle == this->heater_on_handle_ || param->write.handle == this->heater_off_handle_ ||
                  param->write.handle == this->pump_on_handle_ || param->write.handle == this->pump_off_handle_) {
         // Per the trigger-characteristics note in docs/protocol/commands.md,
@@ -341,10 +350,14 @@ void VolcanoComponent::decode_status_(const uint8_t *value, uint16_t value_len) 
   bool heater_on = (status & STATUS_BIT_HEATER_ON) != 0;
   bool pump_on = (status & STATUS_BIT_PUMP_ON) != 0;
   ESP_LOGI(TAG, "Heater %s, pump %s (status=0x%04x)", heater_on ? "on" : "off", pump_on ? "on" : "off", status);
-  if (this->heater_binary_sensor_ != nullptr)
-    this->heater_binary_sensor_->publish_state(heater_on);
-  if (this->pump_binary_sensor_ != nullptr)
-    this->pump_binary_sensor_->publish_state(pump_on);
+  // Published from the register rather than from whatever was last
+  // commanded: the device switches its own actuators off at auto-shutoff
+  // expiry (STATE-011) and on a downward 40 degC crossing (STATE-012), with
+  // no command involved, and reports panel-driven changes identically.
+  if (this->heater_switch_ != nullptr)
+    this->heater_switch_->publish_state(heater_on);
+  if (this->pump_switch_ != nullptr)
+    this->pump_switch_->publish_state(pump_on);
 }
 
 void VolcanoComponent::decode_countdown_(const uint8_t *value, uint16_t value_len) {
@@ -397,14 +410,25 @@ void VolcanoComponent::decode_target_temperature_(const uint8_t *value, uint16_t
     return;
   }
   ESP_LOGI(TAG, "Target temperature: %.1f C", raw / 10.0f);
-  if (this->target_temperature_sensor_ != nullptr)
-    this->target_temperature_sensor_->publish_state(raw / 10.0f);
+  if (this->target_temperature_number_ != nullptr)
+    this->target_temperature_number_->publish_state(raw / 10.0f);
+}
+
+void VolcanoComponent::read_auto_shutoff_duration_() {
+  if (this->duration_handle_ == 0)
+    return;
+  auto status = esp_ble_gattc_read_char(this->parent()->get_gattc_if(), this->parent()->get_conn_id(),
+                                        this->duration_handle_, ESP_GATT_AUTH_REQ_NONE);
+  if (status) {
+    ESP_LOGW(TAG, "esp_ble_gattc_read_char(duration) failed, status=%d", status);
+  }
 }
 
 void VolcanoComponent::set_auto_shutoff_duration_seconds(uint16_t seconds) {
-  if (seconds < MIN_AUTO_SHUTOFF_DURATION_SECONDS) {
-    ESP_LOGW(TAG, "Refusing to set auto-shutoff duration to %u s: below the %u s floor confirmed accepted (CMD-003)",
-             seconds, MIN_AUTO_SHUTOFF_DURATION_SECONDS);
+  if (seconds < MIN_AUTO_SHUTOFF_DURATION_SECONDS || seconds > MAX_AUTO_SHUTOFF_DURATION_SECONDS) {
+    ESP_LOGW(TAG,
+             "Refusing to set auto-shutoff duration to %u s: outside the %u-%u s range confirmed accepted (CMD-003)",
+             seconds, MIN_AUTO_SHUTOFF_DURATION_SECONDS, MAX_AUTO_SHUTOFF_DURATION_SECONDS);
     return;
   }
   if (this->duration_handle_ == 0) {
@@ -477,6 +501,52 @@ void VolcanoComponent::set_target_temperature_decidegrees(uint16_t decidegrees) 
                                          ESP_GATT_AUTH_REQ_NONE);
   if (status) {
     ESP_LOGW(TAG, "esp_ble_gattc_write_char failed, status=%d", status);
+  }
+}
+
+// The entity's own min/max have already clamped `value` by the time this is
+// reached, but they are configurable and so cannot be relied on as the
+// safety bound -- set_target_temperature_decidegrees() re-checks against the
+// range CMD-001 confirms accepted. The guard here is only against the
+// conversion overflowing the 16-bit encoding, which a wide enough configured
+// max would otherwise do silently.
+void VolcanoTargetTemperatureNumber::control(float value) {
+  long decidegrees = lroundf(value * 10.0f);
+  if (decidegrees < 0 || decidegrees > UINT16_MAX) {
+    ESP_LOGW(TAG, "Ignoring target temperature of %.1f C: outside the encodable range", value);
+    return;
+  }
+  this->parent_->set_target_temperature_decidegrees(static_cast<uint16_t>(decidegrees));
+}
+
+// Minutes in, seconds out -- see VolcanoAutoShutoffDurationNumber in
+// volcano.h for why this entity carries minutes. Same overflow guard and
+// same deferral of the safety bound as above.
+void VolcanoAutoShutoffDurationNumber::control(float value) {
+  long seconds = lroundf(value) * 60;
+  if (seconds < 0 || seconds > UINT16_MAX) {
+    ESP_LOGW(TAG, "Ignoring auto-shutoff duration of %.0f min: outside the encodable range", value);
+    return;
+  }
+  this->parent_->set_auto_shutoff_duration_seconds(static_cast<uint16_t>(seconds));
+}
+
+// Neither switch publishes here: the write only asks, and the status/flags
+// register (STATE-008) is what says whether the device actually did it.
+// decode_status_() above publishes when that arrives.
+void VolcanoHeaterSwitch::write_state(bool state) {
+  if (state) {
+    this->parent_->turn_heater_on();
+  } else {
+    this->parent_->turn_heater_off();
+  }
+}
+
+void VolcanoPumpSwitch::write_state(bool state) {
+  if (state) {
+    this->parent_->turn_pump_on();
+  } else {
+    this->parent_->turn_pump_off();
   }
 }
 

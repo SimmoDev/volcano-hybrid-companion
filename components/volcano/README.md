@@ -3,9 +3,9 @@
 This is the `volcano` ESPHome external component. It is a `ble_client` node ([ADR-0007](../../docs/decisions/ADR-0007-ble-connection-lifecycle.md)) that currently implements:
 
 - **Read-only state**: on each connection it resolves the status/flags register (`CHAR-008`), the auto-shutoff countdown (`CHAR-016`), and current/target temperature (`CHAR-013`/`CHAR-014`) by UUID, subscribes, reads their initial values, decodes them, and logs them. Current temperature's sub-40 °C "no reading" gate (STATE-012) is decoded explicitly rather than logged as a false `0.0` reading.
-- **Writes**: `set_auto_shutoff_duration_seconds()` writes the auto-shutoff duration (`CHAR-017`), refusing anything below 60 seconds — the floor CMD-003 confirms the device accepts, loads at the next arming, and honours through to an actual expiry. Values below that are unverified and are not written. `turn_heater_on()`/`turn_heater_off()`/`turn_pump_on()`/`turn_pump_off()` write the four one-byte trigger characteristics (`CHAR-018`–`CHAR-021`), each with the single value CMD-006 through CMD-009 confirm those characteristics accept. `set_target_temperature_decidegrees()` writes the target temperature (`CHAR-014`), refusing anything outside the 40.0–230.0 °C range CMD-001 confirms the official app's UI accepts.
+- **Writes**: `set_auto_shutoff_duration_seconds()` writes the auto-shutoff duration (`CHAR-017`), refusing anything outside 60–21600 seconds — the range CMD-003 confirms accepted, from the floor this project verified through to an actual expiry up to the top of the official app's own range. Values outside it are unverified and are not written. `turn_heater_on()`/`turn_heater_off()`/`turn_pump_on()`/`turn_pump_off()` write the four one-byte trigger characteristics (`CHAR-018`–`CHAR-021`), each with the single value CMD-006 through CMD-009 confirm those characteristics accept. `set_target_temperature_decidegrees()` writes the target temperature (`CHAR-014`), refusing anything outside the 40.0–230.0 °C range CMD-001 confirms the official app's UI accepts.
 
-- **Optional entities**: every decoded value above can be published to a standard ESPHome sensor/binary_sensor, configured directly under the `volcano:` block — see "Configuration" below. This is a stopgap for observing state (e.g. on an ESPHome `web_server` page or in Home Assistant), not the hardware-independent Volcano domain interface control interfaces will eventually depend on.
+- **Optional entities**: every value above can be exposed as a standard ESPHome entity, configured directly under the `volcano:` block — see "Configuration" below. Read-only values get a sensor; each writable one gets a single two-way entity that both reports the device's current value and sets a new one — a number for the temperatures and the duration, a switch for the heater and pump. This is a stopgap for observing and exercising state (e.g. on an ESPHome `web_server` page or in Home Assistant), not the hardware-independent Volcano domain interface control interfaces will eventually depend on.
 
 See `volcano.h` for the `TODO` markers showing where the remaining protocol coverage and the Volcano abstraction layer ([ADR-0002](../../docs/decisions/ADR-0002-volcano-component-architecture.md)) belong.
 
@@ -26,22 +26,37 @@ volcano:
 
 The Volcano's BLE address is unique per unit and is deliberately never recorded in this repository (see [`docs/protocol/README.md`](../../docs/protocol/README.md)) — keep it in `secrets.yaml`, not in a committed config.
 
-Each decoded value has a matching optional key, all omitted by default, each accepting the same options as the underlying [`sensor`](https://esphome.io/components/sensor/#config-sensor) or [`binary_sensor`](https://esphome.io/components/binary_sensor/#config-binary-sensor) platform (`name`, `id`, etc.):
+Each value has a matching optional key, all omitted by default, each accepting the same options as the underlying [`sensor`](https://esphome.io/components/sensor/#config-sensor), [`number`](https://esphome.io/components/number/#config-number) or [`switch`](https://esphome.io/components/switch/#config-switch) platform (`name`, `id`, `mode`, etc.):
 
 ```yaml
 volcano:
   ble_client_id: volcano_ble_client
+  # Read-only (sensor)
   current_temperature:
     name: "Current temperature"
-  target_temperature:
-    name: "Target temperature"
   auto_shutoff_countdown:
     name: "Auto-shutoff countdown"
+  # Read/write (number)
+  target_temperature:
+    name: "Target temperature"
+  auto_shutoff_duration:
+    name: "Auto-shutoff duration"
+  # Read/write (switch)
   heater:
-    name: "Heater"
+    name: "Heat"
   pump:
-    name: "Pump"
+    name: "Air"
 ```
+
+Every writable value is one entity, not a readout plus a separate setter: setting it writes to the device, and the component publishes back to it whenever the device reports a change — including changes made at the device's own control panel, and changes the device makes on its own, such as switching its actuators off at auto-shutoff expiry.
+
+The heater and pump entities are named "Heat" and "Air" above to match the labels on the Volcano's own panel and in the official app; the keys stay `heater`/`pump`, which is this project's terminology and matches the device firmware's own identifiers. See [`docs/CONVENTIONS.md`](../../docs/CONVENTIONS.md#device-actuators-heater-and-pump-except-on-a-label).
+
+`auto_shutoff_duration` is in **minutes**, the unit the official app presents it in, converted to the seconds `CHAR-017` encodes. It is distinct from `auto_shutoff_countdown`, which is the live time remaining and is read-only; the duration is what that countdown will load the next time it arms.
+
+The two numbers accept `min_value`, `max_value` and `step`, defaulting to the ranges the protocol documentation records as confirmed accepted (40–230 °C and 1–360 minutes). Widening them does not widen what reaches the device: the component checks every write against the confirmed range itself and refuses anything outside it, whatever the entity advertises.
+
+The two switches never publish optimistically — the state shown is the one the device reported, not the one that was requested — and their restore mode is fixed to `DISABLED`. Restoring a remembered state would actuate the heater or pump at boot, before the device has said what it is actually doing.
 
 ## Building / validating
 

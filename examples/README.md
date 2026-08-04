@@ -33,11 +33,17 @@ Watch for the `[volcano]` log tag: it logs heater/pump state, the auto-shutoff c
 
 Once connected to WiFi, the device serves a local page at `http://<device-ip-or-hostname>/` (`volcano-dev-scaffold.local` by default, or check `esphome logs` for the IP it picked up on connect). The page has no authentication and no TLS; fine on a trusted home network for this development example, not something to expose beyond it.
 
-It has a control per command the component currently exposes — heater on/off, pump on/off, setting the auto-shutoff duration to 60s, and a target-temperature number field — plus a sensor/binary sensor per readable value: current and target temperature, the auto-shutoff countdown, and heater/pump state. These update live from BLE notifications, including changes made at the device's own panel, so toggling something there is visible on the page without touching a control.
+It exposes one control per value: "Heat" and "Air" switches for the heater and pump; number controls for the target temperature (°C) and the auto-shutoff duration (minutes); and read-only sensors for the current temperature and the auto-shutoff countdown. The two switches are named after the labels on the Volcano's own panel rather than this project's own terminology, so the two read the same side by side — see [`docs/CONVENTIONS.md`](../docs/CONVENTIONS.md#device-actuators-heater-and-pump-except-on-a-label).
 
-Per [STATE-005](../docs/protocol/state-model.md#state-005--auto-shutoff-countdown), the duration write only takes effect at the *next* arming, not on a countdown already running: to see 60s take effect, press that button while the device is fully idle (heater off, pump off, countdown at 0), not mid-countdown.
+Everything updates live from BLE notifications, including changes made at the device's own panel — so setting a target there moves the same control you would set it with, and switching the heater on there flips the same switch that turns it on, without touching the page. The switches also follow changes the device makes on its own, such as switching its actuators off at auto-shutoff expiry.
 
-The target-temperature field spans 30–240 °C — wider than the 40.0–230.0 °C range [CMD-001](../docs/protocol/commands.md#cmd-001--set-target-temperature) confirms the device accepts — so it can also exercise the component's own refusal of an out-of-range value: entering one logs a warning and writes nothing, rather than sending an unverified value to the device.
+Per [STATE-005](../docs/protocol/state-model.md#state-005--auto-shutoff-countdown), the duration write only takes effect at the *next* arming, not on a countdown already running: to see a new duration take effect, set it while the device is fully idle (heater off, pump off, countdown at 0), not mid-countdown. Note that the duration control and the countdown sensor are different values — the duration is what the countdown will load next time it arms.
+
+Both number controls are set to `mode: box`, so they take a typed value rather than rendering as the default slider. That also keeps their unit label on the same baseline as the sensor rows, which the slider layout does not. Dropping the `mode` line gives sliders back.
+
+The controls appear grouped by what they do rather than alphabetically, via a `sorting_weight` on each. That option needs `web_server` version 3, which is why the config sets it explicitly rather than taking the default.
+
+The target-temperature control spans 30–240 °C here — deliberately wider than the 40.0–230.0 °C range [CMD-001](../docs/protocol/commands.md#cmd-001--set-target-temperature) confirms the device accepts — so it can also exercise the component's own refusal of an out-of-range value: setting one logs a warning and writes nothing, rather than sending an unverified value to the device. That widening is this example's choice; the component defaults both controls to the confirmed ranges and enforces them regardless of what the control advertises.
 
 ### Troubleshooting
 

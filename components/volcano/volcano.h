@@ -5,13 +5,70 @@
 #ifdef USE_ESP32
 
 #include "esphome/components/ble_client/ble_client.h"
-#include "esphome/components/binary_sensor/binary_sensor.h"
+#include "esphome/components/number/number.h"
 #include "esphome/components/sensor/sensor.h"
+#include "esphome/components/switch/switch.h"
+#include "esphome/core/helpers.h"
 
 #include <esp_gattc_api.h>
 
 namespace esphome {
 namespace volcano {
+
+class VolcanoComponent;
+
+// Writable target temperature (CHAR-014; CMD-001 for the write, STATE-013
+// for the notify side). One entity for both directions: setting it writes
+// the target, and the component publishes back to it whenever the device
+// reports a new one -- including targets set at the device's own panel,
+// which STATE-013 confirms are notified.
+//
+// The configured min/max are what the entity advertises, and ESPHome clamps
+// to them before control() is reached. They are not the safety bound: that
+// is enforced in set_target_temperature_decidegrees() against the range
+// CMD-001 confirms accepted, whatever this entity is configured to span.
+class VolcanoTargetTemperatureNumber : public number::Number, public Parented<VolcanoComponent> {
+ protected:
+  void control(float value) override;
+};
+
+// Writable auto-shutoff duration (CHAR-017, CMD-003), in minutes -- the unit
+// the official app presents it in, converted here to the seconds CMD-003
+// encodes. Distinct from the auto-shutoff *countdown* (CHAR-016, STATE-005),
+// which is the live time remaining and is read-only: this is the value the
+// countdown loads at its next arming.
+//
+// CHAR-017 has no notify, so this is populated by an explicit read on each
+// connection and refreshed by the read-back after each write. The same
+// min/max caveat as VolcanoTargetTemperatureNumber applies.
+class VolcanoAutoShutoffDurationNumber : public number::Number, public Parented<VolcanoComponent> {
+ protected:
+  void control(float value) override;
+};
+
+// Heater and pump as one entity each, rather than a state readout plus a
+// pair of on/off triggers. Turning either on or off writes the matching
+// trigger characteristic (CMD-006 through CMD-009), and the component
+// publishes back to them from the status/flags register (STATE-008) -- so
+// they follow the device whatever changed it, including its own panel.
+//
+// Neither ever publishes optimistically: the state shown is the one the
+// device reported, not the one that was asked for. STATE-005 and STATE-011
+// make that distinction matter -- the device switches its own actuators off
+// at auto-shutoff expiry, with no command involved.
+//
+// Their restore mode must stay DISABLED (see __init__.py). A switch that
+// restored its previous state would actuate the heater or pump at boot,
+// before the status register has said what the device is actually doing.
+class VolcanoHeaterSwitch : public switch_::Switch, public Parented<VolcanoComponent> {
+ protected:
+  void write_state(bool state) override;
+};
+
+class VolcanoPumpSwitch : public switch_::Switch, public Parented<VolcanoComponent> {
+ protected:
+  void write_state(bool state) override;
+};
 
 // VolcanoComponent is the root of the Volcano component defined in
 // ADR-0002 (docs/decisions/ADR-0002-volcano-component-architecture.md).
@@ -30,11 +87,12 @@ namespace volcano {
 //
 // It also carries the first production writes. set_auto_shutoff_duration_seconds()
 // writes the auto-shutoff duration (CHAR-017, CMD-003 in
-// docs/protocol/commands.md). CMD-003 is Confirmed down to 60 seconds --
+// docs/protocol/commands.md). CMD-003 is Confirmed from 60 seconds --
 // accepted, read back unchanged, loaded at the next arming, and honoured
-// through to an actual expiry -- so this refuses anything below that floor
-// rather than writing an untested value: 0 in particular is unverified and
-// may mean "disabled" on this device, which would silently remove the only
+// through to an actual expiry -- up to the 21600 seconds topping the
+// official app's own range, so this refuses anything outside that rather
+// than writing an untested value: 0 in particular is unverified and may
+// mean "disabled" on this device, which would silently remove the only
 // backstop ADR-0007's persistent-connection design relies on.
 //
 // turn_heater_on()/turn_heater_off()/turn_pump_on()/turn_pump_off() write the
@@ -59,11 +117,14 @@ namespace volcano {
 // state carries over, and treats heater/pump state as unknown while
 // disconnected.
 //
-// Every decoded value above is also published to an optional ESPHome
-// sensor/binary_sensor, configured directly under the `volcano:` block (see
-// __init__.py), if one is configured for it -- e.g. so it can show on an
-// ESPHome web_server page, per components/volcano/README.md. This is a
-// stopgap: it exposes decoded state, not a hardware-independent Volcano
+// Every decoded value above is also published to an optional ESPHome entity,
+// configured directly under the `volcano:` block (see __init__.py), if one
+// is configured for it -- e.g. so it can show on an ESPHome web_server page,
+// per components/volcano/README.md. Read-only values get a sensor; the
+// writable ones get an entity that both reports the device's current value
+// and writes a new one -- a number for target temperature and auto-shutoff
+// duration, a switch for the heater and pump. This is a stopgap: it exposes
+// decoded state and the existing writes, not a hardware-independent Volcano
 // domain interface, which is still the TODO below.
 //
 // TODO(volcano-component): the remaining characteristics, the full Volcano
@@ -82,8 +143,8 @@ class VolcanoComponent : public Component, public ble_client::BLEClientNode {
 
   // Writes CMD-003's confirmed 2-byte-seconds encoding to the auto-shutoff
   // duration characteristic (see the class comment above for the confirmed
-  // floor this refuses to go below). A no-op, logged, if `seconds` is
-  // below that floor or no connection is established.
+  // range this refuses to go outside of). A no-op, logged, if `seconds` is
+  // outside that range or no connection is established.
   void set_auto_shutoff_duration_seconds(uint16_t seconds);
 
   // CMD-006 through CMD-009: each writes `0x00` to its trigger
@@ -99,13 +160,16 @@ class VolcanoComponent : public Component, public ble_client::BLEClientNode {
   void set_target_temperature_decidegrees(uint16_t decidegrees);
 
   // Optional sinks for decoded state, set by __init__.py from the `volcano:`
-  // block's optional sensor/binary_sensor sub-schemas. Each is published to
-  // from the corresponding decode_*_() method below when configured.
+  // block's optional entity sub-schemas. Each is published to from the
+  // corresponding decode_*_() method below when configured. The two number
+  // entities are read/write: they publish device state the same way, and
+  // their control() writes back through the setters above.
   void set_current_temperature_sensor(sensor::Sensor *s) { current_temperature_sensor_ = s; }
-  void set_target_temperature_sensor(sensor::Sensor *s) { target_temperature_sensor_ = s; }
   void set_auto_shutoff_countdown_sensor(sensor::Sensor *s) { auto_shutoff_countdown_sensor_ = s; }
-  void set_heater_binary_sensor(binary_sensor::BinarySensor *s) { heater_binary_sensor_ = s; }
-  void set_pump_binary_sensor(binary_sensor::BinarySensor *s) { pump_binary_sensor_ = s; }
+  void set_target_temperature_number(VolcanoTargetTemperatureNumber *n) { target_temperature_number_ = n; }
+  void set_auto_shutoff_duration_number(VolcanoAutoShutoffDurationNumber *n) { auto_shutoff_duration_number_ = n; }
+  void set_heater_switch(VolcanoHeaterSwitch *s) { heater_switch_ = s; }
+  void set_pump_switch(VolcanoPumpSwitch *s) { pump_switch_ = s; }
 
  protected:
   void decode_status_(const uint8_t *value, uint16_t value_len);
@@ -125,13 +189,20 @@ class VolcanoComponent : public Component, public ble_client::BLEClientNode {
   uint16_t pump_on_handle_{0};        // CHAR-020: pump on trigger.
   uint16_t pump_off_handle_{0};       // CHAR-021: pump off trigger.
 
-  // Optional publish targets set via the set_*_sensor() methods above.
-  // Null unless configured in YAML.
+  // Reads CHAR-017, whose value nothing else would otherwise reveal: it has
+  // no notify, so without this the configured duration is unknown until
+  // something writes one. Issued once per connection, and again after each
+  // write as the read-back that confirms it.
+  void read_auto_shutoff_duration_();
+
+  // Optional publish targets set via the set_*() methods above. Null unless
+  // configured in YAML.
   sensor::Sensor *current_temperature_sensor_{nullptr};
-  sensor::Sensor *target_temperature_sensor_{nullptr};
   sensor::Sensor *auto_shutoff_countdown_sensor_{nullptr};
-  binary_sensor::BinarySensor *heater_binary_sensor_{nullptr};
-  binary_sensor::BinarySensor *pump_binary_sensor_{nullptr};
+  VolcanoTargetTemperatureNumber *target_temperature_number_{nullptr};
+  VolcanoAutoShutoffDurationNumber *auto_shutoff_duration_number_{nullptr};
+  VolcanoHeaterSwitch *heater_switch_{nullptr};
+  VolcanoPumpSwitch *pump_switch_{nullptr};
 
   // Number of ESP_GATTC_REG_FOR_NOTIFY_EVT callbacks still outstanding.
   // node_state must not become ESTABLISHED until this reaches zero: the

@@ -177,7 +177,7 @@ Each notify-capable characteristic's Client Characteristic Configuration descrip
 - **Properties**: Read/Write
 - **Observation**: See [CMD-003](commands.md#cmd-003--set-auto-shutoff-duration). Read value uses the same 2-byte-seconds encoding as the write.
 - **Confidence**: Confirmed
-- **Implementation status**: Implemented in `components/volcano/volcano.cpp`, both the write (CMD-003) and the read-back that confirms it. Verified against real hardware.
+- **Implementation status**: Implemented in `components/volcano/volcano.cpp`: the write (CMD-003), the read-back that confirms it, and a read on each connection. The last matters because this characteristic has no notify — without it the configured duration is unknown until something writes one. Verified against real hardware.
 
 ## CHAR-018 — Heater on trigger
 

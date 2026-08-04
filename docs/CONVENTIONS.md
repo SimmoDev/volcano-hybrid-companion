@@ -15,6 +15,12 @@ These terms are used consistently across the project. Definitions here are summa
 
 Use these terms as defined here rather than introducing synonyms for the architectural components themselves (e.g. don't call the Volcano abstraction layer a "driver" or the BLE communication layer a "transport" — pick the established term). "Control interface" is the canonical term for that architectural component. Descriptive terms such as "control path" or "control surface" are fine when describing a flow or user-facing route (e.g. "three control paths a command can arrive through"), but must not be used in place of "control interface" when naming the component itself.
 
+### Device actuators: "heater" and "pump", except on a label
+
+The two actuators are the **heater** and the **pump** throughout this repository — in protocol findings, code, configuration keys, and prose. Storz & Bickel label them **Heat** and **Air** on the device's own panel and in their app, and those labels may be used for user-facing entity names, where matching what a user is looking at matters more than matching the codebase. Nothing else adopts them.
+
+The split follows the device rather than being arbitrary: S&B's own firmware identifiers use the engineering terms, not the UI ones — the official client names the relevant status-register bits `HEIZUNG_ENA` and `PUMPE_FET_ENABLE`, recorded in the note on [STATE-008](protocol/state-model.md#state-008--statusflags-register-partial). "Heat" and "Air" are their presentation layer; "heater" and "pump" are what the hardware is.
+
 ## Spelling
 
 British English spelling is used throughout the repository — in documentation, code comments, commit messages, and any user-facing text. For example: *behaviour*, *colour*, *organise*, *analyse*, *initialise*, *optimise*, *licence* (noun; *license* only as a verb). When in doubt, prefer the spelling used elsewhere in `docs/decisions/`.
