@@ -8,7 +8,7 @@ Readable/notified device state. Format per [ADR-0006](../decisions/ADR-0006-prot
 - **Observation**: 4-byte little-endian integer, an incrementing count of hours, paired with [STATE-006](#state-006--minutes-of-operation) for the minutes component. It counts heater-on time rather than powered-on time: it advances only while the heater is on, and notifies in the same second that the minutes counter wraps from 59 to 0. Matches the app's displayed hours value exactly, read consistently across multiple sessions.
 - **Interpretation**: An element-usage meter rather than a device-uptime meter — the pair measures how long the heater has run, not how long the device has been plugged in.
 - **Confidence**: Confirmed
-- **Implementation status**: Implemented (read-only) in `components/volcano/volcano.cpp`. Verified against real hardware for the value itself; the carry from [STATE-006](#state-006--minutes-of-operation) wrapping has not been observed directly, since it arrives only once per hour of heater-on time. The interpretation above is not encoded: the component reports the counter rather than deriving a runtime from it.
+- **Implementation status**: Implemented (read-only) in `components/volcano/volcano.cpp`. Verified against real hardware, including the carry: [STATE-006](#state-006--minutes-of-operation) wrapping from 59 to 0 was seen to increment this counter. The interpretation above is not encoded: the component reports the counter rather than deriving a runtime from it.
 
 ## STATE-002 — Serial Number
 

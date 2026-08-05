@@ -227,7 +227,7 @@ Each notify-capable characteristic's Client Characteristic Configuration descrip
 - **Properties**: Read/Notify
 - **Observation**: See [STATE-001](state-model.md#state-001--hours-of-operation).
 - **Confidence**: Confirmed
-- **Implementation status**: Implemented (read-only) in `components/volcano/volcano.cpp` — subscribed, initial value read explicitly, decoded on both. Verified against real hardware for the value itself; the carry from [CHAR-023](#char-023--minutes-of-operation) wrapping has not been observed directly, since it arrives only once an hour of heater-on time.
+- **Implementation status**: Implemented (read-only) in `components/volcano/volcano.cpp` — subscribed, initial value read explicitly, decoded on both. Verified against real hardware, including the carry: minutes wrapping from 59 to 0 was seen to increment this counter.
 
 ## CHAR-023 — Minutes of Operation
 
