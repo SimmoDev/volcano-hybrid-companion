@@ -17,7 +17,7 @@ Findings about how the Volcano Hybrid presents itself over BLE: how it is discov
   **The device does not advertise while a connection is established.** Observed with a second host scanning continuously throughout: it reported no advertisement from the device for as long as the first host held a connection, and reported it within seconds of that connection being dropped. Reproduced by alternating the connection between the two hosts.
 - **Interpretation**: Heater activity cannot be detected by scanning, so a client that needs to know what the device is doing has to connect. A scanner finding no advertisement cannot conclude the device is absent or powered off — it may simply be connected to something else, which is indistinguishable from the scanner's side. Filtering by service UUID is not possible; a scanner must match on the local name or the manufacturer-specific data. Note these need different scan modes: the local name is carried only in the scan response, so name filtering requires an **active** scan, whereas the manufacturer data — and therefore the serial number — is in the advertisement itself and visible to a passive scan. A consequence of the latter is that a specific unit can be identified by a passive scanner without ever connecting to it. The `S&B VOLCANO H` string is separately readable after connecting as the GAP Device Name ([CHAR-001](characteristics.md#char-001--device-name)), but only the advertised copy is usable for scan-time filtering.
 - **Confidence**: Confirmed (the address and its stability across power cycles, advertising and scan-response contents, the absence of service UUIDs, that advertising stops while connected, and that neither the manufacturer-data remainder nor the advertising interval changes with heater activity); Unknown (what the 14-byte remainder encodes, and whether it varies with any state other than heater activity)
-- **Implementation status**: Not implemented
+- **Implementation status**: Not applicable — scanning and address matching are handled by the parent `ble_client`/`esp32_ble_tracker` rather than by this component, per [ADR-0007](../decisions/ADR-0007-ble-connection-lifecycle.md). Nothing here decodes the advertisement.
 
 ## CONN-001 — Connection, security, and subscription procedure
 
@@ -31,7 +31,7 @@ Findings about how the Volcano Hybrid presents itself over BLE: how it is discov
 
   The device requires no proprietary handshake or security setup for the operations exercised: a standard GATT client reached and drove it through a browser API. The eight subscribed descriptors correspond to the status/flags register, the display/units register, current and target temperature, the auto-shutoff countdown, hours and minutes of operation, and SVC-003's read+notify characteristic — this client subscribed to 8 of the device's 16 notify-capable characteristics, not all of them.
 - **Confidence**: Confirmed (MTU, CCCD requirement, the time to reach a synchronised state, write-type support per the property bitmasks, and that every operation exercised succeeded with neither pairing nor encryption); Unknown (whether any characteristic not yet exercised requires an encrypted link, which a device only reveals on access)
-- **Implementation status**: Not implemented
+- **Implementation status**: Implemented in `components/volcano/volcano.cpp` for the parts a client must perform: subscription is by explicit CCCD write, via `esp_ble_gattc_register_for_notify()`, and every operation is issued over an unencrypted link with no pairing, as this finding records is sufficient. The MTU is left at whatever the parent `ble_client` negotiates, which no write here approaches — the longest is 4 bytes. This component subscribes to its own set of characteristics rather than the official client's eight, and reaches a synchronised state on its own schedule; the six-second figure above is that client's, not a target.
 
 ## CONN-002 — Notification delivery model
 
@@ -54,7 +54,7 @@ Findings about how the Volcano Hybrid presents itself over BLE: how it is discov
   This follows from the device suppressing advertising as soon as it is connected ([ADV-001](#adv-001--advertising-and-discovery)): a peripheral that is not advertising is not connectable, so the second host has nothing to connect to. Nothing observed requires the device to reject a second connection actively, and the two behaviours have not been separated.
 - **Interpretation**: A controller holding a persistent connection makes the Volcano invisible to every other client, including the official app — a user cannot fall back to their phone without the controller releasing the link first. Any controller intended to coexist with app use therefore needs a deliberate way to give up the connection, not merely a policy of holding it. In the other direction, a controller that finds no advertisement on startup should treat "connected elsewhere" as a likely cause rather than assuming the device is off.
 - **Confidence**: Confirmed (that only one host can be connected at a time, and that a second host's attempt fails while the first holds the link); Unknown (whether a directed connection to the known address behaves differently from a scan-then-connect — see [`open-questions.md`](open-questions.md))
-- **Implementation status**: Not implemented
+- **Implementation status**: Not applicable — this is device behaviour to live with rather than something a client implements. Its consequence is real, though: the component holds the connection persistently (ADR-0007), so the device is unavailable to the official app while it is connected.
 
 ## CONN-004 — Actuator behaviour across a client disconnect
 
@@ -69,7 +69,7 @@ Findings about how the Volcano Hybrid presents itself over BLE: how it is discov
 
   For a reconnecting client, the corollary is useful: device state survives the gap intact, so a controller that drops and reconnects can read current state rather than assuming the device reset to idle.
 - **Confidence**: Confirmed (that heater and pump both continue running across a client disconnect, and that the countdown continues uninterrupted on real time); Unknown (whether an absence longer than has been waited out eventually triggers a cut-off)
-- **Implementation status**: Not implemented
+- **Implementation status**: Not applicable — nothing to implement. The behaviour is the device's, and the component's response to it is covered by [CONN-002](#conn-002--notification-delivery-model) re-reading state on each reconnection.
 
 ## SVC-001 — Generic Access (standard)
 
@@ -77,7 +77,7 @@ Findings about how the Volcano Hybrid presents itself over BLE: how it is discov
 - **UUID**: `1800` (Bluetooth SIG standard)
 - **Observation**: 3 characteristics — see CHAR-001 through CHAR-003 in [`characteristics.md`](characteristics.md).
 - **Confidence**: Confirmed
-- **Implementation status**: Not implemented
+- **Implementation status**: Not applicable — the standard GAP service. Nothing in this component reads it.
 
 ## SVC-002 — Generic Attribute (standard)
 
@@ -85,7 +85,7 @@ Findings about how the Volcano Hybrid presents itself over BLE: how it is discov
 - **UUID**: `1801` (Bluetooth SIG standard)
 - **Observation**: Service declaration only; no characteristics are exposed.
 - **Confidence**: Confirmed
-- **Implementation status**: Not implemented
+- **Implementation status**: Not applicable — the standard GATT service. Nothing in this component reads it.
 
 ## SVC-003 — Vendor service A
 
@@ -111,7 +111,7 @@ Findings about how the Volcano Hybrid presents itself over BLE: how it is discov
 - **Observation**: 22 characteristics, all read at least once. See [`characteristics.md`](characteristics.md) for the ones with a known identity, and [`open-questions.md`](open-questions.md) for the rest, which have confirmed raw values but unknown meaning.
 - **Interpretation**: Holds device information (serial number, firmware versions), general settings (vibration, display-on-cooling), and the heater/pump/vibration status register.
 - **Confidence**: Confirmed
-- **Implementation status**: Not implemented
+- **Implementation status**: Implemented in the sense that applies to a service: `components/volcano/volcano.cpp` resolves characteristics within it by (service, characteristic) UUID pair on every connection. Individual characteristics carry their own implementation status in [`characteristics.md`](characteristics.md); several within this service remain unimplemented.
 
 ## SVC-006 — Control/actuator service
 
@@ -120,7 +120,7 @@ Findings about how the Volcano Hybrid presents itself over BLE: how it is discov
 - **Observation**: 17 characteristics, all read at least once. See [`characteristics.md`](characteristics.md) for the ones with a known identity, and [`open-questions.md`](open-questions.md) for the rest.
 - **Interpretation**: Holds the device's controllable state: temperature, heater, pump, LED brightness, and auto-shutoff.
 - **Confidence**: Confirmed
-- **Implementation status**: Not implemented
+- **Implementation status**: Implemented in the sense that applies to a service: `components/volcano/volcano.cpp` resolves characteristics within it by (service, characteristic) UUID pair on every connection. Individual characteristics carry their own implementation status in [`characteristics.md`](characteristics.md); several within this service remain unimplemented.
 
 ## SVC-007 — Unidentified service
 
