@@ -95,6 +95,19 @@ Entities default to an entity category reflecting what they are, so a UI can gro
 
 The two switches never publish optimistically — the state shown is the one the device reported, not the one that was requested — and their restore mode is fixed to `DISABLED`. Restoring a remembered state would actuate the heater or pump at boot, before the device has said what it is actually doing.
 
+## Notification limits
+
+Every characteristic this component subscribes to consumes one of a fixed pool of GATT notification registrations, shared across everything on the same GATT client interface. The pool holds 12 by default; the component currently uses 8 of them, so a configuration that adds further notifying characteristics of its own can exhaust it. Registrations beyond the limit fail with `ESP_GATT_NO_RESOURCES` (status 128) — the failure is logged, but the characteristic simply never notifies afterwards.
+
+Raise the pool on the `esp32_ble` component:
+
+```yaml
+esp32_ble:
+  max_notifications: 16
+```
+
+Setting `CONFIG_BT_GATTC_NOTIF_REG_MAX` through `sdkconfig_options` instead does **not** work: `esp32_ble` writes that same option itself from `max_notifications`, after any raw override, so a value set that way is discarded with no warning. The device has 16 notify-capable characteristics in total, which is the practical ceiling worth requesting.
+
 ## Building / validating
 
 See [`docs/DEVELOPMENT.md`](../../docs/DEVELOPMENT.md#validating-the-component-locally) for how to validate this component against the example configuration.
