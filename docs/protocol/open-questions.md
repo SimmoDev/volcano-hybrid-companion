@@ -44,13 +44,23 @@ See [`characteristics.md`](characteristics.md) for the 12 of 22 characteristics 
 | `10100009` | `0x0025` | R W | ASCII, 10 digits, zero-padded (possibly a device- or batch-specific code — exact value not recorded here) |
 | `1010000a` | `0x0027` | R W | ASCII `"000000"` |
 | `1010000b` | `0x0029` | R | ASCII `"000000"` |
-| `1010000f` | `0x0034` | N R W | `0x00003000` (12288) |
+| `1010000f` | `0x0034` | N R W | Rests at `0x00003000`, pulsing bits of its low byte on panel input — see below |
 | `10100010` | `0x0037` | N R | `0x00000014` (20) |
 | `10100012` | `0x003c` | R W | `0x00` |
 | `10100013` | `0x003e` | R W | `0x00` |
 | `10100014` | `0x0040` | R W | `0x00` |
 
-The two Notify-capable entries (`1010000f` and `10100010`) have now been subscribed rather than only read, through a full heating cycle, several pump runs, heater transitions and settings changes. Neither notified once: `1010000f` held `0x00003000` and `10100010` held `0x00000014` throughout. Whatever they hold does not change with any device state exercised so far, which makes them look like fixed characteristics rather than live values. The rest would be resolved by reading each across a change of device state — before and after a heating cycle, a pump run and a settings change — to find any that move, and by writing to the R/W ones one at a time and observing whether the device's behaviour or display alters. One concrete lead: the official client writes a page count for the firmware binary during its update sequence, alongside the code number it writes to `10100011` ([CHAR-026](characteristics.md#char-026--firmware-update-code-number)). The three unidentified `R W` characteristics reading `0x00` — `10100012`, `10100013`, `10100014` — sit in the same UUID neighbourhood and are the obvious candidates for it.
+`1010000f` responds to input at the device's own control panel, and appears to respond to nothing else. It rests at `0x00003000` and pulses bits of its low byte for a second or two before returning to rest.
+
+Bit 6 (`0x40`) is the one established so far. It pulses whenever an actuator is switched off **at the panel** — observed on every such event across repeated pump-off and heater-off presses, with the heater off throughout the pump cases. The control that makes this more than a coincidence is an actuator switched off by the device itself: at an auto-shutoff expiry the heater goes off and this register does not pulse at all. Over an entire run containing one such expiry its only notifications were those accompanying panel target changes.
+
+Bit 5 (`0x20`) accompanies target-temperature changes made at the panel, sometimes together with bit 1 (`0x22` has been seen as well as `0x20`). A panel target change is only possible while the heater is on, since the panel shows the target only in that state, so "target changed" and "heater on" cannot be separated for this bit.
+
+Bits 2 and 3 (`0x04`, `0x08`) have been seen around actuator on-presses but not on every one, so no meaning is claimed for them; either they mark something narrower, or a pulse shorter than the interval between notifications is sometimes missed entirely.
+
+This matters beyond the register itself. [STATE-008](state-model.md#state-008--statusflags-register-partial) records that the status register reports panel-originated changes indistinguishably from commanded ones, with nothing in the value marking origin. This register appears to carry exactly that distinction, which would let a controller tell a user pressing a button from its own command or from the device timing out. Would be resolved by exercising each panel control in isolation, repeatedly, to map bits to inputs — and by establishing whether the bits mark the input itself or the state change that follows it. What the resting `0x3000` denotes, bits 12 and 13 being permanently set, is untouched by any of this.
+
+`10100010` held `0x00000014` throughout the same runs without notifying once, so it still looks like a fixed characteristic rather than a live value. The rest would be resolved by reading each across a change of device state — before and after a heating cycle, a pump run and a settings change — to find any that move, and by writing to the R/W ones one at a time and observing whether the device's behaviour or display alters. One concrete lead: the official client writes a page count for the firmware binary during its update sequence, alongside the code number it writes to `10100011` ([CHAR-026](characteristics.md#char-026--firmware-update-code-number)). The three unidentified `R W` characteristics reading `0x00` — `10100012`, `10100013`, `10100014` — sit in the same UUID neighbourhood and are the obvious candidates for it.
 
 ## `10110…` characteristics with confirmed raw values but unknown identity
 
