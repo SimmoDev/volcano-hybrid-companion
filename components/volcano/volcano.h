@@ -108,6 +108,18 @@ class VolcanoDisplayOnCoolingSwitch : public switch_::Switch, public Parented<Vo
   void write_state(bool state) override;
 };
 
+// Display units (STATE-010, bit 9 of CHAR-009's register; CMD-010 for the
+// write). ON means Fahrenheit. The device's own simultaneous +/- panel
+// gesture changes the same setting, and this switch follows it.
+//
+// Its polarity is NOT inverted, unlike the vibration and display-on-cooling
+// bits on the same pair of registers: set means Fahrenheit, so enabling it
+// writes the set action rather than the clear one.
+class VolcanoDisplayUnitsSwitch : public switch_::Switch, public Parented<VolcanoComponent> {
+ protected:
+  void write_state(bool state) override;
+};
+
 // VolcanoComponent is the root of the Volcano component defined in
 // ADR-0002 (docs/decisions/ADR-0002-volcano-component-architecture.md).
 //
@@ -184,6 +196,7 @@ class VolcanoDisplayOnCoolingSwitch : public switch_::Switch, public Parented<Vo
 // the characteristics documented above.
 class VolcanoComponent : public Component, public ble_client::BLEClientNode {
  public:
+
   void setup() override;
   void loop() override;
   void dump_config() override;
@@ -224,6 +237,10 @@ class VolcanoComponent : public Component, public ble_client::BLEClientNode {
   // user-facing sense; the bit written is its inverse.
   void set_display_on_cooling(bool enabled);
 
+  // Writes CMD-010's confirmed mask-and-action form for STATE-010's units
+  // bit. Display-layer only: values on the wire stay Celsius-encoded.
+  void set_display_units_fahrenheit(bool fahrenheit);
+
   // Optional sinks for decoded state, set by __init__.py from the `volcano:`
   // block's optional entity sub-schemas. Each is published to from the
   // corresponding decode_*_() method below when configured. The two number
@@ -237,6 +254,7 @@ class VolcanoComponent : public Component, public ble_client::BLEClientNode {
   void set_pump_switch(VolcanoPumpSwitch *s) { pump_switch_ = s; }
   void set_vibration_switch(VolcanoVibrationSwitch *s) { vibration_switch_ = s; }
   void set_display_on_cooling_switch(VolcanoDisplayOnCoolingSwitch *s) { display_on_cooling_switch_ = s; }
+  void set_display_units_switch(VolcanoDisplayUnitsSwitch *s) { display_units_switch_ = s; }
   void set_firmware_version_text_sensor(text_sensor::TextSensor *s) { firmware_version_text_sensor_ = s; }
   void set_ble_firmware_version_text_sensor(text_sensor::TextSensor *s) { ble_firmware_version_text_sensor_ = s; }
   void set_serial_number_text_sensor(text_sensor::TextSensor *s) { serial_number_text_sensor_ = s; }
@@ -279,6 +297,7 @@ class VolcanoComponent : public Component, public ble_client::BLEClientNode {
   uint16_t vibration_handle_{0};             // CHAR-010: vibration setting.
   uint16_t display_register_handle_{0};      // CHAR-009: display/units register.
 
+
   // Reads CHAR-017, whose value nothing else would otherwise reveal: it has
   // no notify, so without this the configured duration is unknown until
   // something writes one. Issued once per connection as part of the static
@@ -315,6 +334,7 @@ class VolcanoComponent : public Component, public ble_client::BLEClientNode {
   VolcanoPumpSwitch *pump_switch_{nullptr};
   VolcanoVibrationSwitch *vibration_switch_{nullptr};
   VolcanoDisplayOnCoolingSwitch *display_on_cooling_switch_{nullptr};
+  VolcanoDisplayUnitsSwitch *display_units_switch_{nullptr};
 
   // Last decoded display-on-cooling state, or -1 before the first read.
   // Its register notifies on every 1 degC change of current temperature
@@ -322,6 +342,7 @@ class VolcanoComponent : public Component, public ble_client::BLEClientNode {
   // keep the log to actual changes rather than a line every few seconds
   // throughout a heating or cooling run.
   int8_t display_on_cooling_state_{-1};
+
   text_sensor::TextSensor *firmware_version_text_sensor_{nullptr};
   text_sensor::TextSensor *ble_firmware_version_text_sensor_{nullptr};
   text_sensor::TextSensor *serial_number_text_sensor_{nullptr};

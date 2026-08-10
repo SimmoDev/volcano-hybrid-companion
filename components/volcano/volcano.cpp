@@ -124,6 +124,13 @@ static const uint32_t VIBRATION_BIT_DISABLED = 0x0400;
 // writing this setting cannot disturb them.
 static const uint32_t DISPLAY_ON_COOLING_BIT_DISABLED = 0x1000;
 
+// STATE-010: the display units bit on the same register. Its polarity is
+// the opposite way round to the two settings above -- set means Fahrenheit,
+// clear means Celsius, with no inversion -- which is exactly the trap the
+// setting-bit note in docs/protocol/commands.md warns about: the inversion
+// is a property of those two settings, not of the register.
+static const uint32_t DISPLAY_UNITS_BIT_FAHRENHEIT = 0x0200;
+
 static void subscribe(esphome::ble_client::BLEClient *client, uint16_t handle, const char *name) {
   auto status = esp_ble_gattc_register_for_notify(client->get_gattc_if(), client->get_remote_bda(), handle);
   if (status) {
@@ -451,7 +458,7 @@ void VolcanoComponent::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
         this->decode_current_temperature_(param->read.value, param->read.value_len);
       } else if (param->read.handle == this->target_temp_handle_) {
         this->decode_target_temperature_(param->read.value, param->read.value_len);
-      } else if (param->read.handle == this->display_register_handle_) {
+            } else if (param->read.handle == this->display_register_handle_) {
         this->decode_display_register_(param->read.value, param->read.value_len);
       } else if (param->read.handle == this->vibration_handle_) {
         this->decode_vibration_(param->read.value, param->read.value_len);
@@ -498,7 +505,7 @@ void VolcanoComponent::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
         this->decode_current_temperature_(param->notify.value, param->notify.value_len);
       } else if (param->notify.handle == this->target_temp_handle_) {
         this->decode_target_temperature_(param->notify.value, param->notify.value_len);
-      } else if (param->notify.handle == this->display_register_handle_) {
+            } else if (param->notify.handle == this->display_register_handle_) {
         this->decode_display_register_(param->notify.value, param->notify.value_len);
       } else if (param->notify.handle == this->vibration_handle_) {
         this->decode_vibration_(param->notify.value, param->notify.value_len);
@@ -673,6 +680,9 @@ void VolcanoComponent::decode_display_register_(const uint8_t *value, uint16_t v
   // (STATE-009), so it arrives every few seconds throughout a run while
   // this setting has not moved at all. Log only actual changes; publishing
   // an unchanged state is harmless, but a log line every few seconds is not.
+  if (this->display_units_switch_ != nullptr)
+    this->display_units_switch_->publish_state((reg & DISPLAY_UNITS_BIT_FAHRENHEIT) != 0);
+
   int8_t state = enabled ? 1 : 0;
   if (state != this->display_on_cooling_state_) {
     ESP_LOGI(TAG, "Display on cooling %s (register=0x%08x)", enabled ? "on" : "off", reg);
@@ -842,6 +852,29 @@ void VolcanoComponent::set_vibration(bool enabled) {
   }
 }
 
+void VolcanoComponent::set_display_units_fahrenheit(bool fahrenheit) {
+  if (this->display_register_handle_ == 0) {
+    ESP_LOGW(TAG, "Display/units register not resolved; not connected?");
+    return;
+  }
+  // CMD-010's confirmed mask-and-action form, naming only the units bit.
+  // The action byte is NOT inverted here: set selects Fahrenheit, unlike
+  // the two settings above where clear enables.
+  uint8_t payload[4] = {
+      static_cast<uint8_t>(DISPLAY_UNITS_BIT_FAHRENHEIT & 0xFF),
+      static_cast<uint8_t>((DISPLAY_UNITS_BIT_FAHRENHEIT >> 8) & 0xFF),
+      static_cast<uint8_t>(fahrenheit ? 0x01 : 0x00),
+      0x00,
+  };
+  ESP_LOGI(TAG, "Setting display units to %s", fahrenheit ? "Fahrenheit" : "Celsius");
+  auto status = esp_ble_gattc_write_char(this->parent()->get_gattc_if(), this->parent()->get_conn_id(),
+                                         this->display_register_handle_, sizeof(payload), payload,
+                                         ESP_GATT_WRITE_TYPE_RSP, ESP_GATT_AUTH_REQ_NONE);
+  if (status) {
+    ESP_LOGW(TAG, "esp_ble_gattc_write_char failed, status=%d", status);
+  }
+}
+
 void VolcanoComponent::set_display_on_cooling(bool enabled) {
   if (this->display_register_handle_ == 0) {
     ESP_LOGW(TAG, "Display/units register not resolved; not connected?");
@@ -941,6 +974,8 @@ void VolcanoTargetTemperatureNumber::control(float value) {
 void VolcanoVibrationSwitch::write_state(bool state) { this->parent_->set_vibration(state); }
 
 void VolcanoDisplayOnCoolingSwitch::write_state(bool state) { this->parent_->set_display_on_cooling(state); }
+
+void VolcanoDisplayUnitsSwitch::write_state(bool state) { this->parent_->set_display_units_fahrenheit(state); }
 
 void VolcanoLedBrightnessNumber::control(float value) {
   long percent = lroundf(value);

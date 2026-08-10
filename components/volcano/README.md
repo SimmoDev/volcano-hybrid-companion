@@ -4,6 +4,7 @@ This is the `volcano` ESPHome external component. It is a `ble_client` node ([AD
 
 - **Read-only state**: on each connection it resolves the status/flags register (`CHAR-008`), the auto-shutoff countdown (`CHAR-016`), current/target temperature (`CHAR-013`/`CHAR-014`) and the heater-runtime meter (`CHAR-022`/`CHAR-023`) by UUID, subscribes, reads their initial values, decodes them, and logs them. Current temperature's sub-40 °C "no reading" gate (STATE-012) is decoded explicitly rather than logged as a false `0.0` reading.
 - **Vibration**: `set_vibration()` writes the vibration setting (`CHAR-010`) — whether the device buzzes on reaching temperature — using the mask-and-action form CMD-004 confirms. The register bit is inverted (clear means enabled), which the component hides: the entity and method both read and write in the obvious sense. The register notifies, so it is subscribed rather than re-read after each write.
+- **Display units**: `set_display_units_fahrenheit()` writes the Celsius/Fahrenheit display setting (`CHAR-009`, CMD-010), the same bit the device's own simultaneous `+`/`−` panel gesture changes. Its polarity is *not* inverted, unlike the two settings sharing these registers: set selects Fahrenheit. Display-layer only — temperature values on the wire stay Celsius-encoded either way, so changing it alters what the device shows and nothing it reports.
 - **Display on cooling**: `set_display_on_cooling()` writes the setting (`CHAR-009`) governing whether the device shows current temperature on its own display while cooling, using the same mask-and-action form and naming only that bit — the register's units bit and its unidentified bits are left alone. Display-only: current temperature keeps notifying over BLE either way. Its register notifies on every 1 °C temperature change, so the component logs only actual changes to the setting.
 - **LED brightness**: `set_led_brightness_percent()` writes the display brightness (`CHAR-015`) on the 0–100 scale CMD-002 records, read once per connection and re-read after each write. `0` switches the display off entirely rather than dimming it; any non-zero value restores it.
 - **Device information**: firmware version (`CHAR-005`), firmware BLE version (`CHAR-006`), serial number (`CHAR-007`), power supply rating (`CHAR-024`) and product line name (`CHAR-025`) are read once per connection. None of them notifies, so each is read explicitly; they are read one at a time rather than all at once, since a GATT client has only a small number of outstanding reads available. Three of the five are writable on the device and none is ever written here — writing `CHAR-007` would replace a real unit's serial number.
@@ -67,6 +68,8 @@ volcano:
     name: "Vibration"
   display_on_cooling:
     name: "Display on cooling"
+  display_units_fahrenheit:
+    name: "Display in Fahrenheit"
   heater:
     name: "Heat"
   pump:
@@ -88,7 +91,7 @@ Entities default to an entity category reflecting what they are, so a UI can gro
 | Category | Entities |
 |---|---|
 | *(none)* | `heater`, `pump`, `current_temperature`, `target_temperature`, `auto_shutoff_countdown` — live state and primary control |
-| `config` | `auto_shutoff_duration`, `led_brightness`, `vibration`, `display_on_cooling` — settings that configure how the device behaves |
+| `config` | `auto_shutoff_duration`, `led_brightness`, `vibration`, `display_on_cooling`, `display_units_fahrenheit` — settings that configure how the device behaves |
 | `diagnostic` | `hours_of_operation`, `minutes_of_operation` and the five device-information strings — information about the device |
 
 `auto_shutoff_countdown` sits with the controls rather than the diagnostics despite being read-only: it is live operational state that changes every second, and it is the backstop against the heater running unattended, so it belongs where the actuator state is read. The lifetime meters alongside it in `diagnostic` change too slowly to inform anything in the moment. Every category can be overridden per entity in YAML.

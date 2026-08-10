@@ -106,6 +106,10 @@ volcano:
   # regardless, so nothing this component reads is affected.
   display_on_cooling:
     name: "Display on cooling"
+  # ON means Fahrenheit. The device's own +/- panel gesture changes the same
+  # setting, and this switch follows it either way (CMD-010, STATE-010).
+  display_units_fahrenheit:
+    name: "Display in Fahrenheit"
     web_server:
       sorting_weight: 90
   # CMD-002 records a 0-100 scale, which is the default range here.
