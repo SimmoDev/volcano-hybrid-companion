@@ -61,6 +61,16 @@ Write-triggered behaviour. Format per [ADR-0006](../decisions/ADR-0006-protocol-
 - **Confidence**: Confirmed (write encoding, reproduced in both directions; that the setting governs whether current temperature is displayed while cooling; that bits 12 and 16 of the notified value track it together; that BLE notification is unaffected; and that its visible effect is confined to temperatures above the STATE-012 threshold); Unknown (what bit 16 represents beyond tracking this setting)
 - **Implementation status**: Implemented in `components/volcano/volcano.cpp` (`set_display_on_cooling()`), using the same mask-and-action form as [CMD-004](#cmd-004--set-vibration) and naming only this bit, so the register's units bit and unidentified bits are untouched. Verified against real hardware against the device's own display in both states.
 
+## CMD-010 — Set display units
+
+- **Handle**: `0x002e`
+- **Observation**: 4-byte write in the same register-bit form as [CMD-004](#cmd-004--set-vibration) and [CMD-005](#cmd-005--set-display-on-cooling), naming the units bit: raw bytes `00 02 01 00` selects Fahrenheit and `00 02 00 00` selects Celsius, where `0x0200` is the bit mask and the third byte selects set or clear. The device accepts both, returning no ATT error, and the register reads back with bit 9 following the write. The physical display changes with it, target and current temperature both switching between °C and °F. Reproduced in both directions.
+
+  **The polarity is not inverted here.** Setting the bit selects Fahrenheit, so enabling this feature writes the `01` action — the opposite of vibration and display on cooling, which write `00` to enable. This is the case the setting-bit note below warns about: the inversion is a property of those two settings, not of the register.
+- **Interpretation**: Display units are settable remotely, not only by the device's own simultaneous `+`/`-` panel gesture. The setting is display-layer only: temperature values on the wire remain Celsius-encoded regardless, per [STATE-007](state-model.md#state-007--current-actual-temperature), so a client changing this alters what the device shows and nothing it reports.
+- **Confidence**: Confirmed (encoding, that the device accepts the write in both directions, and that the display follows it)
+- **Implementation status**: Not implemented
+
 ### Note: setting-bit writes
 
 CMD-004 and CMD-005 are two uses of one mechanism rather than two ad-hoc encodings. Both write to a bit-register: `0x0031` for vibration ([CHAR-010](characteristics.md#char-010--vibration-setting)) and `0x002e` for display and units ([CHAR-009](characteristics.md#char-009--display-on-cooling--units-register), [STATE-009](state-model.md#state-009--temperature-step-pulse-on-displayunits-register), [STATE-010](state-model.md#state-010--temperature-display-units-bit)). The status/flags register `0x002b` ([STATE-008](state-model.md#state-008--statusflags-register-partial)) has the same bit-register shape but is Read/Notify only and takes no writes. A setting is changed by writing four bytes: a 2-byte little-endian bit mask, then `00` to clear that bit or `01` to set it, then a padding byte. The write names only the bit being changed, so the register's other bits do not need to be read first or preserved.

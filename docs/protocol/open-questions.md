@@ -118,15 +118,11 @@ See [`gatt-services.md`](gatt-services.md#svc-007--unidentified-service). All 12
 
 See [CHAR-010](characteristics.md#char-010--vibration-setting) and [CHAR-009](characteristics.md#char-009--display-on-cooling--units-register). Reading `0x0031` with vibration enabled and then disabled changes exactly two bits — the setting bit and bit 16 — leaving several other bits set in both states. Those remaining bits correspond to nothing the app displays and do not move with the only setting the register is known to carry, so either they encode further settings or state not yet exercised, or they are fixed device characteristics. The same question applies to `0x002e`, whose reads carry bits beyond the four identified there. Would be resolved by reading both registers across every setting the app can change and every device state that can be reached, and treating whatever never moves as static — then probing the static bits individually with the mask-and-action write form the register already accepts.
 
-## `0x002e` units bit — whether it can be written
-
-See [STATE-010](state-model.md#state-010--temperature-display-units-bit). Bit `0x0200` of this register tracks the device's Celsius/Fahrenheit display setting, and the register accepts the settings-bit write form used by [CMD-004](commands.md#cmd-004--set-vibration) and [CMD-005](commands.md#cmd-005--set-display-on-cooling). Whether that form works for this particular bit — changing the display units remotely — has never been attempted: the official app exposes no control for it, and the setting is changed with a physical panel gesture instead. A controller that wants to present temperatures in the user's preferred units needs to know whether it can set this or must read it and convert. Would be resolved by writing the settings-bit form for mask `0x0200` in each direction and observing whether the device's display units follow.
-
 ## Whether a target-temperature write can be silently dropped
 
 See [STATE-013](state-model.md#state-013--target-temperature-notifications). A write is occasionally answered within a fraction of a second by a notification carrying the previously-set target rather than the one just written, and that write then has no effect until the client sends it again. These are the only occasions on which a client-written value has come back as a notification, and they are consistent with the write being rejected or dropped while the device was still applying the previous one. Each occurrence followed a run of writes a few seconds apart, with the value notified back being a target the current temperature had just reached. If writes can be dropped this way, a controller cannot treat a successful ATT write response as confirmation that the target changed. Would be resolved by issuing closely spaced target writes and reading the characteristic back after each, which also overlaps with the write-pacing question below.
 
-## What bit 16 of the settings registers signifies (largely resolved)
+## What bit 16 of the settings registers signifies (resolved)
 
 See the setting-bit note in [`commands.md`](commands.md#note-setting-bit-writes). Bit 16 of both `0x0031` and `0x002e` appears alongside that register's named setting bit — clear when the feature is enabled, set when disabled — reproduced in both directions on both registers, which made it look like a duplicate of the setting itself.
 
@@ -137,7 +133,7 @@ See the setting-bit note in [`commands.md`](commands.md#note-setting-bit-writes)
 
 A setting therefore changes without bit 16 moving, so bit 16 does not track settings. The status register `0x002b`, which has the same shape and is never written, has likewise never shown bit 16 set.
 
-What is not established is the mechanism. That bit 16 accompanies writes rather than settings is consistent with the register echoing the last write's action byte — byte 2 of the write payload sits at exactly bit 16 when that payload is read as a 32-bit little-endian value, and the polarity matches — but "echoes the action byte" and "is set by any write at all" are not distinguished by the evidence above. Would be resolved by writing the register with a mask naming a bit other than the setting bit and reading it back: if bit 16 still follows the action byte of that write, it is an artefact of the write path.
+**It follows the action byte specifically, not merely the presence of a write.** Writing the units bit ([CMD-010](commands.md#cmd-010--set-display-units)) names a different mask on the same register and carries an uninverted action byte, so the two can be told apart: the `01` action selecting Fahrenheit leaves bit 16 set, and the `00` action selecting Celsius leaves it clear. Byte 2 of the write payload sits at exactly bit 16 when that payload is read as a 32-bit little-endian value, and the register reproduces it. What remains unestablished is whether the register stores that byte or merely reflects the most recent write until something else changes it.
 
 ## Target temperature — valid/safe range not established
 
