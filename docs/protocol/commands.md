@@ -69,7 +69,7 @@ Write-triggered behaviour. Format per [ADR-0006](../decisions/ADR-0006-protocol-
   **The polarity is not inverted here.** Setting the bit selects Fahrenheit, so enabling this feature writes the `01` action — the opposite of vibration and display on cooling, which write `00` to enable. This is the case the setting-bit note below warns about: the inversion is a property of those two settings, not of the register.
 - **Interpretation**: Display units are settable remotely, not only by the device's own simultaneous `+`/`-` panel gesture. The setting is display-layer only: temperature values on the wire remain Celsius-encoded regardless, per [STATE-007](state-model.md#state-007--current-actual-temperature), so a client changing this alters what the device shows and nothing it reports.
 - **Confidence**: Confirmed (encoding, that the device accepts the write in both directions, and that the display follows it)
-- **Implementation status**: Not implemented
+- **Implementation status**: Implemented in `components/volcano/volcano.cpp` (`set_display_units_fahrenheit()`). Verified against real hardware in both directions, with the device's own display following the write.
 
 ### Note: setting-bit writes
 
