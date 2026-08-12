@@ -178,7 +178,22 @@ void VolcanoBleClient::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
     }
     case ESP_GATTC_SEARCH_CMPL_EVT: {
       if (param->search_cmpl.status != ESP_GATT_OK) {
-        ESP_LOGW(TAG, "Service discovery failed, status=%d", param->search_cmpl.status);
+        // ESPHome's own esp32_ble_client::BLEClientBase handles this same
+        // event unconditionally: it advances the *parent* client's own
+        // state to ESTABLISHED regardless of status, but that call goes
+        // through set_state_internal_(), which bypasses the virtual
+        // set_state() this node's node_state is only ever updated through
+        // (ble_client::BLEClient::set_state() is what propagates a state
+        // change to every node). So on this path node_state is left at
+        // whatever OPEN_EVT set it (CONNECTED) and never reaches
+        // ESTABLISHED, while the physical link stays up -- with nothing to
+        // retry it, since esp32_ble_tracker only offers a fresh connection
+        // attempt once this device is next seen advertising as
+        // unconnected. Force a clean disconnect so that reconnect loop
+        // actually runs, rather than leaving the component stuck at
+        // CONNECTING indefinitely.
+        ESP_LOGW(TAG, "Service discovery failed, status=%d; disconnecting to retry", param->search_cmpl.status);
+        this->client_->disconnect();
         break;
       }
       if (this->observer_ != nullptr)
