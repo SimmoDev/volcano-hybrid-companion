@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  esphome:
+    name: Validate and compile the example ESPHome config
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install ESPHome
+        run: pip install esphome
+      # esphome config/compile need only a placeholder value here, not a
+      # real device -- see docs/DEVELOPMENT.md. secrets.yaml itself is
+      # gitignored, so CI creates it fresh from the committed example.
+      - name: Create placeholder secrets.yaml
+        run: cp examples/secrets.yaml.example examples/secrets.yaml
+      # Recent ESPHome releases fetch their own ESP-IDF toolchain into
+      # ~/.cache/esphome rather than using PlatformIO's ~/.platformio --
+      # confirmed by actually running this job locally with `act` rather
+      # than assumed, since which one a given unpinned `pip install
+      # esphome` resolves to isn't fixed. Both are cached so this doesn't
+      # silently stop working (no cache, just a slower job) on either
+      # build path.
+      - name: Cache ESPHome/PlatformIO toolchains
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/esphome
+            ~/.platformio
+          key: esphome-toolchains-${{ runner.os }}
+      - name: esphome config
+        run: esphome config examples/esp32-s3-devkit-minimal.yaml
+      - name: esphome compile
+        run: esphome compile examples/esp32-s3-devkit-minimal.yaml
+
+  volcano-device-tests:
+    name: VolcanoDevice host-side tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: make test
+        working-directory: components/volcano/test
+        run: make test
