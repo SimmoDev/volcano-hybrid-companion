@@ -132,3 +132,5 @@ Setting `CONFIG_BT_GATTC_NOTIF_REG_MAX` through `sdkconfig_options` instead does
 ## Building / validating
 
 See [`docs/DEVELOPMENT.md`](../../docs/DEVELOPMENT.md#validating-the-component-locally) for how to validate this component against the example configuration.
+
+`VolcanoDevice` additionally has its own host-side tests, needing neither ESPHome nor hardware — see [`test/`](test/) and [`docs/DEVELOPMENT.md`](../../docs/DEVELOPMENT.md#testing-volcanodevice).

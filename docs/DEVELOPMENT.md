@@ -43,3 +43,14 @@ esphome compile examples/esp32-s3-devkit-minimal.yaml
 Both commands should complete without errors. `esphome compile` is the closest available check that the component's C++ actually builds; it requires no physical ESP32-S3 hardware.
 
 To flash this example to real hardware and watch its logs, see [`examples/README.md`](../examples/README.md).
+
+## Testing `VolcanoDevice`
+
+`VolcanoDevice` (the Volcano abstraction layer) has no BLE or ESP-IDF dependency by design (ADR-0009), so it is tested directly on the host rather than through `esphome compile`/hardware. [`components/volcano/test/`](../components/volcano/test/) builds `volcano_device.cpp` against fake stand-ins for its BLE client and the handful of ESPHome core headers it touches, with no ESPHome installation or physical device required:
+
+```sh
+cd components/volcano/test
+make test
+```
+
+This is the only place in the repository the split from ADR-0009 is exercised without hardware; `VolcanoBleClient` and `VolcanoComponent` still require a real connection to verify, per [`components/volcano/README.md`](../components/volcano/README.md#building--validating).
