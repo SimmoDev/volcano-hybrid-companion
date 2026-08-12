@@ -19,6 +19,10 @@ enum class VolcanoField {
   VIBRATION,
   DISPLAY_ON_COOLING,
   DISPLAY_UNITS_FAHRENHEIT,
+  // Sentinel: the number of real fields above, never a field itself. Lets
+  // VolcanoDevice::pending_deadlines_ size itself from this enum instead of
+  // a hand-counted literal that could silently fall out of sync with it.
+  COUNT,
 };
 
 // Declared by VolcanoBleClient, implemented by VolcanoDevice (ADR-0009).

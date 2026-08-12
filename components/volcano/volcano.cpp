@@ -208,9 +208,12 @@ void VolcanoLedBrightnessNumber::control(float value) {
 }
 
 // Minutes in, seconds out -- see VolcanoAutoShutoffDurationNumber in
-// volcano.h for why this entity carries minutes.
+// volcano.h for why this entity carries minutes. Rounds to the nearest
+// second, not the nearest minute: CHAR-017's wire encoding is seconds, and
+// rounding minutes first would silently discard a `step` configured finer
+// than 1.0 (e.g. 0.5 minutes, still within CMD-003's 60-21600s range).
 void VolcanoAutoShutoffDurationNumber::control(float value) {
-  long seconds = lroundf(value) * 60;
+  long seconds = lroundf(value * 60.0f);
   if (seconds < 0 || seconds > UINT16_MAX) {
     ESP_LOGW(TAG, "Ignoring auto-shutoff duration of %.0f min: outside the encodable range", value);
     return;

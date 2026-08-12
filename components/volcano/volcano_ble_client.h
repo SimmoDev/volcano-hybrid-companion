@@ -46,6 +46,10 @@ class VolcanoBleClient {
   // A `true` return means only that the write was queued: the observer's
   // on_write_failed() or the matching on_*() report is what confirms it
   // actually reached the device, per ADR-0009.
+  //
+  // write_auto_shutoff_duration()/write_led_brightness() additionally refuse
+  // (false, logged) until the static-read sweep has completed -- see
+  // static_sweep_done_ below for why.
   bool write_target_temperature(float celsius);
   bool write_heater(bool on);
   bool write_pump(bool on);
@@ -150,6 +154,26 @@ class VolcanoBleClient {
   // that same cache -- reporting ESTABLISHED early releases it out from
   // under a subscription still in flight and crashes.
   uint8_t pending_subscriptions_{0};
+
+  // Set once issue_next_static_read_() has worked through every queued
+  // static read for this connection (the same point that fires on_ready()),
+  // cleared on disconnect and again at the start of the next connection's
+  // service discovery. Exists so write_auto_shutoff_duration() and
+  // write_led_brightness() can refuse to write while it is false: both
+  // characteristics are also static-read queue members (duration_handle_ and
+  // led_brightness_handle_), and a write's own read-back
+  // (read_auto_shutoff_duration_(), and the equivalent inline read for LED
+  // brightness) issues a second, independent esp_ble_gattc_read_char() on
+  // the same handle. ESP_GATTC_READ_CHAR_EVT carries no request identity, so
+  // issue_next_static_read_()'s handle-and-position match in
+  // ESP_GATTC_READ_CHAR_EVT cannot tell that second read's response apart
+  // from the static queue's own -- whichever response lands first gets
+  // credited to the static queue's current slot regardless of which call
+  // actually produced it, which can silently skip a real static read and
+  // fire on_ready() one read early. Refusing the write until the sweep is
+  // done removes the second read entirely rather than trying to make the
+  // matching logic tell the two apart.
+  bool static_sweep_done_{false};
 };
 
 }  // namespace volcano

@@ -149,6 +149,28 @@ void test_write_confirmed_by_matching_report() {
   CHECK(device.heater().value() == true);
 }
 
+// The same plain-confirm path as test_write_confirmed_by_matching_report,
+// for pump rather than heater -- both resolve from the one on_actuator_state()
+// report (STATE-008), so this also covers that the report can confirm one
+// field's request while simultaneously just updating the other's value().
+void test_pump_write_confirmed_by_matching_report() {
+  VolcanoBleClient fake_ble;
+  VolcanoDevice device;
+  device.set_ble_client(&fake_ble);
+
+  device.set_pump(true);
+  CHECK(fake_ble.last_pump == true);
+  CHECK(device.pump().requested().has_value());
+  CHECK(*device.pump().requested() == true);
+
+  device.on_actuator_state(false, true);
+  CHECK(!device.pump().requested().has_value());
+  CHECK(device.pump().is_known());
+  CHECK(device.pump().value() == true);
+  CHECK(device.heater().is_known());  // the same report also settles heater, just with no request to resolve
+  CHECK(device.heater().value() == false);
+}
+
 // STATE-013's silent-drop signature: the device answers a write with a
 // *different* value than what was requested. requested() must still clear
 // (the write is resolved, just not the way asked), and value() must land on
@@ -211,6 +233,30 @@ void test_write_failed_clears_requested_immediately() {
   CHECK(!device.vibration().is_known());
 }
 
+// The same immediate-failure path as test_write_failed_clears_requested_immediately,
+// for the two read-back-confirmed fields (LED brightness, auto-shutoff
+// duration) rather than a notification-confirmed one (vibration) -- both
+// confirmation sources funnel a failure through the same
+// clear_requested_for_field_(), but nothing before this exercised either of
+// these two specifically.
+void test_write_failed_clears_requested_for_read_back_confirmed_fields() {
+  VolcanoBleClient fake_ble;
+  VolcanoDevice device;
+  device.set_ble_client(&fake_ble);
+
+  device.set_led_brightness(75);
+  CHECK(device.led_brightness().requested().has_value());
+  device.on_write_failed(VolcanoField::LED_BRIGHTNESS);
+  CHECK(!device.led_brightness().requested().has_value());
+  CHECK(!device.led_brightness().is_known());
+
+  device.set_auto_shutoff_duration(600);
+  CHECK(device.auto_shutoff_duration().requested().has_value());
+  device.on_write_failed(VolcanoField::AUTO_SHUTOFF_DURATION);
+  CHECK(!device.auto_shutoff_duration().requested().has_value());
+  CHECK(!device.auto_shutoff_duration().is_known());
+}
+
 // A command in flight when the link drops must not survive the disconnect:
 // on_connecting()/on_disconnected() clear requested() the same as a timeout
 // or an explicit write failure would, rather than leaving it pending against
@@ -270,9 +316,11 @@ int main() {
   test_command_without_ble_client_is_safe_noop();
   test_command_is_noop_when_write_refused();
   test_write_confirmed_by_matching_report();
+  test_pump_write_confirmed_by_matching_report();
   test_silent_drop_lands_on_devices_reported_value();
   test_pending_write_times_out_leaving_value_untouched();
   test_write_failed_clears_requested_immediately();
+  test_write_failed_clears_requested_for_read_back_confirmed_fields();
   test_pending_write_cleared_by_disconnect();
   test_pending_write_cleared_by_reconnect();
   test_callback_fires_on_change_only();

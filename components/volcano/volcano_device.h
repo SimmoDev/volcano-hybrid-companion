@@ -211,7 +211,11 @@ class VolcanoDevice : public VolcanoBleClientObserver {
   VolcanoBleClient *ble_client_{nullptr};
   std::function<uint32_t()> clock_;
   std::vector<std::function<void()>> callbacks_;
-  std::array<optional<uint32_t>, 8> pending_deadlines_;
+  // Sized from VolcanoField::COUNT rather than a hand-counted literal, so a
+  // future field added to that enum can't silently leave this array too
+  // small -- indexing it by an out-of-range VolcanoField would otherwise be
+  // undefined behaviour rather than a compile error.
+  std::array<optional<uint32_t>, static_cast<size_t>(VolcanoField::COUNT)> pending_deadlines_;
 };
 
 }  // namespace volcano

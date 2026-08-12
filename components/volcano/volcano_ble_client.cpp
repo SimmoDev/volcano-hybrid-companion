@@ -171,6 +171,7 @@ void VolcanoBleClient::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
       this->pending_subscriptions_ = 0;
       this->static_read_count_ = 0;
       this->static_read_index_ = 0;
+      this->static_sweep_done_ = false;
       ESP_LOGI(TAG, "Disconnected; heater/pump/countdown/temperature state unknown");
       if (this->observer_ != nullptr)
         this->observer_->on_disconnected();
@@ -203,6 +204,10 @@ void VolcanoBleClient::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
       auto control_service = espbt::ESPBTUUID::from_raw(CONTROL_SERVICE_UUID);
 
       this->pending_subscriptions_ = 0;
+      // Reset defensively even though ESP_GATTC_DISCONNECT_EVT already does
+      // this -- this path is the one thing that can start a static-read
+      // sweep, so it is the one that must not find the flag left set.
+      this->static_sweep_done_ = false;
 
       auto *status_chr =
           this->client_->get_characteristic(settings_service, espbt::ESPBTUUID::from_raw(STATUS_CHARACTERISTIC_UUID));
@@ -749,6 +754,12 @@ void VolcanoBleClient::queue_static_reads_() {
       this->serial_number_handle_,    this->power_supply_handle_,
       this->product_line_handle_,
   };
+  // Compile-time link between this list and static_reads_'s capacity: a
+  // future addition here that isn't matched by a MAX_STATIC_READS bump would
+  // otherwise fail silently (the loop below just stops enqueueing) rather
+  // than at build time.
+  static_assert(sizeof(handles) / sizeof(handles[0]) <= MAX_STATIC_READS,
+                "static_reads_ is too small for the handles listed above");
   this->static_read_count_ = 0;
   this->static_read_index_ = 0;
   for (uint16_t handle : handles) {
@@ -773,7 +784,11 @@ void VolcanoBleClient::issue_next_static_read_() {
   }
   // The static read sweep has completed -- ADR-0009: this, not merely the
   // link being up, is what "ready" means, since the state model is not
-  // populated until this point.
+  // populated until this point. static_sweep_done_ gates
+  // write_auto_shutoff_duration()/write_led_brightness() so their read-backs
+  // can never again collide with this sweep's own reads on the same handle
+  // -- see the member's declaration in volcano_ble_client.h.
+  this->static_sweep_done_ = true;
   if (this->observer_ != nullptr)
     this->observer_->on_ready();
 }
@@ -819,6 +834,13 @@ bool VolcanoBleClient::write_auto_shutoff_duration(uint16_t seconds) {
     ESP_LOGW(TAG, "Auto-shutoff duration characteristic not resolved; not connected?");
     return false;
   }
+  if (!this->static_sweep_done_) {
+    // See static_sweep_done_'s declaration: this write's own read-back
+    // would otherwise race the static-read sweep's own read of this same
+    // handle, since ESP_GATTC_READ_CHAR_EVT can't tell the two apart.
+    ESP_LOGW(TAG, "Refusing to set auto-shutoff duration: still reading initial device state, try again shortly");
+    return false;
+  }
   // CMD-003's confirmed encoding: 2-byte little-endian seconds.
   uint8_t payload[2] = {static_cast<uint8_t>(seconds & 0xFF), static_cast<uint8_t>((seconds >> 8) & 0xFF)};
   ESP_LOGI(TAG, "Setting auto-shutoff duration to %u s", seconds);
@@ -840,6 +862,13 @@ bool VolcanoBleClient::write_led_brightness(uint8_t percent) {
   }
   if (this->led_brightness_handle_ == 0) {
     ESP_LOGW(TAG, "LED brightness characteristic not resolved; not connected?");
+    return false;
+  }
+  if (!this->static_sweep_done_) {
+    // See static_sweep_done_'s declaration: this write's own read-back
+    // would otherwise race the static-read sweep's own read of this same
+    // handle, since ESP_GATTC_READ_CHAR_EVT can't tell the two apart.
+    ESP_LOGW(TAG, "Refusing to set LED brightness: still reading initial device state, try again shortly");
     return false;
   }
   // CMD-002's confirmed encoding: 2 bytes, only the low one significant.

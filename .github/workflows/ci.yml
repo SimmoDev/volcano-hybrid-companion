@@ -16,6 +16,15 @@ jobs:
           python-version: "3.12"
       - name: Install ESPHome
         run: pip install esphome
+      # esphome is installed unpinned above, so the version actually
+      # resolved isn't fixed -- captured here so the cache key below can
+      # include it, rather than a bare per-OS key that would keep restoring
+      # an older release's toolchain forever after an ESPHome upgrade
+      # changes what it needs (see the comment below: this already happened
+      # once, for which toolchain directory gets used at all).
+      - name: Get installed ESPHome version
+        id: esphome_version
+        run: echo "version=$(esphome version | head -n1 | awk '{print $2}')" >> "$GITHUB_OUTPUT"
       # esphome config/compile need only a placeholder value here, not a
       # real device -- see docs/DEVELOPMENT.md. secrets.yaml itself is
       # gitignored, so CI creates it fresh from the committed example.
@@ -34,7 +43,9 @@ jobs:
           path: |
             ~/.cache/esphome
             ~/.platformio
-          key: esphome-toolchains-${{ runner.os }}
+          key: esphome-toolchains-${{ runner.os }}-${{ steps.esphome_version.outputs.version }}
+          restore-keys: |
+            esphome-toolchains-${{ runner.os }}-
       - name: esphome config
         run: esphome config examples/esp32-s3-devkit-minimal.yaml
       - name: esphome compile

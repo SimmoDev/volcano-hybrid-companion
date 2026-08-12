@@ -94,6 +94,8 @@ bool VolcanoDevice::clear_requested_for_field_(VolcanoField field) {
       return this->clear_requested_(this->state_.display_on_cooling);
     case VolcanoField::DISPLAY_UNITS_FAHRENHEIT:
       return this->clear_requested_(this->state_.display_units_fahrenheit);
+    case VolcanoField::COUNT:
+      break;  // Sentinel only, never a real field; satisfies -Wswitch.
   }
   return false;
 }
