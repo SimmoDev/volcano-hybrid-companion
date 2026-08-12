@@ -198,13 +198,9 @@ void VolcanoDevice::on_serial_number(const std::string &value) {
   this->update_value_(this->state_.serial_number, value);
 }
 
-void VolcanoDevice::on_power_supply(const std::string &value) {
-  this->update_value_(this->state_.power_supply, value);
-}
+void VolcanoDevice::on_power_supply(const std::string &value) { this->update_value_(this->state_.power_supply, value); }
 
-void VolcanoDevice::on_product_line(const std::string &value) {
-  this->update_value_(this->state_.product_line, value);
-}
+void VolcanoDevice::on_product_line(const std::string &value) { this->update_value_(this->state_.product_line, value); }
 
 void VolcanoDevice::on_write_failed(VolcanoField field) {
   if (this->clear_requested_for_field_(field))

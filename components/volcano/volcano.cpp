@@ -93,8 +93,8 @@ void VolcanoComponent::dump_config() {
   ESP_LOGCONFIG(TAG, "    firmware BLE version");
   ESP_LOGCONFIG(TAG, "    (CHAR-006), serial number (CHAR-007), power supply (CHAR-024),");
   ESP_LOGCONFIG(TAG, "    product line (CHAR-025).");
-  ESP_LOGCONFIG(TAG, "  Write: auto-shutoff duration (CHAR-017), %u-%u s;",
-                VolcanoDevice::MIN_AUTO_SHUTOFF_DURATION_S, VolcanoDevice::MAX_AUTO_SHUTOFF_DURATION_S);
+  ESP_LOGCONFIG(TAG, "  Write: auto-shutoff duration (CHAR-017), %u-%u s;", VolcanoDevice::MIN_AUTO_SHUTOFF_DURATION_S,
+                VolcanoDevice::MAX_AUTO_SHUTOFF_DURATION_S);
   ESP_LOGCONFIG(TAG, "    heater on/off (CHAR-018/019), pump on/off (CHAR-020/021);");
   ESP_LOGCONFIG(TAG, "    target temperature (CHAR-014), %.1f-%.1f C;", VolcanoDevice::MIN_TARGET_TEMPERATURE_C,
                 VolcanoDevice::MAX_TARGET_TEMPERATURE_C);
@@ -104,7 +104,7 @@ void VolcanoComponent::dump_config() {
 }
 
 void VolcanoComponent::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if,
-                                            esp_ble_gattc_cb_param_t *param) {
+                                           esp_ble_gattc_cb_param_t *param) {
   this->ble_client_.gattc_event_handler(event, gattc_if, param);
 }
 

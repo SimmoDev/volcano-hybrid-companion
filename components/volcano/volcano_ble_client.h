@@ -68,8 +68,8 @@ class VolcanoBleClient {
   // observer method for the characteristic being decoded -- the five
   // device-information strings share this one decode body. `name` is for
   // the log line only.
-  void decode_text_(const uint8_t *value, uint16_t value_len, void (VolcanoBleClientObserver::*report)(const std::string &),
-                    const char *name);
+  void decode_text_(const uint8_t *value, uint16_t value_len,
+                    void (VolcanoBleClientObserver::*report)(const std::string &), const char *name);
 
   void read_auto_shutoff_duration_();
   bool write_trigger_(uint16_t handle, const char *name);
@@ -88,15 +88,15 @@ class VolcanoBleClient {
 
   // Handles resolved by UUID after each connection. Zero while
   // unresolved/disconnected.
-  uint16_t status_handle_{0};         // CHAR-008: status/flags register.
-  uint16_t countdown_handle_{0};      // CHAR-016: auto-shutoff countdown.
-  uint16_t duration_handle_{0};       // CHAR-017: auto-shutoff duration.
-  uint16_t current_temp_handle_{0};   // CHAR-013: current (actual) temperature.
-  uint16_t target_temp_handle_{0};    // CHAR-014: target temperature.
-  uint16_t heater_on_handle_{0};      // CHAR-018: heater on trigger.
-  uint16_t heater_off_handle_{0};     // CHAR-019: heater off trigger.
-  uint16_t pump_on_handle_{0};        // CHAR-020: pump on trigger.
-  uint16_t pump_off_handle_{0};       // CHAR-021: pump off trigger.
+  uint16_t status_handle_{0};        // CHAR-008: status/flags register.
+  uint16_t countdown_handle_{0};     // CHAR-016: auto-shutoff countdown.
+  uint16_t duration_handle_{0};      // CHAR-017: auto-shutoff duration.
+  uint16_t current_temp_handle_{0};  // CHAR-013: current (actual) temperature.
+  uint16_t target_temp_handle_{0};   // CHAR-014: target temperature.
+  uint16_t heater_on_handle_{0};     // CHAR-018: heater on trigger.
+  uint16_t heater_off_handle_{0};    // CHAR-019: heater off trigger.
+  uint16_t pump_on_handle_{0};       // CHAR-020: pump on trigger.
+  uint16_t pump_off_handle_{0};      // CHAR-021: pump off trigger.
   // Device information, all read-only in practice. CHAR-007, CHAR-024 and
   // CHAR-025 are writable on the device, and must never be written: CHAR-007
   // in particular would overwrite a real unit's serial number.
@@ -107,11 +107,11 @@ class VolcanoBleClient {
   uint16_t product_line_handle_{0};          // CHAR-025: product line name.
   // The heater-runtime meter, notify-capable and so subscribed rather than
   // read once. Both advance only while the heater is on.
-  uint16_t hours_handle_{0};                 // CHAR-022: hours of operation.
-  uint16_t minutes_handle_{0};               // CHAR-023: minutes of operation.
-  uint16_t led_brightness_handle_{0};        // CHAR-015: LED brightness.
-  uint16_t vibration_handle_{0};             // CHAR-010: vibration setting.
-  uint16_t display_register_handle_{0};      // CHAR-009: display/units register.
+  uint16_t hours_handle_{0};             // CHAR-022: hours of operation.
+  uint16_t minutes_handle_{0};           // CHAR-023: minutes of operation.
+  uint16_t led_brightness_handle_{0};    // CHAR-015: LED brightness.
+  uint16_t vibration_handle_{0};         // CHAR-010: vibration setting.
+  uint16_t display_register_handle_{0};  // CHAR-009: display/units register.
 
   // CHAR-009 carries two independent settings (display-on-cooling, CMD-005;
   // display units, CMD-010) behind one handle, written with two distinct

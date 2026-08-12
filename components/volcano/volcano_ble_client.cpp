@@ -139,7 +139,7 @@ static void subscribe(esphome::ble_client::BLEClient *client, uint16_t handle, c
 }
 
 void VolcanoBleClient::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if,
-                                            esp_ble_gattc_cb_param_t *param) {
+                                           esp_ble_gattc_cb_param_t *param) {
   switch (event) {
     case ESP_GATTC_DISCONNECT_EVT: {
       // ADR-0007: device state is marked unknown while disconnected.
@@ -204,8 +204,8 @@ void VolcanoBleClient::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
 
       this->pending_subscriptions_ = 0;
 
-      auto *status_chr = this->client_->get_characteristic(settings_service,
-                                                            espbt::ESPBTUUID::from_raw(STATUS_CHARACTERISTIC_UUID));
+      auto *status_chr =
+          this->client_->get_characteristic(settings_service, espbt::ESPBTUUID::from_raw(STATUS_CHARACTERISTIC_UUID));
       if (status_chr == nullptr) {
         ESP_LOGW(TAG, "Status/flags register (CHAR-008) not found on device");
       } else {
@@ -239,8 +239,8 @@ void VolcanoBleClient::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
         subscribe(this->client_, this->display_register_handle_, "display/units register");
       }
 
-      auto *countdown_chr = this->client_->get_characteristic(
-          control_service, espbt::ESPBTUUID::from_raw(COUNTDOWN_CHARACTERISTIC_UUID));
+      auto *countdown_chr =
+          this->client_->get_characteristic(control_service, espbt::ESPBTUUID::from_raw(COUNTDOWN_CHARACTERISTIC_UUID));
       if (countdown_chr == nullptr) {
         ESP_LOGW(TAG, "Auto-shutoff countdown (CHAR-016) not found on device");
       } else {
@@ -249,8 +249,8 @@ void VolcanoBleClient::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
         subscribe(this->client_, this->countdown_handle_, "auto-shutoff countdown");
       }
 
-      auto *duration_chr = this->client_->get_characteristic(
-          control_service, espbt::ESPBTUUID::from_raw(DURATION_CHARACTERISTIC_UUID));
+      auto *duration_chr =
+          this->client_->get_characteristic(control_service, espbt::ESPBTUUID::from_raw(DURATION_CHARACTERISTIC_UUID));
       if (duration_chr == nullptr) {
         ESP_LOGW(TAG, "Auto-shutoff duration (CHAR-017) not found on device");
       } else {
@@ -280,8 +280,8 @@ void VolcanoBleClient::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
         subscribe(this->client_, this->target_temp_handle_, "target temperature");
       }
 
-      auto *hours_chr = this->client_->get_characteristic(
-          control_service, espbt::ESPBTUUID::from_raw(HOURS_CHARACTERISTIC_UUID));
+      auto *hours_chr =
+          this->client_->get_characteristic(control_service, espbt::ESPBTUUID::from_raw(HOURS_CHARACTERISTIC_UUID));
       if (hours_chr == nullptr) {
         ESP_LOGW(TAG, "Hours of operation (CHAR-022) not found on device");
       } else {
@@ -290,8 +290,8 @@ void VolcanoBleClient::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
         subscribe(this->client_, this->hours_handle_, "hours of operation");
       }
 
-      auto *minutes_chr = this->client_->get_characteristic(
-          control_service, espbt::ESPBTUUID::from_raw(MINUTES_CHARACTERISTIC_UUID));
+      auto *minutes_chr =
+          this->client_->get_characteristic(control_service, espbt::ESPBTUUID::from_raw(MINUTES_CHARACTERISTIC_UUID));
       if (minutes_chr == nullptr) {
         ESP_LOGW(TAG, "Minutes of operation (CHAR-023) not found on device");
       } else {
@@ -304,8 +304,8 @@ void VolcanoBleClient::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
       // characteristics (CMD-006 through CMD-009), not Notify-capable, so
       // resolved here like the duration characteristic above and not
       // counted in pending_subscriptions_.
-      auto *heater_on_chr = this->client_->get_characteristic(
-          control_service, espbt::ESPBTUUID::from_raw(HEATER_ON_CHARACTERISTIC_UUID));
+      auto *heater_on_chr =
+          this->client_->get_characteristic(control_service, espbt::ESPBTUUID::from_raw(HEATER_ON_CHARACTERISTIC_UUID));
       if (heater_on_chr == nullptr) {
         ESP_LOGW(TAG, "Heater on trigger (CHAR-018) not found on device");
       } else {
@@ -320,16 +320,16 @@ void VolcanoBleClient::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
         this->heater_off_handle_ = heater_off_chr->handle;
       }
 
-      auto *pump_on_chr = this->client_->get_characteristic(
-          control_service, espbt::ESPBTUUID::from_raw(PUMP_ON_CHARACTERISTIC_UUID));
+      auto *pump_on_chr =
+          this->client_->get_characteristic(control_service, espbt::ESPBTUUID::from_raw(PUMP_ON_CHARACTERISTIC_UUID));
       if (pump_on_chr == nullptr) {
         ESP_LOGW(TAG, "Pump on trigger (CHAR-020) not found on device");
       } else {
         this->pump_on_handle_ = pump_on_chr->handle;
       }
 
-      auto *pump_off_chr = this->client_->get_characteristic(
-          control_service, espbt::ESPBTUUID::from_raw(PUMP_OFF_CHARACTERISTIC_UUID));
+      auto *pump_off_chr =
+          this->client_->get_characteristic(control_service, espbt::ESPBTUUID::from_raw(PUMP_OFF_CHARACTERISTIC_UUID));
       if (pump_off_chr == nullptr) {
         ESP_LOGW(TAG, "Pump off trigger (CHAR-021) not found on device");
       } else {
@@ -383,9 +383,8 @@ void VolcanoBleClient::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
     }
     case ESP_GATTC_REG_FOR_NOTIFY_EVT: {
       uint16_t handle = param->reg_for_notify.handle;
-      if (handle != this->status_handle_ && handle != this->countdown_handle_ &&
-          handle != this->current_temp_handle_ && handle != this->target_temp_handle_ &&
-          handle != this->hours_handle_ && handle != this->minutes_handle_ &&
+      if (handle != this->status_handle_ && handle != this->countdown_handle_ && handle != this->current_temp_handle_ &&
+          handle != this->target_temp_handle_ && handle != this->hours_handle_ && handle != this->minutes_handle_ &&
           handle != this->vibration_handle_ && handle != this->display_register_handle_)
         break;
 
@@ -475,8 +474,8 @@ void VolcanoBleClient::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
         this->decode_text_(param->read.value, param->read.value_len, &VolcanoBleClientObserver::on_firmware_version,
                            "Firmware version");
       } else if (param->read.handle == this->ble_firmware_version_handle_) {
-        this->decode_text_(param->read.value, param->read.value_len,
-                           &VolcanoBleClientObserver::on_ble_firmware_version, "Firmware BLE version");
+        this->decode_text_(param->read.value, param->read.value_len, &VolcanoBleClientObserver::on_ble_firmware_version,
+                           "Firmware BLE version");
       } else if (param->read.handle == this->serial_number_handle_) {
         this->decode_text_(param->read.value, param->read.value_len, &VolcanoBleClientObserver::on_serial_number,
                            "Serial number");
@@ -527,15 +526,13 @@ void VolcanoBleClient::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
         // effect, so it cannot confirm the action -- only the status/flags
         // register notification (STATE-008) does that.
         if (param->write.status != ESP_GATT_OK) {
-          ESP_LOGW(TAG, "Trigger write to handle 0x%04x failed, status=%d", param->write.handle,
-                   param->write.status);
+          ESP_LOGW(TAG, "Trigger write to handle 0x%04x failed, status=%d", param->write.handle, param->write.status);
           if (this->observer_ != nullptr)
             this->observer_->on_write_failed(VolcanoField::HEATER);
         }
       } else if (param->write.handle == this->pump_on_handle_ || param->write.handle == this->pump_off_handle_) {
         if (param->write.status != ESP_GATT_OK) {
-          ESP_LOGW(TAG, "Trigger write to handle 0x%04x failed, status=%d", param->write.handle,
-                   param->write.status);
+          ESP_LOGW(TAG, "Trigger write to handle 0x%04x failed, status=%d", param->write.handle, param->write.status);
           if (this->observer_ != nullptr)
             this->observer_->on_write_failed(VolcanoField::PUMP);
         }
@@ -747,8 +744,9 @@ void VolcanoBleClient::queue_static_reads_() {
   // only one of these that affects how the device behaves, and the device
   // information after, none of which anything waits on.
   const uint16_t handles[] = {
-      this->duration_handle_,      this->led_brightness_handle_, this->firmware_version_handle_,
-      this->ble_firmware_version_handle_, this->serial_number_handle_, this->power_supply_handle_,
+      this->duration_handle_,         this->led_brightness_handle_,
+      this->firmware_version_handle_, this->ble_firmware_version_handle_,
+      this->serial_number_handle_,    this->power_supply_handle_,
       this->product_line_handle_,
   };
   this->static_read_count_ = 0;
@@ -824,9 +822,9 @@ bool VolcanoBleClient::write_auto_shutoff_duration(uint16_t seconds) {
   // CMD-003's confirmed encoding: 2-byte little-endian seconds.
   uint8_t payload[2] = {static_cast<uint8_t>(seconds & 0xFF), static_cast<uint8_t>((seconds >> 8) & 0xFF)};
   ESP_LOGI(TAG, "Setting auto-shutoff duration to %u s", seconds);
-  auto status = esp_ble_gattc_write_char(this->client_->get_gattc_if(), this->client_->get_conn_id(),
-                                         this->duration_handle_, sizeof(payload), payload, ESP_GATT_WRITE_TYPE_RSP,
-                                         ESP_GATT_AUTH_REQ_NONE);
+  auto status =
+      esp_ble_gattc_write_char(this->client_->get_gattc_if(), this->client_->get_conn_id(), this->duration_handle_,
+                               sizeof(payload), payload, ESP_GATT_WRITE_TYPE_RSP, ESP_GATT_AUTH_REQ_NONE);
   if (status) {
     ESP_LOGW(TAG, "esp_ble_gattc_write_char failed, status=%d", status);
     return false;
@@ -876,9 +874,9 @@ bool VolcanoBleClient::write_vibration(bool enabled) {
       0x00,
   };
   ESP_LOGI(TAG, "Turning vibration %s", enabled ? "on" : "off");
-  auto status = esp_ble_gattc_write_char(this->client_->get_gattc_if(), this->client_->get_conn_id(),
-                                         this->vibration_handle_, sizeof(payload), payload, ESP_GATT_WRITE_TYPE_RSP,
-                                         ESP_GATT_AUTH_REQ_NONE);
+  auto status =
+      esp_ble_gattc_write_char(this->client_->get_gattc_if(), this->client_->get_conn_id(), this->vibration_handle_,
+                               sizeof(payload), payload, ESP_GATT_WRITE_TYPE_RSP, ESP_GATT_AUTH_REQ_NONE);
   if (status) {
     ESP_LOGW(TAG, "esp_ble_gattc_write_char failed, status=%d", status);
     return false;
@@ -973,7 +971,8 @@ bool VolcanoBleClient::write_pump(bool on) {
 
 bool VolcanoBleClient::write_target_temperature(float celsius) {
   long decidegrees_signed = std::lroundf(celsius * 10.0f);
-  if (decidegrees_signed < MIN_TARGET_TEMPERATURE_DECIDEGREES || decidegrees_signed > MAX_TARGET_TEMPERATURE_DECIDEGREES) {
+  if (decidegrees_signed < MIN_TARGET_TEMPERATURE_DECIDEGREES ||
+      decidegrees_signed > MAX_TARGET_TEMPERATURE_DECIDEGREES) {
     ESP_LOGW(TAG,
              "Refusing to set target temperature to %.1f C: outside the %.1f-%.1f C range confirmed accepted "
              "(CMD-001)",
@@ -994,9 +993,9 @@ bool VolcanoBleClient::write_target_temperature(float celsius) {
       0,
   };
   ESP_LOGI(TAG, "Setting target temperature to %.1f C", decidegrees / 10.0f);
-  auto status = esp_ble_gattc_write_char(this->client_->get_gattc_if(), this->client_->get_conn_id(),
-                                         this->target_temp_handle_, sizeof(payload), payload, ESP_GATT_WRITE_TYPE_RSP,
-                                         ESP_GATT_AUTH_REQ_NONE);
+  auto status =
+      esp_ble_gattc_write_char(this->client_->get_gattc_if(), this->client_->get_conn_id(), this->target_temp_handle_,
+                               sizeof(payload), payload, ESP_GATT_WRITE_TYPE_RSP, ESP_GATT_AUTH_REQ_NONE);
   if (status) {
     ESP_LOGW(TAG, "esp_ble_gattc_write_char failed, status=%d", status);
     return false;

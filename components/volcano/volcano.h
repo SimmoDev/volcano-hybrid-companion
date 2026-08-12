@@ -143,7 +143,7 @@ class VolcanoComponent : public Component, public ble_client::BLEClientNode {
   void dump_config() override;
 
   void gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if,
-                            esp_ble_gattc_cb_param_t *param) override;
+                           esp_ble_gattc_cb_param_t *param) override;
 
   // Forwarded to the matching VolcanoDevice::set_*() -- see volcano_device.h
   // for the confirmed ranges each refuses outside of, and ADR-0009 for the
