@@ -99,7 +99,7 @@ volcano-hybrid-companion/
 
 ## Contributing
 
-Not yet open for contributions — the project is still early: only a partial BLE implementation exists, and there's no hardware-independent interface yet for a contributor to build against. This will be revisited as the foundations mature.
+Not yet open for contributions — Phase 1's foundations (the BLE implementation and the hardware-independent `VolcanoDevice` interface) are in place, but Phase 2 (the M5Stack Dial UI) hasn't started, so there's no additional surface yet for a contributor to build against. This will be revisited once Phase 2 work begins.
 
 ## Licence
 
