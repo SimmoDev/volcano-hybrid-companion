@@ -54,3 +54,21 @@ make test
 ```
 
 This is the only place in the repository the split from ADR-0009 is exercised without hardware; `VolcanoBleClient` and `VolcanoComponent` still require a real connection to verify, per [`components/volcano/README.md`](../components/volcano/README.md#building--validating).
+
+## Continuous integration and pre-commit hooks
+
+[`.github/workflows/ci.yml`](../.github/workflows/ci.yml) runs on every push and pull request: `esphome config`/`esphome compile` against the example configuration (with a placeholder `secrets.yaml`, per "Validating the component locally" above), and `make test` for `VolcanoDevice`'s host-side tests. Neither job needs real hardware.
+
+Two local pre-commit hooks, defined in [`.pre-commit-config.yaml`](../.pre-commit-config.yaml) and implemented in [`scripts/`](../scripts/):
+
+- **`check-markdown-links`** — blocks the commit if a relative Markdown link in a tracked `.md` file doesn't resolve to a real file. Link-like text inside backticks (a syntax example, as in `CONVENTIONS.md`'s Markdown conventions section) is not checked.
+- **`readme-staleness-nudge`** — advisory only, never blocks. Prints a reminder if a commit touches `components/volcano/` or `docs/decisions/` without also touching the root `README.md`, since a change to either can make a claim in README's Status/Development Phases/Contributing sections go stale.
+
+Install with:
+
+```sh
+pip install pre-commit
+pre-commit install
+```
+
+`pre-commit run --all-files` runs both hooks against the whole repository without committing anything.
