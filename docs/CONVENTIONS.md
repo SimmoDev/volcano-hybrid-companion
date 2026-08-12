@@ -48,7 +48,12 @@ Avoid vague terms such as "usually", "normally", "generally", or "probably" when
 
 ## Code formatting expectations
 
-Formatting expectations have not yet been defined concretely; `components/volcano/` has no automated formatter configured. At minimum, whatever formatter/style the Volcano component's C++ code adopts should be applied consistently via an automated tool (e.g. `clang-format`) rather than left to manual judgement, and that tooling choice should be documented here once made.
+`components/volcano/`'s C++ (`*.h`/`*.cpp`) is formatted with `clang-format`, configured by the repository-root [`.clang-format`](../.clang-format) — copied verbatim from [ESPHome's own upstream style](https://github.com/esphome/esphome/blob/dev/.clang-format), since the Volcano component is an ESPHome external component and was already hand-written to approximate it. Enforced two ways, both pinned to the same `clang-format==22.1.8` (the version that PyPI package resolves to) so a contributor's local result matches CI exactly:
+
+- The `clang-format` pre-commit hook ([`.pre-commit-config.yaml`](../.pre-commit-config.yaml)) reformats in place on commit.
+- The `clang-format` CI job ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)) runs `clang-format --dry-run --Werror` and fails the build on anything unformatted.
+
+A single `clang-format -i` pass is not always idempotent on its own output for lines near the column limit — confirmed while adopting this: reformatting once locally and then running the pre-commit hook produced a second round of (also internally-consistent) changes. Run it (or the pre-commit hook) until a repeat run reports no further changes, not just once.
 
 ## Naming conventions — files and directories
 
