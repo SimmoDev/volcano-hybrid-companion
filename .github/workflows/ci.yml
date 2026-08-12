@@ -48,3 +48,21 @@ jobs:
       - name: make test
         working-directory: components/volcano/test
         run: make test
+
+  clang-format:
+    name: Check clang-format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      # Pinned via the clang-format PyPI package rather than apt's
+      # clang-format, whose version tracks the runner image and isn't
+      # pinned here -- a version drift between what a contributor ran
+      # locally and what CI checks against would fail the check on
+      # formatting nobody actually changed.
+      - name: Install clang-format
+        run: pip install clang-format==22.1.8
+      - name: clang-format --dry-run --Werror
+        run: clang-format --dry-run --Werror $(git ls-files 'components/volcano/*.h' 'components/volcano/*.cpp')
