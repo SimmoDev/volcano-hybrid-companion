@@ -1,5 +1,7 @@
 # Volcano Hybrid Companion
 
+[![CI](https://github.com/SimmoDev/volcano-hybrid-companion/actions/workflows/ci.yml/badge.svg)](https://github.com/SimmoDev/volcano-hybrid-companion/actions/workflows/ci.yml)
+
 An open-source, standalone remote controller for the Storz & Bickel Volcano Hybrid vaporizer, built on ESPHome and ESP32 hardware.
 
 This project is **not affiliated with, endorsed by, or supported by Storz & Bickel**. Bluetooth Low Energy (BLE) communication is being independently documented and implemented through observation and testing. Protocol behaviour will only be considered supported once it has been verified against real hardware.
