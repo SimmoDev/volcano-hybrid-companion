@@ -1,0 +1,18 @@
+# Install with: pip install pre-commit && pre-commit install
+# See docs/DEVELOPMENT.md for what each hook does and why.
+repos:
+  - repo: local
+    hooks:
+      - id: check-markdown-links
+        name: Check relative Markdown links resolve
+        description: Blocks the commit on a broken relative link in a tracked .md file.
+        entry: python3 scripts/check_markdown_links.py
+        language: system
+        files: \.md$
+      - id: readme-staleness-nudge
+        name: Nudge if components/volcano/ or docs/decisions/ changed without README.md
+        description: Advisory only -- never fails the commit.
+        entry: python3 scripts/check_readme_sync.py
+        language: system
+        pass_filenames: false
+        always_run: true
