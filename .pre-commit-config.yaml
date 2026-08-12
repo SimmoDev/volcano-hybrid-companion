@@ -1,6 +1,13 @@
 # Install with: pip install pre-commit && pre-commit install
 # See docs/DEVELOPMENT.md for what each hook does and why.
 repos:
+  # Reformats components/volcano/*.h/.cpp in place using .clang-format (-style=file).
+  # Pinned to match the version CI checks against (clang-format==22.1.8) --
+  # see the CI job's own comment on why that matters.
+  - repo: https://github.com/pre-commit/mirrors-clang-format
+    rev: v22.1.8
+    hooks:
+      - id: clang-format
   - repo: local
     hooks:
       - id: check-markdown-links
