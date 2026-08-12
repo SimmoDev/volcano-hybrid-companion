@@ -8,28 +8,28 @@ Readable/notified device state. Format per [ADR-0006](../decisions/ADR-0006-prot
 - **Observation**: 4-byte little-endian integer, an incrementing count of hours, paired with [STATE-006](#state-006--minutes-of-operation) for the minutes component. It counts heater-on time rather than powered-on time: it advances only while the heater is on, and notifies in the same second that the minutes counter wraps from 59 to 0. Matches the app's displayed hours value exactly, read consistently across multiple sessions.
 - **Interpretation**: An element-usage meter rather than a device-uptime meter — the pair measures how long the heater has run, not how long the device has been plugged in.
 - **Confidence**: Confirmed
-- **Implementation status**: Implemented (read-only) in `components/volcano/volcano.cpp`. Verified against real hardware, including the carry: [STATE-006](#state-006--minutes-of-operation) wrapping from 59 to 0 was seen to increment this counter. The interpretation above is not encoded: the component reports the counter rather than deriving a runtime from it.
+- **Implementation status**: Implemented (read-only) in `components/volcano/volcano_ble_client.cpp`. Verified against real hardware, including the carry: [STATE-006](#state-006--minutes-of-operation) wrapping from 59 to 0 was seen to increment this counter. The interpretation above is not encoded: the component reports the counter rather than deriving a runtime from it.
 
 ## STATE-002 — Serial Number
 
 - **Handle**: `0x0023`
 - **Observation**: 10-byte ASCII string, unique per device. The app displays a truncated 8-character prefix of it. The full 10 bytes are also broadcast in the advertising payload (see [ADV-001](gatt-services.md#adv-001--advertising-and-discovery)). Read consistently across multiple sessions.
 - **Confidence**: Confirmed
-- **Implementation status**: Implemented (read-only) in `components/volcano/volcano.cpp`, read once per connection. Verified against real hardware. Never written.
+- **Implementation status**: Implemented (read-only) in `components/volcano/volcano_ble_client.cpp`, read once per connection. Verified against real hardware. Never written.
 
 ## STATE-003 — Firmware version
 
 - **Handle**: `0x0019`
 - **Observation**: ASCII string `"V01.03.00.00"`. The app displays a truncated `"V01.03.0"`. Read consistently across multiple sessions.
 - **Confidence**: Confirmed
-- **Implementation status**: Implemented (read-only) in `components/volcano/volcano.cpp`, read once per connection. Verified against real hardware.
+- **Implementation status**: Implemented (read-only) in `components/volcano/volcano_ble_client.cpp`, read once per connection. Verified against real hardware.
 
 ## STATE-004 — Firmware BLE version
 
 - **Handle**: `0x001b`
 - **Observation**: ASCII string `"V01.00.00.00"`, exact match to the app's displayed value. Read consistently across multiple sessions.
 - **Confidence**: Confirmed
-- **Implementation status**: Implemented (read-only) in `components/volcano/volcano.cpp`, read once per connection. Verified against real hardware.
+- **Implementation status**: Implemented (read-only) in `components/volcano/volcano_ble_client.cpp`, read once per connection. Verified against real hardware.
 
 ## STATE-005 — Auto-shutoff countdown
 
@@ -47,7 +47,7 @@ Readable/notified device state. Format per [ADR-0006](../decisions/ADR-0006-prot
   The load, the decrement rate, and the reset on returning to idle have each been reproduced across separate heating cycles and separate pump-only runs, and a full expiry has been observed end to end across many separate sessions.
 - **Interpretation**: Live "time remaining until the device shuts its actuators off", armed by activity rather than free-running, and snapshotted at the moment of arming rather than tracking the configured duration continuously. Because pump-on arms it too, it is a general unattended-operation backstop rather than a heater-specific one.
 - **Confidence**: Confirmed (encoding, load on heater-on and on pump-on, decrement rate, reset on return to idle, reload-in-full on each arming, indifference to a pump toggle mid-run, that a duration change does not reload a running countdown, and that reaching zero switches off whichever actuators are running)
-- **Implementation status**: Implemented (the value's read and decode) in `components/volcano/volcano.cpp`. Verified against real hardware, including the load at arming, the per-second decrement, and the reset on returning to idle. The component reports the countdown rather than acting on it: none of the arming, reload or expiry behaviour documented above is encoded as logic.
+- **Implementation status**: Implemented (the value's read and decode) in `components/volcano/volcano_ble_client.cpp`. Verified against real hardware, including the load at arming, the per-second decrement, and the reset on returning to idle. The component reports the countdown rather than acting on it: none of the arming, reload or expiry behaviour documented above is encoded as logic.
 
 ## STATE-006 — Minutes of Operation
 
@@ -60,7 +60,7 @@ Readable/notified device state. Format per [ADR-0006](../decisions/ADR-0006-prot
   Observed across many separate heating cycles and off periods, in both directions, and confirmed as 2 bytes wide.
 - **Interpretation**: The minutes component of a heater-runtime meter, paired with [STATE-001](#state-001--hours-of-operation), ticking in real time rather than only refreshing on read. Because it is gated on heater state, an arriving tick is positive evidence that the heater is on. The inverse does not hold: ticks are 60 seconds apart, so silence is the normal condition for up to a minute of heater-on time. Bit 5 of the status/flags register ([STATE-008](#state-008--statusflags-register-partial)) gives heater state immediately and is what a controller should use.
 - **Confidence**: Confirmed
-- **Implementation status**: Implemented (read-only) in `components/volcano/volcano.cpp`. Verified against real hardware, including a live tick while the heater was on. The gating behaviour this finding documents is not encoded as logic: the component reports the counter rather than inferring heater state from it, which the interpretation above advises against anyway.
+- **Implementation status**: Implemented (read-only) in `components/volcano/volcano_ble_client.cpp`. Verified against real hardware, including a live tick while the heater was on. The gating behaviour this finding documents is not encoded as logic: the component reports the counter rather than inferring heater state from it, which the interpretation above advises against anyway.
 
 ## STATE-007 — Current (actual) temperature
 
@@ -72,7 +72,7 @@ Readable/notified device state. Format per [ADR-0006](../decisions/ADR-0006-prot
   - **Reporting is gated on heater state below 40 °C.** With the heater on, the true value is always reported, including below 40 °C. With the heater off, the value is reported down to 40.0 °C and reads `0` below that. Switching the heater off while the temperature is already under 40 °C flips the value to `0` in the same second, and switching it back on restores the true reading just as promptly — see [STATE-012](#state-012--sub-40-c-reporting-and-the-idle-display-state).
 - **Interpretation**: The raw value is always Celsius-encoded (×10) regardless of the device's display unit setting — Fahrenheit is a display-layer conversion only, never reflected in the BLE value itself. The ×10 encoding therefore carries more precision than the device ever populates on the read side.
 - **Confidence**: Confirmed
-- **Implementation status**: Implemented (read-only) in `components/volcano/volcano.cpp`. Verified against real hardware, including the sub-40 °C gating behaviour — see [STATE-012](#state-012--sub-40-c-reporting-and-the-idle-display-state).
+- **Implementation status**: Implemented (read-only) in `components/volcano/volcano_ble_client.cpp`. Verified against real hardware, including the sub-40 °C gating behaviour — see [STATE-012](#state-012--sub-40-c-reporting-and-the-idle-display-state).
 
 ## STATE-008 — Status/flags register (partial)
 
@@ -116,7 +116,7 @@ Readable/notified device state. Format per [ADR-0006](../decisions/ADR-0006-prot
   Bit `0x2000` is not uniquely "vibration" — it's set during both vibration and pump activity, so it more likely represents something like "an auxiliary motor is active," with bit `0x1000` specifically distinguishing pump from vibration. Two independent third-party sources name bit `0x2000` "Air Pump On" without mentioning the vibration overlap — plausibly an incomplete third-party description rather than a contradiction.
 - **Confidence**: per-bit levels are given in the decode table above. Overall: Confirmed (the heater, pump and vibration bit behaviours; bit 9's latch; bit 10's clear edge; that the `0x2000` pulse is conditional on the vibration setting; and that panel-originated changes notify indistinguishably from commanded ones); Probable (that bit 13 marks a motor being active rather than the pump specifically, and that the register is evaluated on a roughly one-second cycle — the latter inferred from the distribution of bit 10's set-edge delays rather than measured directly); Unknown (what bits 0 and 1 mean, what bit 9's latch is used for, what governs bit 10's set edge, and the error mask)
 - **Note**: the official client treats this characteristic as a register it calls `PRJSTAT1`, and names three of its bits: bit 5 `HEIZUNG_ENA` (heater enable), bit 9 `ENABLE_AUTOBLESHUTDOWN` (automatic BLE shutdown enable), and bit 13 `PUMPE_FET_ENABLE` (pump FET enable). It also defines an error mask of `0x4018` (bits 3, 4 and 14), matching the value two third-party sources give. Bits 5 and 13 agree with what was observed here. The bit 13 name also explains the vibration/pump overlap noted above: it drives a motor FET rather than the pump specifically. Bit 9 does **not** agree: it changes as a consequence of heating, latching on the first target-reach and clearing at heater-off, with no settings change involved. Nor does it track the auto-shutoff countdown: that arms on any actuator starting, including a pump-on with the heater off, whereas bit 9 requires a heating cycle and sets only as the target is approached ([STATE-005](#state-005--auto-shutoff-countdown)). The observed behaviour is recorded above; the client's name for the bit is not adopted. Bits 0, 1, 10 and 12 are not named by the client.
-- **Implementation status**: Implemented (read-only), for bit 5 (heater) and bit 12 (pump) only, in `components/volcano/volcano.cpp`. Verified against real hardware, including that panel-originated toggles are reported indistinguishably from commanded ones. The remaining bits (0, 1, 9, 10, 13, and the error mask) are not implemented.
+- **Implementation status**: Implemented (read-only), for bit 5 (heater) and bit 12 (pump) only, in `components/volcano/volcano_ble_client.cpp`. Verified against real hardware, including that panel-originated toggles are reported indistinguishably from commanded ones. The remaining bits (0, 1, 9, 10, 13, and the error mask) are not implemented.
 
 ## STATE-009 — Temperature-step pulse on display/units register
 
@@ -140,7 +140,7 @@ Readable/notified device state. Format per [ADR-0006](../decisions/ADR-0006-prot
 - **Observation**: Bit 9 (`0x0200`) of the 4-byte value notified on this handle (the same register as [CMD-005](commands.md#cmd-005--set-display-on-cooling)) tracks the device's Celsius/Fahrenheit display setting: **set = Fahrenheit, clear = Celsius**. The setting is changed using the device's own simultaneous `+`/`-` panel gesture, and can also be written over BLE ([CMD-010](commands.md#cmd-010--set-display-units)); the app exposes no control for it. Reproduced across multiple sessions, and agrees with a third-party source. The bit has also been watched changing live over a subscription while the gesture was performed, with the device's own display switching between 210 °C and 410 °F for both target and current temperature as it did so, confirming that the bit and the displayed unit move together. Nothing else in the register moved with it — in particular bit 16 stayed clear, which is what separates a panel-driven setting change from a written one (see [`open-questions.md`](open-questions.md)). The official client calls this register `PRJSTAT2` and names this bit `FAHRENHEIT_ENA`, treating it with the same polarity: the bit clear selects Celsius, set selects Fahrenheit. This bit is on register `0x002e` and is unrelated to the same-numbered bit on register `0x002b` described in [STATE-008](#state-008--statusflags-register-partial).
 - **Interpretation**: The unit setting is a display-layer property only — temperature values on the wire are always Celsius-encoded regardless of it, per [STATE-007](#state-007--current-actual-temperature).
 - **Confidence**: Confirmed (polarity; that the bit tracks the displayed unit on both target and current temperature as the panel gesture is performed; and that the bit is writable, changing the displayed unit remotely — see [CMD-010](commands.md#cmd-010--set-display-units))
-- **Implementation status**: Implemented in `components/volcano/volcano.cpp`, both the decode of bit 9 and the write ([CMD-010](commands.md#cmd-010--set-display-units)). Verified against real hardware, including that a change made by the panel gesture is reported as readily as one written.
+- **Implementation status**: Implemented in `components/volcano/volcano_ble_client.cpp`, both the decode of bit 9 and the write ([CMD-010](commands.md#cmd-010--set-display-units)). Verified against real hardware, including that a change made by the panel gesture is reported as readily as one written.
 
 ## STATE-011 — Auto-shutoff behaviour
 
@@ -185,7 +185,7 @@ Readable/notified device state. Format per [ADR-0006](../decisions/ADR-0006-prot
 
   Four consequences for a controller: `0` on `0x0047` must never be treated as a temperature; a silent connection must not be treated as a dead one; no wake-up or reconnect step is needed before commanding a device whose display has gone blank; and a pump run started on a cooling device will be cut short without any command when the temperature crosses 40 °C, so a controller must not assume the pump is still running merely because it never switched it off.
 - **Confidence**: Confirmed (the heater-gated 40 °C threshold in both directions, that the pump does not lift it, the accompanying display state, that the link is not dropped, that target, pump and heater commands all take effect in this state, and that a downward crossing stops a running pump — reproduced, with a pump run started below 40 °C ruling out the state as the cause and a 4-minute run ruling out a run-time limit)
-- **Implementation status**: Implemented (the `0` → "no reading" gate on current temperature, in both directions) in `components/volcano/volcano.cpp`. Verified against real hardware, reproduced multiple times. The pump- and display-related aspects of this finding are not implemented, since this component does not yet read the pump or display state in this context.
+- **Implementation status**: Implemented (the `0` → "no reading" gate on current temperature, in both directions) in `components/volcano/volcano_ble_client.cpp`. Verified against real hardware, reproduced multiple times. The pump- and display-related aspects of this finding are not implemented, since this component does not yet read the pump or display state in this context.
 
 ## STATE-013 — Target temperature notifications
 
@@ -195,4 +195,4 @@ Readable/notified device state. Format per [ADR-0006](../decisions/ADR-0006-prot
   Writes issued by the connected client are almost never echoed: hardly any write to this handle is followed by a notification, and none has been followed by a notification carrying the value just written. There is one exception, and it matters. A write is sometimes answered within a fraction of a second by a notification carrying the *previous* target rather than the one just written, and that write then has no effect — the device neither heats toward the new value nor reports it — until the client sends it again. Observed in separate sessions, each time on a write following a run of writes a few seconds apart, each time with the temperature only moving after the re-send, and each time with the value notified back being a target the current temperature had just reached. It is intermittent: the same write spacing does not reliably reproduce it.
 - **Interpretation**: The device reports target changes it originates itself, which lets a controller stay in step with the panel rather than assuming it is the only thing setting the target. Since a held button emits every intermediate value, a controller should treat the stream as a live drag and act on where it settles rather than on each value in turn. Whether the absence of an echo on client writes is a general property or specific to the writing client is undetermined: no session has ever had a second client connected to compare against.
 - **Confidence**: Confirmed (that the characteristic notifies on device-side target changes, the encoding, and the intermediate-value stream); Unknown (why some writes are answered with the previously-set target, and whether a write can be silently dropped — see [`open-questions.md`](open-questions.md))
-- **Implementation status**: Implemented (this finding's notify/read side) in `components/volcano/volcano.cpp`. Verified against real hardware, including that panel-driven target changes are reported indistinguishably from commanded ones, matching [STATE-008](#state-008--statusflags-register-partial)'s finding for the status register. The write side is covered separately by [CMD-001](commands.md#cmd-001--set-target-temperature).
+- **Implementation status**: Implemented (this finding's notify/read side) in `components/volcano/volcano_ble_client.cpp`. Verified against real hardware, including that panel-driven target changes are reported indistinguishably from commanded ones, matching [STATE-008](#state-008--statusflags-register-partial)'s finding for the status register. The write side is covered separately by [CMD-001](commands.md#cmd-001--set-target-temperature).

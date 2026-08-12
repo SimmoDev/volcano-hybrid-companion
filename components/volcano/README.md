@@ -1,20 +1,35 @@
 # Volcano component
 
-This is the `volcano` ESPHome external component. It is a `ble_client` node ([ADR-0007](../../docs/decisions/ADR-0007-ble-connection-lifecycle.md)) that currently implements:
+This is the `volcano` ESPHome external component. Per [ADR-0009](../../docs/decisions/ADR-0009-volcano-abstraction-layer-interface.md), it is three types, each with its own file pair:
 
-- **Read-only state**: on each connection it resolves the status/flags register (`CHAR-008`), the auto-shutoff countdown (`CHAR-016`), current/target temperature (`CHAR-013`/`CHAR-014`) and the heater-runtime meter (`CHAR-022`/`CHAR-023`) by UUID, subscribes, reads their initial values, decodes them, and logs them. Current temperature's sub-40 °C "no reading" gate (STATE-012) is decoded explicitly rather than logged as a false `0.0` reading.
-- **Vibration**: `set_vibration()` writes the vibration setting (`CHAR-010`) — whether the device buzzes on reaching temperature — using the mask-and-action form CMD-004 confirms. The register bit is inverted (clear means enabled), which the component hides: the entity and method both read and write in the obvious sense. The register notifies, so it is subscribed rather than re-read after each write.
-- **Display units**: `set_display_units_fahrenheit()` writes the Celsius/Fahrenheit display setting (`CHAR-009`, CMD-010), the same bit the device's own simultaneous `+`/`−` panel gesture changes. Its polarity is *not* inverted, unlike the two settings sharing these registers: set selects Fahrenheit. Display-layer only — temperature values on the wire stay Celsius-encoded either way, so changing it alters what the device shows and nothing it reports. Every temperature this component reads or writes is Celsius, per [ADR-0008](../../docs/decisions/ADR-0008-temperature-units-handling.md); presenting Fahrenheit is a control interface's concern.
-- **Display on cooling**: `set_display_on_cooling()` writes the setting (`CHAR-009`) governing whether the device shows current temperature on its own display while cooling, using the same mask-and-action form and naming only that bit — the register's units bit and its unidentified bits are left alone. Display-only: current temperature keeps notifying over BLE either way. Its register notifies on every 1 °C temperature change, so the component logs only actual changes to the setting.
-- **LED brightness**: `set_led_brightness_percent()` writes the display brightness (`CHAR-015`) on the 0–100 scale CMD-002 records, read once per connection and re-read after each write. `0` switches the display off entirely rather than dimming it; any non-zero value restores it.
-- **Device information**: firmware version (`CHAR-005`), firmware BLE version (`CHAR-006`), serial number (`CHAR-007`), power supply rating (`CHAR-024`) and product line name (`CHAR-025`) are read once per connection. None of them notifies, so each is read explicitly; they are read one at a time rather than all at once, since a GATT client has only a small number of outstanding reads available. Three of the five are writable on the device and none is ever written here — writing `CHAR-007` would replace a real unit's serial number.
-- **Writes**: `set_auto_shutoff_duration_seconds()` writes the auto-shutoff duration (`CHAR-017`), refusing anything outside 60–21600 seconds — the range CMD-003 confirms accepted, from the floor this project verified through to an actual expiry up to the top of the official app's own range. Values outside it are unverified and are not written. `turn_heater_on()`/`turn_heater_off()`/`turn_pump_on()`/`turn_pump_off()` write the four one-byte trigger characteristics (`CHAR-018`–`CHAR-021`), each with the single value CMD-006 through CMD-009 confirm those characteristics accept. `set_target_temperature_decidegrees()` writes the target temperature (`CHAR-014`), refusing anything outside the 40.0–230.0 °C range CMD-001 confirms the official app's UI accepts.
+- **`VolcanoBleClient`** (`volcano_ble_client.h`/`.cpp`) — the BLE communication layer ([ADR-0002](../../docs/decisions/ADR-0002-volcano-component-architecture.md)). Owns the `ble_client` node lifecycle's GATT detail ([ADR-0007](../../docs/decisions/ADR-0007-ble-connection-lifecycle.md)): resolving every characteristic by UUID, subscribing, reading, writing, and every wire encoding/decoding. No BLE type or characteristic handle ever appears above this layer.
+- **`VolcanoDevice`** (`volcano_device.h`/`.cpp`) — the Volcano abstraction layer. Owns `VolcanoState`, the single authoritative record of device state, connection state (`DISCONNECTED`/`CONNECTING`/`READY`), and the requested-versus-confirmed handling every write goes through. Every field is a `DeviceValue<T>`: `is_known()` before trusting `value()`, and `requested()` while a write is outstanding. Has no BLE dependency and is not an ESPHome `Component`, so it can be constructed and exercised directly — including by a future control interface — without a Volcano, an ESP32, or ESPHome's runtime present.
+- **`VolcanoComponent`** (`volcano.h`/`.cpp`) — the ESPHome integration. Owns `Component`/`ble_client::BLEClientNode` registration and the optional entities below, and does no protocol work of its own: it is a consumer of `VolcanoDevice`'s interface, on equal footing with any other control interface built against it.
 
-- **Optional entities**: every value above can be exposed as a standard ESPHome entity, configured directly under the `volcano:` block — see "Configuration" below. Read-only values get a sensor or text_sensor; each writable one gets a single two-way entity that both reports the device's current value and sets a new one — a number for the temperatures and the duration, a switch for the heater and pump. These entities currently hold the only record of device state, which [ADR-0009](../../docs/decisions/ADR-0009-volcano-abstraction-layer-interface.md) reverses: they become one control interface among several, reading from a state model the component owns. They are not themselves the hardware-independent Volcano domain interface.
+`VolcanoDevice`'s interface, all Celsius/seconds/percent in the device's own units (never the wire's decidegrees):
 
-See `volcano.h` for the `TODO` markers showing where the remaining protocol coverage and the Volcano abstraction layer ([ADR-0002](../../docs/decisions/ADR-0002-volcano-component-architecture.md)) belong. That layer's interface — the state model, connection state, and the requested-versus-confirmed handling of writes — is specified in [ADR-0009](../../docs/decisions/ADR-0009-volcano-abstraction-layer-interface.md), which also splits this single class into three.
+```cpp
+void set_target_temperature(float celsius);
+void set_heater(bool on);
+void set_pump(bool on);
+void set_auto_shutoff_duration(uint16_t seconds);
+void set_led_brightness(uint8_t percent);
+void set_vibration(bool enabled);
+void set_display_on_cooling(bool enabled);
+void set_display_units_fahrenheit(bool fahrenheit);
+```
+
+Every temperature is Celsius, per [ADR-0008](../../docs/decisions/ADR-0008-temperature-units-handling.md) — presenting Fahrenheit is a control interface's concern, not this component's. Range enforcement (CMD-001's 40.0–230.0 °C, CMD-002's 0–100%, CMD-003's 60–21600 s) lives in `VolcanoBleClient`, the last gate before the wire; a command outside a confirmed range is refused and logged rather than sent. Vibration and display-on-cooling hide their registers' inverted bit polarity — the method and the device's observable behaviour agree, even though the bit written is the opposite.
+
+A command is a request, never an immediate state change (ADR-0002): `set_heater(true)` does not make `device.heater().value()` become `true`. Each field resolves through whichever confirmation source the protocol actually gives it — heater, pump, vibration, display-on-cooling and display-units resolve from the device's own notification; target temperature, LED brightness and auto-shutoff duration have no such notification (STATE-013), so each is confirmed by an explicit read-back issued right after the write. Either way, `requested()` clears once the device answers — matching what was asked, confirming it; answering with something else (STATE-013's silent-drop case) still clears it, with `value()` landing on whatever the device actually reported — or after a 5-second timeout with no answer at all, in which case `value()` is left untouched.
 
 Protocol behaviour to implement here is recorded in [`docs/protocol/`](../../docs/protocol/README.md). Per [ADR-0005](../../docs/decisions/ADR-0005-volcano-ble-discovery-methodology.md), only findings classified **Confirmed** back default production behaviour; Probable findings belong behind clearly marked experimental code, and Unknown behaviour must not be encoded as an assumption.
+
+## Optional entities
+
+Every value `VolcanoDevice` tracks can be exposed as a standard ESPHome entity, configured directly under the `volcano:` block — see "Configuration" below. Read-only values get a sensor or text_sensor; each writable one gets a single two-way entity that both reports the device's current value and sets a new one — a number for the temperatures and the duration, a switch for the heater and pump. `VolcanoComponent` is what wires these: an entity's `control()`/`write_state()` forwards into the matching `VolcanoDevice::set_*()`, and `VolcanoDevice`'s state-change callback publishes to whichever entities are configured, whenever a field they carry actually changes.
+
+Unknown state is handled per what each ESPHome entity type can express. `sensor` and `number` publish `NAN` (shown as `NA` on a `web_server` page); `text_sensor` clears its `has_state()`. A `switch` cannot express unknown at all — ESPHome's switch entity has no such state — so the heater, pump, vibration, display-on-cooling and display-units switches simply hold whatever they last published across a disconnect, rather than resetting or being forced to a value. The `connected` entity below is what tells a consumer whether that held value is still trustworthy.
 
 ## Configuration
 
@@ -31,11 +46,14 @@ volcano:
 
 The Volcano's BLE address is unique per unit and is deliberately never recorded in this repository (see [`docs/protocol/README.md`](../../docs/protocol/README.md)) — keep it in `secrets.yaml`, not in a committed config.
 
-Each value has a matching optional key, all omitted by default, each accepting the same options as the underlying [`sensor`](https://esphome.io/components/sensor/#config-sensor), [`text_sensor`](https://esphome.io/components/text_sensor/#config-text-sensor), [`number`](https://esphome.io/components/number/#config-number) or [`switch`](https://esphome.io/components/switch/#config-switch) platform (`name`, `id`, `mode`, etc.):
+Each value has a matching optional key, all omitted by default, each accepting the same options as the underlying [`sensor`](https://esphome.io/components/sensor/#config-sensor), [`text_sensor`](https://esphome.io/components/text_sensor/#config-text-sensor), [`number`](https://esphome.io/components/number/#config-number), [`switch`](https://esphome.io/components/switch/#config-switch) or [`binary_sensor`](https://esphome.io/components/binary_sensor/#config-binary-sensor) platform (`name`, `id`, `mode`, etc.):
 
 ```yaml
 volcano:
   ble_client_id: volcano_ble_client
+  # Read-only (binary_sensor)
+  connected:
+    name: "Connected"
   # Read-only (sensor)
   current_temperature:
     name: "Current temperature"
@@ -90,13 +108,13 @@ Entities default to an entity category reflecting what they are, so a UI can gro
 
 | Category | Entities |
 |---|---|
-| *(none)* | `heater`, `pump`, `current_temperature`, `target_temperature`, `auto_shutoff_countdown` — live state and primary control |
+| *(none)* | `connected`, `heater`, `pump`, `current_temperature`, `target_temperature`, `auto_shutoff_countdown` — connection state, live state and primary control |
 | `config` | `auto_shutoff_duration`, `led_brightness`, `vibration`, `display_on_cooling`, `display_units_fahrenheit` — settings that configure how the device behaves |
 | `diagnostic` | `hours_of_operation`, `minutes_of_operation` and the five device-information strings — information about the device |
 
-`auto_shutoff_countdown` sits with the controls rather than the diagnostics despite being read-only: it is live operational state that changes every second, and it is the backstop against the heater running unattended, so it belongs where the actuator state is read. The lifetime meters alongside it in `diagnostic` change too slowly to inform anything in the moment. Every category can be overridden per entity in YAML.
+`auto_shutoff_countdown` sits with the controls rather than the diagnostics despite being read-only: it is live operational state that changes every second, and it is the backstop against the heater running unattended, so it belongs where the actuator state is read. `connected` sits there too, despite also being read-only: it is what every other entity's currently-displayed value depends on being trustworthy, not background information about the device. The lifetime meters alongside the diagnostics change too slowly to inform anything in the moment. Every category can be overridden per entity in YAML.
 
-The two switches never publish optimistically — the state shown is the one the device reported, not the one that was requested — and their restore mode is fixed to `DISABLED`. Restoring a remembered state would actuate the heater or pump at boot, before the device has said what it is actually doing.
+None of the five switches ever publishes optimistically — the state shown is the one the device reported, not the one that was requested — and their restore mode is fixed to `DISABLED`. Restoring a remembered state would actuate the heater or pump at boot, before the device has said what it is actually doing. None of them can represent "unknown" either (see "Optional entities" above): each holds whatever it last published across a disconnect, with `connected` as the signal that a held value may no longer reflect the device.
 
 ## Notification limits
 

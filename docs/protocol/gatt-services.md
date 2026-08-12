@@ -31,7 +31,7 @@ Findings about how the Volcano Hybrid presents itself over BLE: how it is discov
 
   The device requires no proprietary handshake or security setup for the operations exercised: a standard GATT client reached and drove it through a browser API. The eight subscribed descriptors correspond to the status/flags register, the display/units register, current and target temperature, the auto-shutoff countdown, hours and minutes of operation, and SVC-003's read+notify characteristic — this client subscribed to 8 of the device's 16 notify-capable characteristics, not all of them.
 - **Confidence**: Confirmed (MTU, CCCD requirement, the time to reach a synchronised state, write-type support per the property bitmasks, and that every operation exercised succeeded with neither pairing nor encryption); Unknown (whether any characteristic not yet exercised requires an encrypted link, which a device only reveals on access)
-- **Implementation status**: Implemented in `components/volcano/volcano.cpp` for the parts a client must perform: subscription is by explicit CCCD write, via `esp_ble_gattc_register_for_notify()`, and every operation is issued over an unencrypted link with no pairing, as this finding records is sufficient. The MTU is left at whatever the parent `ble_client` negotiates, which no write here approaches — the longest is 4 bytes. This component subscribes to its own set of characteristics rather than the official client's eight, and reaches a synchronised state on its own schedule; the six-second figure above is that client's, not a target.
+- **Implementation status**: Implemented in `components/volcano/volcano_ble_client.cpp` for the parts a client must perform: subscription is by explicit CCCD write, via `esp_ble_gattc_register_for_notify()`, and every operation is issued over an unencrypted link with no pairing, as this finding records is sufficient. The MTU is left at whatever the parent `ble_client` negotiates, which no write here approaches — the longest is 4 bytes. This component subscribes to its own set of characteristics rather than the official client's eight, and reaches a synchronised state on its own schedule; the six-second figure above is that client's, not a target.
 
 ## CONN-002 — Notification delivery model
 
@@ -45,7 +45,7 @@ Findings about how the Volcano Hybrid presents itself over BLE: how it is discov
   The extreme case is a device sitting below 40 °C with the heater off: a connection has been held for over four hours without a single notification on any subscribed characteristic, while the device remained fully responsive to commands throughout ([STATE-012](state-model.md#state-012--sub-40-c-reporting-and-the-idle-display-state)).
 - **Interpretation**: Notifications are sent on change, not on a schedule. Two consequences for an implementation: a client must read a characteristic after subscribing to establish its initial value, since none is pushed; and the absence of notifications means only that nothing changed, so it cannot be used as a liveness or connection-health signal — an idle device stays silent indefinitely while remaining connected.
 - **Confidence**: Confirmed (on-change delivery, absence of an initial notification, and the 60-second minutes-of-operation tick, which is a device rule rather than a measured rate — see [STATE-006](state-model.md#state-006--minutes-of-operation)); Probable (that the remaining intervals generalise, since those reflect how fast a value happened to be moving)
-- **Implementation status**: Implemented in `components/volcano/volcano.cpp` for every characteristic it subscribes to — the initial value is read explicitly after subscribing rather than assumed. The same reasoning is applied to the auto-shutoff duration ([CHAR-017](characteristics.md#char-017--auto-shutoff-duration)), which has no notify at all and so is read once per connection. Verified against real hardware.
+- **Implementation status**: Implemented in `components/volcano/volcano_ble_client.cpp` for every characteristic it subscribes to — the initial value is read explicitly after subscribing rather than assumed. The same reasoning is applied to the auto-shutoff duration ([CHAR-017](characteristics.md#char-017--auto-shutoff-duration)), which has no notify at all and so is read once per connection. Verified against real hardware.
 
 ## CONN-003 — Single connection at a time
 
@@ -111,7 +111,7 @@ Findings about how the Volcano Hybrid presents itself over BLE: how it is discov
 - **Observation**: 22 characteristics, all read at least once. See [`characteristics.md`](characteristics.md) for the ones with a known identity, and [`open-questions.md`](open-questions.md) for the rest, which have confirmed raw values but unknown meaning.
 - **Interpretation**: Holds device information (serial number, firmware versions), general settings (vibration, display-on-cooling), and the heater/pump/vibration status register.
 - **Confidence**: Confirmed
-- **Implementation status**: Implemented in the sense that applies to a service: `components/volcano/volcano.cpp` resolves characteristics within it by (service, characteristic) UUID pair on every connection. Individual characteristics carry their own implementation status in [`characteristics.md`](characteristics.md); several within this service remain unimplemented.
+- **Implementation status**: Implemented in the sense that applies to a service: `components/volcano/volcano_ble_client.cpp` resolves characteristics within it by (service, characteristic) UUID pair on every connection. Individual characteristics carry their own implementation status in [`characteristics.md`](characteristics.md); several within this service remain unimplemented.
 
 ## SVC-006 — Control/actuator service
 
@@ -120,7 +120,7 @@ Findings about how the Volcano Hybrid presents itself over BLE: how it is discov
 - **Observation**: 17 characteristics, all read at least once. See [`characteristics.md`](characteristics.md) for the ones with a known identity, and [`open-questions.md`](open-questions.md) for the rest.
 - **Interpretation**: Holds the device's controllable state: temperature, heater, pump, LED brightness, and auto-shutoff.
 - **Confidence**: Confirmed
-- **Implementation status**: Implemented in the sense that applies to a service: `components/volcano/volcano.cpp` resolves characteristics within it by (service, characteristic) UUID pair on every connection. Individual characteristics carry their own implementation status in [`characteristics.md`](characteristics.md); several within this service remain unimplemented.
+- **Implementation status**: Implemented in the sense that applies to a service: `components/volcano/volcano_ble_client.cpp` resolves characteristics within it by (service, characteristic) UUID pair on every connection. Individual characteristics carry their own implementation status in [`characteristics.md`](characteristics.md); several within this service remain unimplemented.
 
 ## SVC-007 — Unidentified service
 

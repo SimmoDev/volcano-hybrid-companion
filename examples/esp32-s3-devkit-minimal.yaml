@@ -47,6 +47,16 @@ volcano:
   # including on-panel changes. Everything the device lets us both read
   # and write is a single two-way control rather than a readout plus
   # separate setters.
+  #
+  # Whether the abstraction layer's state is READY (ADR-0009) -- the link
+  # is up AND the initial read sweep has completed. This is what the
+  # switches below cannot tell you themselves: none of them can express
+  # "unknown", so each holds its last state across a disconnect rather than
+  # resetting. This is the entity to watch instead.
+  connected:
+    name: "Connected"
+    web_server:
+      sorting_weight: 5
   current_temperature:
     name: "Current temperature"
     web_server:

@@ -1,6 +1,6 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome.components import ble_client, number, sensor, switch, text_sensor
+from esphome.components import ble_client, binary_sensor, number, sensor, switch, text_sensor
 from esphome.const import (
     CONF_CURRENT_TEMPERATURE,
     CONF_HEATER,
@@ -9,6 +9,7 @@ from esphome.const import (
     CONF_MIN_VALUE,
     CONF_STEP,
     CONF_TARGET_TEMPERATURE,
+    DEVICE_CLASS_CONNECTIVITY,
     DEVICE_CLASS_DURATION,
     DEVICE_CLASS_SWITCH,
     DEVICE_CLASS_TEMPERATURE,
@@ -31,23 +32,26 @@ from esphome.const import (
     UNIT_SECOND,
 )
 
-# Volcano component (ADR-0002, ADR-0003, ADR-0007).
+# Volcano component (ADR-0002, ADR-0003, ADR-0007, ADR-0009).
 #
-# The BLE communication layer: connects via the configured ble_client,
-# resolves characteristics by UUID, reads and decodes their values, and
-# writes the ones documented in components/volcano/README.md. Each decoded
-# value can optionally be exposed as an entity configured below -- a sensor
-# for the read-only ones, a number or switch for the writable ones, each of
-# those reporting the device's state as well as setting it -- for use on
-# e.g. an ESPHome web_server page. See volcano.h / volcano.cpp for the TODO
-# markers showing where the remaining protocol coverage and the
-# hardware-independent Volcano abstraction layer belong.
+# Three parts, per ADR-0009: VolcanoBleClient (the BLE communication layer:
+# connects via the configured ble_client, resolves characteristics by UUID,
+# reads/writes and encodes/decodes them), VolcanoDevice (the Volcano
+# abstraction layer: the authoritative state model, connection state, and
+# requested-versus-confirmed write handling), and VolcanoComponent (this
+# component: ESPHome integration only, consuming VolcanoDevice like any
+# other control interface). Each value can optionally be exposed as an
+# entity configured below -- a sensor for the read-only ones, a number or
+# switch for the writable ones, each reporting the device's state as well
+# as setting it -- for use on e.g. an ESPHome web_server page. See
+# components/volcano/README.md for the full picture.
 
 CODEOWNERS = ["@SimmoDev"]
 DEPENDENCIES = ["ble_client"]
-AUTO_LOAD = ["sensor", "number", "switch", "text_sensor"]
+AUTO_LOAD = ["binary_sensor", "sensor", "number", "switch", "text_sensor"]
 
 CONF_PUMP = "pump"
+CONF_CONNECTED = "connected"
 CONF_AUTO_SHUTOFF_COUNTDOWN = "auto_shutoff_countdown"
 CONF_AUTO_SHUTOFF_DURATION = "auto_shutoff_duration"
 CONF_FIRMWARE_VERSION = "firmware_version"
@@ -163,6 +167,14 @@ CONFIG_SCHEMA = (
                 accuracy_decimals=0,
                 device_class=DEVICE_CLASS_DURATION,
                 state_class=STATE_CLASS_MEASUREMENT,
+            ),
+            # ADR-0009: whether VolcanoDevice's connection state is READY --
+            # the link is up AND the initial read sweep has completed, not
+            # merely that the link exists. No entity category: this is what
+            # every other entity's own validity depends on, so it groups
+            # with the primary state/controls rather than the diagnostics.
+            cv.Optional(CONF_CONNECTED): binary_sensor.binary_sensor_schema(
+                device_class=DEVICE_CLASS_CONNECTIVITY,
             ),
             # DISABLED restore mode, deliberately: any other mode makes the
             # switch apply a remembered state at boot, which would actuate
@@ -298,6 +310,9 @@ async def to_code(config):
     if countdown_config := config.get(CONF_AUTO_SHUTOFF_COUNTDOWN):
         sens = await sensor.new_sensor(countdown_config)
         cg.add(var.set_auto_shutoff_countdown_sensor(sens))
+
+    if connected_config := config.get(CONF_CONNECTED):
+        cg.add(var.set_connected_binary_sensor(await binary_sensor.new_binary_sensor(connected_config)))
 
     if heater_config := config.get(CONF_HEATER):
         sw = await switch.new_switch(heater_config)

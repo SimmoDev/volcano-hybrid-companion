@@ -15,7 +15,7 @@ Write-triggered behaviour. Format per [ADR-0006](../decisions/ADR-0006-protocol-
 - **Interpretation**: The value is always Celsius-encoded (×10) regardless of the device's display unit setting — see [STATE-007](state-model.md#state-007--current-actual-temperature) for the corresponding read-side behaviour. A third-party source additionally claims temperature reads always round to the nearest °C regardless of display units, while writes accept full precision. The read half of that claim is borne out directly: every current-temperature value observed is a whole number of degrees Celsius, without exception ([STATE-007](state-model.md#state-007--current-actual-temperature)). The write half is now directly confirmed rather than inferred: the target characteristic is a separate attribute from current temperature, and the whole-degree rounding STATE-007 documents does not apply to it.
 - **Confidence**: Confirmed (write behaviour, Celsius encoding, that current-temperature reads are always whole degrees, that the client issues sub-degree writes, and that the device retains sub-degree write precision)
 - **Note**: the official app's UI exposes a settable range of 40–230 °C (displayed as 104–446 °F). The app clamps to that range: once the maximum is reached, further increase presses re-send the same `fc 08 00 00` (2300 = 230.0 °C) rather than a higher value. This project's own ESP32/ESPHome client enforces the same range in software, refusing to write outside it, so what the device itself would do with an out-of-range write remains untested — see [`open-questions.md`](open-questions.md).
-- **Implementation status**: Implemented in `components/volcano/volcano.cpp` (`set_target_temperature_decidegrees()`), which refuses values outside the confirmed 40.0–230.0 °C range rather than writing an unverified value. Verified against real hardware, including sub-degree precision and both range boundaries, without disrupting heater/pump/countdown behaviour.
+- **Implementation status**: Implemented in `components/volcano/volcano_ble_client.cpp` (`write_target_temperature()`), which refuses values outside the confirmed 40.0–230.0 °C range rather than writing an unverified value. Verified against real hardware, including sub-degree precision and both range boundaries, without disrupting heater/pump/countdown behaviour.
 
 ## CMD-002 — Set LED brightness
 
@@ -28,23 +28,23 @@ Write-triggered behaviour. Format per [ADR-0006](../decisions/ADR-0006-protocol-
 
   This is a different state from the blanking in [STATE-012](state-model.md#state-012--sub-40-c-reporting-and-the-idle-display-state), which drops the temperature readout but leaves the Bluetooth and power indicators lit. Brightness `0` extinguishes those too, so the two are distinguishable by looking at the device.
 - **Confidence**: Confirmed (encoding, the 0–100 scale, that `0` switches the display off rather than dimming it, and that a non-zero write restores it)
-- **Implementation status**: Implemented in `components/volcano/volcano.cpp` (`set_led_brightness_percent()`), together with a read on each connection and the read-back that confirms each write. Verified against real hardware across the scale, including `0` and its restoration.
+- **Implementation status**: Implemented in `components/volcano/volcano_ble_client.cpp` (`write_led_brightness()`), together with a read on each connection and the read-back that confirms each write. Verified against real hardware across the scale, including `0` and its restoration.
 
 ## CMD-003 — Set auto-shutoff duration
 
 - **Handle**: `0x0057`
 - **Observation**: 2-byte little-endian value in seconds (e.g. raw bytes `30 2a` = 10800s = 180 min). The app's UI spans 30 minutes (`08 07` = 1800s) to 360 minutes (`60 54` = 21600s); writes at both ends of that range have been captured. Observed across several distinct duration settings and reproduced across multiple sessions. The write sets the duration used the next time the countdown arms — which is any actuator starting from idle, not heater-on specifically; it does not reload a countdown already running. See [STATE-005](state-model.md#state-005--auto-shutoff-countdown).
 
-  **The device accepts a duration well below the app's 30-minute floor.** Writing `3c 00` (60s) while idle was read back unchanged, loaded in full at the next heater-on rather than being clamped to 1800, decremented at the usual one-per-second rate, and reached `0`, at which point the device switched the heater off exactly as at any other expiry (see [STATE-011](state-model.md#state-011--auto-shutoff-behaviour)). Reproduced across separate connections. The app's 30-minute figure is a UI constraint, not a device-enforced minimum. Issued from this project's own ESP32/ESPHome client (`components/volcano/volcano.cpp`), not the app.
+  **The device accepts a duration well below the app's 30-minute floor.** Writing `3c 00` (60s) while idle was read back unchanged, loaded in full at the next heater-on rather than being clamped to 1800, decremented at the usual one-per-second rate, and reached `0`, at which point the device switched the heater off exactly as at any other expiry (see [STATE-011](state-model.md#state-011--auto-shutoff-behaviour)). Reproduced across separate connections. The app's 30-minute figure is a UI constraint, not a device-enforced minimum. Issued from this project's own ESP32/ESPHome client (`components/volcano/volcano_ble_client.cpp`), not the app.
 - **Confidence**: Confirmed (encoding, that the app's UI spans that range, that the write applies at the next arming rather than reloading a running countdown, and that a 60-second duration is accepted, read back unchanged, loaded at the next arming, and honoured through to an actual expiry — see [STATE-005](state-model.md#state-005--auto-shutoff-countdown))
-- **Implementation status**: Implemented in `components/volcano/volcano.cpp` (`set_auto_shutoff_duration_seconds()`), which refuses durations outside the confirmed 60–21600s range rather than writing an unverified value. Verified against real hardware, including a full expiry at the shorter duration.
+- **Implementation status**: Implemented in `components/volcano/volcano_ble_client.cpp` (`write_auto_shutoff_duration()`), which refuses durations outside the confirmed 60–21600s range rather than writing an unverified value. Verified against real hardware, including a full expiry at the shorter duration.
 
 ## CMD-004 — Set vibration
 
 - **Handle**: `0x0031`
 - **Observation**: 4-byte write in the register-bit form described in the note below: raw bytes `00 04 00 00` = on, `00 04 01 00` = off. The first two bytes are the bit mask `0x0400`, and the third selects clear (`00`) or set (`01`). Reproduced across repeated toggles in both directions. A third-party source states `0x000400` = on and `0x010400` = off, which matches these bytes exactly once read as a 32-bit little-endian value.
 - **Confidence**: Confirmed
-- **Implementation status**: Implemented in `components/volcano/volcano.cpp` (`set_vibration()`), the first use of the mask-and-action write form. Verified against real hardware against the physical effect rather than the register alone: with the setting written enabled and then disabled alternately, the device vibrated on reaching target only in the enabled cases. Reproduced in both directions, with each target change large enough to clear bit 10 of the status register, which [STATE-008](state-model.md#state-008--statusflags-register-partial) records as a precondition for the alert firing at all.
+- **Implementation status**: Implemented in `components/volcano/volcano_ble_client.cpp` (`write_vibration()`), the first use of the mask-and-action write form. Verified against real hardware against the physical effect rather than the register alone: with the setting written enabled and then disabled alternately, the device vibrated on reaching target only in the enabled cases. Reproduced in both directions, with each target change large enough to clear bit 10 of the status register, which [STATE-008](state-model.md#state-008--statusflags-register-partial) records as a precondition for the alert firing at all.
 
 ## CMD-005 — Set display on cooling
 
@@ -59,7 +59,7 @@ Write-triggered behaviour. Format per [ADR-0006](../decisions/ADR-0006-protocol-
 
   Its visible effect is bounded by [STATE-012](state-model.md#state-012--sub-40-c-reporting-and-the-idle-display-state): below 40 °C with the heater off the device shows no temperature whatever this setting says, so the two states are only distinguishable while cooling above 40 °C.
 - **Confidence**: Confirmed (write encoding, reproduced in both directions; that the setting governs whether current temperature is displayed while cooling; that bits 12 and 16 of the notified value track it together; that BLE notification is unaffected; and that its visible effect is confined to temperatures above the STATE-012 threshold); Unknown (what bit 16 represents beyond tracking this setting)
-- **Implementation status**: Implemented in `components/volcano/volcano.cpp` (`set_display_on_cooling()`), using the same mask-and-action form as [CMD-004](#cmd-004--set-vibration) and naming only this bit, so the register's units bit and unidentified bits are untouched. Verified against real hardware against the device's own display in both states.
+- **Implementation status**: Implemented in `components/volcano/volcano_ble_client.cpp` (`write_display_on_cooling()`), using the same mask-and-action form as [CMD-004](#cmd-004--set-vibration) and naming only this bit, so the register's units bit and unidentified bits are untouched. Verified against real hardware against the device's own display in both states.
 
 ## CMD-010 — Set display units
 
@@ -69,7 +69,7 @@ Write-triggered behaviour. Format per [ADR-0006](../decisions/ADR-0006-protocol-
   **The polarity is not inverted here.** Setting the bit selects Fahrenheit, so enabling this feature writes the `01` action — the opposite of vibration and display on cooling, which write `00` to enable. This is the case the setting-bit note below warns about: the inversion is a property of those two settings, not of the register.
 - **Interpretation**: Display units are settable remotely, not only by the device's own simultaneous `+`/`-` panel gesture. The setting is display-layer only: temperature values on the wire remain Celsius-encoded regardless, per [STATE-007](state-model.md#state-007--current-actual-temperature), so a client changing this alters what the device shows and nothing it reports.
 - **Confidence**: Confirmed (encoding, that the device accepts the write in both directions, and that the display follows it)
-- **Implementation status**: Implemented in `components/volcano/volcano.cpp` (`set_display_units_fahrenheit()`). Verified against real hardware in both directions, with the device's own display following the write.
+- **Implementation status**: Implemented in `components/volcano/volcano_ble_client.cpp` (`write_display_units_fahrenheit()`). Verified against real hardware in both directions, with the device's own display following the write.
 
 ### Note: setting-bit writes
 
@@ -86,28 +86,28 @@ Note the polarity is inverted for both documented settings: the bit **clear** me
 - **Handle**: `0x005c`
 - **Observation**: Writing value `00` triggers the action. Reproduced across multiple sessions. Reading this handle returns `0x00` — see the note below.
 - **Confidence**: Confirmed (that a write of `00` switches the heater on); Unknown (whether any other value is accepted — only `00` has ever been written — see [`open-questions.md`](open-questions.md))
-- **Implementation status**: Implemented in `components/volcano/volcano.cpp` (`turn_heater_on()`). Verified against real hardware, including that the status/flags register reflects the change (STATE-008) and the auto-shutoff countdown arms accordingly (STATE-005).
+- **Implementation status**: Implemented in `components/volcano/volcano_ble_client.cpp` (`write_heater(true)`). Verified against real hardware, including that the status/flags register reflects the change (STATE-008) and the auto-shutoff countdown arms accordingly (STATE-005).
 
 ## CMD-007 — Heater off
 
 - **Handle**: `0x005e`
 - **Observation**: Writing value `00` triggers the action, mirroring CMD-006's pairing shape (and the pump on/off pairing, CMD-008/CMD-009). Reproduced across multiple sessions. Reading this handle returns `0x00` — see the note below.
 - **Confidence**: Confirmed (that a write of `00` switches the heater off); Unknown (whether any other value is accepted — only `00` has ever been written — see [`open-questions.md`](open-questions.md))
-- **Implementation status**: Implemented in `components/volcano/volcano.cpp` (`turn_heater_off()`). Verified against real hardware, including that the status/flags register reflects the change (STATE-008) and the auto-shutoff countdown resets to idle accordingly (STATE-005).
+- **Implementation status**: Implemented in `components/volcano/volcano_ble_client.cpp` (`write_heater(false)`). Verified against real hardware, including that the status/flags register reflects the change (STATE-008) and the auto-shutoff countdown resets to idle accordingly (STATE-005).
 
 ## CMD-008 — Pump on
 
 - **Handle**: `0x0064`
 - **Observation**: Writing value `00` triggers the action. Reproduced across repeated pump toggles performed in isolation, with heater state held constant. Reading this handle returns `0x00` — see the note below.
 - **Confidence**: Confirmed (that a write of `00` switches the pump on); Unknown (whether any other value is accepted — only `00` has ever been written — see [`open-questions.md`](open-questions.md))
-- **Implementation status**: Implemented in `components/volcano/volcano.cpp` (`turn_pump_on()`). Verified against real hardware, including that the status/flags register reflects the change (STATE-008, `0x3000` with the heater off) and the auto-shutoff countdown arms accordingly (STATE-005).
+- **Implementation status**: Implemented in `components/volcano/volcano_ble_client.cpp` (`write_pump(true)`). Verified against real hardware, including that the status/flags register reflects the change (STATE-008, `0x3000` with the heater off) and the auto-shutoff countdown arms accordingly (STATE-005).
 
 ## CMD-009 — Pump off
 
 - **Handle**: `0x0066`
 - **Observation**: Writing value `00` triggers the action. Reproduced across repeated pump toggles performed in isolation, with heater state held constant. Reading this handle returns `0x00` — see the note below.
 - **Confidence**: Confirmed (that a write of `00` switches the pump off); Unknown (whether any other value is accepted — only `00` has ever been written — see [`open-questions.md`](open-questions.md))
-- **Implementation status**: Implemented in `components/volcano/volcano.cpp` (`turn_pump_off()`). Verified against real hardware, including that the status/flags register reflects the change (STATE-008) and the auto-shutoff countdown resets to idle accordingly (STATE-005).
+- **Implementation status**: Implemented in `components/volcano/volcano_ble_client.cpp` (`write_pump(false)`). Verified against real hardware, including that the status/flags register reflects the change (STATE-008) and the auto-shutoff countdown resets to idle accordingly (STATE-005).
 
 ### Note: the trigger characteristics
 

@@ -55,7 +55,7 @@ Formatting expectations have not yet been defined concretely; `components/volcan
 - **ADRs**: `docs/decisions/ADR-NNNN-short-kebab-case-title.md`, numbered sequentially, never reused or renumbered once accepted.
 - **Protocol documentation**: fixed filenames under `docs/protocol/` as defined in [ADR-0006](decisions/ADR-0006-protocol-documentation-structure.md) (`README.md`, `gatt-services.md`, `characteristics.md`, `commands.md`, `state-model.md`, `open-questions.md`).
 - **General directories and files**: use lower-kebab-case where practical (e.g. `components/volcano/`). Established conventional filenames such as `README.md`, `LICENSE`, and tool-required files are exceptions.
-- **C++ source files**: `components/volcano/` currently uses lowercase filenames matching the component name (`volcano.h`, `volcano.cpp`), following typical ESPHome external component convention; no further formal naming convention has been decided beyond that.
+- **C++ source files**: `components/volcano/` uses lowercase filenames matching the component name for the ESPHome integration itself (`volcano.h`, `volcano.cpp`), following typical ESPHome external component convention. Its other classes each get their own file pair (or a header alone, for an interface with no implementation of its own), named for the class in snake_case — `volcano_ble_client.h`/`.cpp` for `VolcanoBleClient`, `volcano_device.h`/`.cpp` for `VolcanoDevice`, `volcano_ble_client_observer.h` for `VolcanoBleClientObserver` — established when [ADR-0009](decisions/ADR-0009-volcano-abstraction-layer-interface.md) split the component into multiple classes.
 
 ## Naming conventions — protocol findings
 
