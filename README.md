@@ -29,14 +29,14 @@ ESPHome provides the firmware framework this project is built on, and also provi
 
 ## Development Phases
 
-**Phase 1 — BLE foundation (current)**
+**Phase 1 — BLE foundation (complete)**
 - Develop on an ESP32-S3-WROOM-1-N16R8 development board.
 - Use ESPHome as the firmware framework.
 - Document and validate the Volcano Hybrid BLE protocol through observation and testing.
 - Implement the hardware-independent Volcano component.
 - Expose it as an ESPHome external component.
 
-**Phase 2 — Local standalone remote**
+**Phase 2 — Local standalone remote (next)**
 - Port the working firmware to the M5Stack Dial.
 - Add rotary encoder input, touchscreen, and a local UI.
 - The Dial should fully control the Volcano with no external dependencies.
