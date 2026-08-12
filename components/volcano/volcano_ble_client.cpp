@@ -163,6 +163,11 @@ void VolcanoBleClient::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
       this->vibration_handle_ = 0;
       this->display_register_handle_ = 0;
       this->display_on_cooling_log_state_ = -1;
+      // Any write queued here will never get its ESP_GATTC_WRITE_CHAR_EVT
+      // now the link is gone; leaving it would let a future connection's
+      // first completion on this handle pop a stale entry instead of its
+      // own.
+      this->display_register_pending_writes_.clear();
       this->pending_subscriptions_ = 0;
       this->static_read_count_ = 0;
       this->static_read_index_ = 0;
@@ -521,11 +526,21 @@ void VolcanoBleClient::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
         }
       } else if (param->write.handle == this->display_register_handle_) {
         // Notifies, so no read-back: decode_display_register_() reports
-        // via the observer on its own.
-        if (param->write.status != ESP_GATT_OK) {
-          ESP_LOGW(TAG, "Display-on-cooling write failed, status=%d", param->write.status);
-          if (this->observer_ != nullptr)
-            this->observer_->on_write_failed(this->display_register_last_write_field_);
+        // via the observer on its own. write_display_on_cooling() and
+        // write_display_units_fahrenheit() can each be called independently
+        // of the other, so which field this completion belongs to is the
+        // front of display_register_pending_writes_, not whichever call
+        // happened to run most recently -- see the member's declaration.
+        if (this->display_register_pending_writes_.empty()) {
+          ESP_LOGW(TAG, "Display/units register write completed with no pending write tracked");
+        } else {
+          VolcanoField field = this->display_register_pending_writes_.front();
+          this->display_register_pending_writes_.pop_front();
+          if (param->write.status != ESP_GATT_OK) {
+            ESP_LOGW(TAG, "Display/units register write failed, status=%d", param->write.status);
+            if (this->observer_ != nullptr)
+              this->observer_->on_write_failed(field);
+          }
         }
       } else if (param->write.handle == this->vibration_handle_) {
         // No read-back here: unlike the write-only-readable settings, this
@@ -861,7 +876,6 @@ bool VolcanoBleClient::write_display_units_fahrenheit(bool fahrenheit) {
     ESP_LOGW(TAG, "Display/units register not resolved; not connected?");
     return false;
   }
-  this->display_register_last_write_field_ = VolcanoField::DISPLAY_UNITS_FAHRENHEIT;
   // CMD-010's confirmed mask-and-action form, naming only the units bit.
   // The action byte is NOT inverted here: set selects Fahrenheit, unlike
   // the two settings below where clear enables.
@@ -879,6 +893,10 @@ bool VolcanoBleClient::write_display_units_fahrenheit(bool fahrenheit) {
     ESP_LOGW(TAG, "esp_ble_gattc_write_char failed, status=%d", status);
     return false;
   }
+  // Queued only once the write is actually in flight, so a synchronous
+  // esp_ble_gattc_write_char() failure above never leaves a stale entry for
+  // an ESP_GATTC_WRITE_CHAR_EVT that will now never arrive.
+  this->display_register_pending_writes_.push_back(VolcanoField::DISPLAY_UNITS_FAHRENHEIT);
   return true;
 }
 
@@ -887,7 +905,6 @@ bool VolcanoBleClient::write_display_on_cooling(bool enabled) {
     ESP_LOGW(TAG, "Display/units register not resolved; not connected?");
     return false;
   }
-  this->display_register_last_write_field_ = VolcanoField::DISPLAY_ON_COOLING;
   // CMD-005's confirmed mask-and-action form, identical in shape to CMD-004
   // and naming only the display-on-cooling bit -- so the units bit and the
   // register's unidentified bits are left alone.
@@ -905,6 +922,7 @@ bool VolcanoBleClient::write_display_on_cooling(bool enabled) {
     ESP_LOGW(TAG, "esp_ble_gattc_write_char failed, status=%d", status);
     return false;
   }
+  this->display_register_pending_writes_.push_back(VolcanoField::DISPLAY_ON_COOLING);
   return true;
 }
 

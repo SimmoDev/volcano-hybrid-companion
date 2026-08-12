@@ -6,6 +6,7 @@
 #include "esphome/components/esp32_ble_tracker/esp32_ble_tracker.h"
 
 #include <cstdint>
+#include <deque>
 #include <string>
 
 #include <esp_gattc_api.h>
@@ -114,11 +115,19 @@ class VolcanoBleClient {
 
   // CHAR-009 carries two independent settings (display-on-cooling, CMD-005;
   // display units, CMD-010) behind one handle, written with two distinct
-  // mask-and-action payloads. Writes to it are never concurrent -- this
-  // class issues one write at a time -- so recording which setting the
-  // most recent write targeted is enough to attribute an async write
-  // failure (ESP_GATTC_WRITE_CHAR_EVT) to the right field.
-  VolcanoField display_register_last_write_field_{VolcanoField::DISPLAY_ON_COOLING};
+  // mask-and-action payloads. write_display_on_cooling() and
+  // write_display_units_fahrenheit() can each be called independently --
+  // e.g. two entities toggled in quick succession -- so a write to one can
+  // be issued before the other's ESP_GATTC_WRITE_CHAR_EVT arrives. Tracking
+  // "the most recent write" in one field would attribute that event to
+  // whichever call happened to run last, not the write it actually
+  // completes, so this is a FIFO of every write issued but not yet
+  // completed on this handle instead: each write_*() pushes its field only
+  // once esp_ble_gattc_write_char() itself reports success, and each
+  // ESP_GATTC_WRITE_CHAR_EVT pops the front to find out which field it
+  // belongs to. Order is preserved because ATT write requests on one
+  // handle complete in the order they were sent.
+  std::deque<VolcanoField> display_register_pending_writes_;
 
   static const uint8_t MAX_STATIC_READS = 7;
   uint16_t static_reads_[MAX_STATIC_READS];
