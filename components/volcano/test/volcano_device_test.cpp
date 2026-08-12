@@ -211,6 +211,38 @@ void test_write_failed_clears_requested_immediately() {
   CHECK(!device.vibration().is_known());
 }
 
+// A command in flight when the link drops must not survive the disconnect:
+// on_connecting()/on_disconnected() clear requested() the same as a timeout
+// or an explicit write failure would, rather than leaving it pending against
+// a connection that no longer exists.
+void test_pending_write_cleared_by_disconnect() {
+  VolcanoBleClient fake_ble;
+  VolcanoDevice device;
+  device.set_ble_client(&fake_ble);
+
+  device.set_heater(true);
+  CHECK(device.heater().requested().has_value());
+
+  device.on_disconnected();
+  CHECK(!device.heater().requested().has_value());
+  CHECK(!device.heater().is_known());
+}
+
+// The same clearing happens on a reconnect's on_connecting(), not only on
+// on_disconnected() -- both funnel through mark_live_state_unknown_().
+void test_pending_write_cleared_by_reconnect() {
+  VolcanoBleClient fake_ble;
+  VolcanoDevice device;
+  device.set_ble_client(&fake_ble);
+
+  device.set_target_temperature(200.0f);
+  CHECK(device.target_temperature().requested().has_value());
+
+  device.on_connecting();
+  CHECK(!device.target_temperature().requested().has_value());
+  CHECK(!device.target_temperature().is_known());
+}
+
 // The state-change callback fires on an actual change and does not fire
 // again for a repeat report of the same value.
 void test_callback_fires_on_change_only() {
@@ -241,6 +273,8 @@ int main() {
   test_silent_drop_lands_on_devices_reported_value();
   test_pending_write_times_out_leaving_value_untouched();
   test_write_failed_clears_requested_immediately();
+  test_pending_write_cleared_by_disconnect();
+  test_pending_write_cleared_by_reconnect();
   test_callback_fires_on_change_only();
 
   std::printf("%d checks, %d failures\n", g_checks, g_failures);

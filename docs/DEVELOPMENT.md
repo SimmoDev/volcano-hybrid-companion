@@ -28,7 +28,7 @@ At this stage:
 
 ## Validating the component locally
 
-The current example configuration is [`examples/esp32-s3-devkit-minimal.yaml`](../examples/esp32-s3-devkit-minimal.yaml). It loads the `volcano` component and targets the Phase 1 development board, with manual command-trigger controls and state sensors — see [`examples/README.md`](../examples/README.md) for what they do. It reads a BLE MAC address from `examples/secrets.yaml` (not committed — copy it from [`examples/secrets.yaml.example`](../examples/secrets.yaml.example)), but `esphome config`/`esphome compile` below need only a placeholder value, not a real device.
+The current example configuration is [`examples/esp32-s3-devkit-minimal.yaml`](../examples/esp32-s3-devkit-minimal.yaml). It loads the `volcano` component and targets the Phase 1 development board, with two-way number/switch controls and read-only state sensors — see [`examples/README.md`](../examples/README.md) for what they do. It reads a BLE MAC address from `examples/secrets.yaml` (not committed — copy it from [`examples/secrets.yaml.example`](../examples/secrets.yaml.example)), but `esphome config`/`esphome compile` below need only a placeholder value, not a real device.
 
 Requires the [ESPHome CLI](https://esphome.io/) installed locally. From the repository root:
 
@@ -63,7 +63,7 @@ Three local pre-commit hooks, defined in [`.pre-commit-config.yaml`](../.pre-com
 
 - **`clang-format`** — reformats `components/volcano/`'s C++ in place, matching the CI check exactly (same pinned version). See [`docs/CONVENTIONS.md`](CONVENTIONS.md#code-formatting-expectations).
 - **`check-markdown-links`** (implemented in [`scripts/`](../scripts/)) — blocks the commit if a relative Markdown link in a tracked `.md` file doesn't resolve to a real file. Link-like text inside backticks (a syntax example, as in `CONVENTIONS.md`'s Markdown conventions section) is not checked.
-- **`readme-staleness-nudge`** (implemented in [`scripts/`](../scripts/)) — advisory only, never blocks. Prints a reminder if a commit touches `components/volcano/` or `docs/decisions/` without also touching the root `README.md`, since a change to either can make a claim in README's Status/Development Phases/Contributing sections go stale.
+- **`readme-staleness-nudge`** (implemented in [`scripts/`](../scripts/)) — advisory only, never blocks. Prints a reminder if a commit touches `components/volcano/` or `docs/decisions/` without also touching at least one of the root `README.md`, this document, or [`examples/README.md`](../examples/README.md), since a change to either can make a claim in one of those go stale — implementation status, phase, capability, or what an example's entities are/do.
 
 Install with:
 

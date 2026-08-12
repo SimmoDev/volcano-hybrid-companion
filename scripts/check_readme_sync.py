@@ -1,20 +1,27 @@
 #!/usr/bin/env python3
 """Pre-commit hook: advisory nudge, not a block. If a commit touches
-components/volcano/ or docs/decisions/ without also touching the root
-README.md, print a reminder to check README.md's Status/Development
-Phases/Contributing sections for staleness.
+components/volcano/ or docs/decisions/ without touching any of the docs that
+describe the component's current behaviour (root README.md,
+docs/DEVELOPMENT.md, examples/README.md), print a reminder to check them for
+staleness.
 
 This is exactly the pattern that let README.md go stale for three commits
 after the ADR-0009 abstraction-layer split landed: every other doc that
 referenced the architecture was updated in that commit except README.md,
-which was corrected only later by a milestone review. Not every such change
-makes README.md stale, so this never fails the commit -- it only prints.
+which was corrected only later by a milestone review. A later review then
+found docs/DEVELOPMENT.md and the example config's own header comment still
+describing pre-ADR-0009 trigger-style entities, in a commit that *did* touch
+docs/DEVELOPMENT.md -- so touching a target file isn't proof its relevant
+sentences were re-read, only a precondition this hook can actually check.
+Not every trigger change makes one of these docs stale, so this never fails
+the commit -- it only prints.
 """
 
 import subprocess
 import sys
 
 TRIGGER_PREFIXES = ("components/volcano/", "docs/decisions/")
+TARGET_DOCS = ("README.md", "docs/DEVELOPMENT.md", "examples/README.md")
 
 
 def staged_files() -> list[str]:
@@ -30,14 +37,14 @@ def staged_files() -> list[str]:
 def main() -> int:
     files = staged_files()
     touches_trigger = any(f.startswith(TRIGGER_PREFIXES) for f in files)
-    touches_readme = "README.md" in files
-    if touches_trigger and not touches_readme:
+    touches_target = any(doc in files for doc in TARGET_DOCS)
+    if touches_trigger and not touches_target:
         print(
             "NOTE: this commit touches components/volcano/ or docs/decisions/ "
-            "but not the root README.md. If this changes what's true about "
-            "the project's current state (implementation status, phase, "
-            "capability), check README.md's Status/Development Phases/"
-            "Contributing sections before committing.",
+            "but none of README.md, docs/DEVELOPMENT.md or examples/README.md. "
+            "If this changes what's true about the project's current state "
+            "(implementation status, phase, capability, or what an example's "
+            "entities are/do), check those docs before committing.",
             file=sys.stderr,
         )
     return 0

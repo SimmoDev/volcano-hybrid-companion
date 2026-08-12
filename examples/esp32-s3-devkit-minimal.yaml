@@ -1,8 +1,8 @@
-# Minimal example: exercises the `volcano` external component's read-only
-# BLE connection -- decoded heater/pump and auto-shutoff countdown state to
-# the log -- plus manually-triggered commands (auto-shutoff duration,
-# heater/pump on/off, target temperature), on the Phase 1 development board
-# (ADR-0004). It has no Home Assistant integration; see
+# Minimal example: exercises the `volcano` external component's BLE
+# connection -- decoded heater/pump and auto-shutoff countdown state to the
+# log -- plus two-way number/switch controls (auto-shutoff duration,
+# heater/pump on/off, target temperature, and more), on the Phase 1
+# development board (ADR-0004). It has no Home Assistant integration; see
 # components/volcano/README.md and ADR-0002/ADR-0003/ADR-0007 for the
 # architecture this follows.
 #
