@@ -13,24 +13,19 @@ static const char *const TAG = "volcano";
 
 namespace {
 
-// sensor/number::Number::publish_state() do not dedup, unlike
+// sensor::Sensor and number::Number::publish_state() do not dedup, unlike
 // switch_::Switch's (see publish_switch() below) -- so on_device_state_
 // changed_() below, which fires on any field's change rather than only the
 // one field a BLE callback used to scope a publish_state() call to, dedups
 // itself. NAN is ESPHome's convention for "no valid reading"; has_state()
 // gates the very first publish, since a coincidental match against an
 // entity's un-published default must still publish once.
-void publish_numeric(sensor::Sensor *entity, bool known, float value) {
-  if (entity == nullptr)
-    return;
-  float new_state = known ? value : NAN;
-  bool changed = !entity->has_state() || std::isnan(new_state) != std::isnan(entity->state) ||
-                 (!std::isnan(new_state) && new_state != entity->state);
-  if (changed)
-    entity->publish_state(new_state);
-}
-
-void publish_numeric(number::Number *entity, bool known, float value) {
+//
+// Templated rather than overloaded for sensor::Sensor*/number::Number*
+// separately: the two types share no common base with has_state()/state/
+// publish_state(), but both satisfy this function's structural requirements
+// identically, so one definition covers both without duplicating the body.
+template<typename Entity> void publish_numeric(Entity *entity, bool known, float value) {
   if (entity == nullptr)
     return;
   float new_state = known ? value : NAN;

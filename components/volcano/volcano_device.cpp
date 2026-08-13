@@ -47,6 +47,8 @@ void VolcanoDevice::mark_live_state_unknown_() {
   // the unit, not live state (ADR-0009).
   for (auto &deadline : this->pending_deadlines_)
     deadline.reset();
+  for (auto &acked : this->write_acked_)
+    acked = false;
 }
 
 template<typename T>
@@ -55,14 +57,27 @@ void VolcanoDevice::update_value_(DeviceValue<T> &field, const T &new_value, opt
   field.value_ = new_value;
   field.known_ = true;
   if (field.requested_.has_value()) {
-    // Resolved either way: a match is a plain confirm, a mismatch is
-    // STATE-013's silent-drop signature -- the device answered with
-    // something other than what this just requested. value_ above already
-    // reflects the truth the device reported either way.
-    field.requested_.reset();
-    changed = true;
-    if (written_by.has_value())
-      this->pending_deadlines_[static_cast<size_t>(*written_by)].reset();
+    bool matches = *field.requested_ == new_value;
+    bool acked = written_by.has_value() && this->write_acked_[static_cast<size_t>(*written_by)];
+    // A match is a plain confirm and is trusted regardless of ack state --
+    // it is unambiguous no matter what produced it. A mismatch is only
+    // trusted as STATE-013's silent-drop signature once this write's own
+    // ATT-level completion has actually been observed: before that, a
+    // report for this field cannot be this write's outcome at all, since
+    // the write has not yet reached the device -- it is necessarily some
+    // unrelated report (e.g. another field's change decoded from the same
+    // register, or STATE-009's temperature-change pulse), and treating it
+    // as a drop would be a false signal. value_ above already adopted the
+    // reported value regardless, so a legitimate unrelated change (e.g. a
+    // panel action) is still reflected either way.
+    if (matches || acked) {
+      field.requested_.reset();
+      changed = true;
+      if (written_by.has_value()) {
+        this->pending_deadlines_[static_cast<size_t>(*written_by)].reset();
+        this->write_acked_[static_cast<size_t>(*written_by)] = false;
+      }
+    }
   }
   if (changed)
     this->fire_callback_();
@@ -77,6 +92,7 @@ template<typename T> bool VolcanoDevice::clear_requested_(DeviceValue<T> &field)
 
 bool VolcanoDevice::clear_requested_for_field_(VolcanoField field) {
   this->pending_deadlines_[static_cast<size_t>(field)].reset();
+  this->write_acked_[static_cast<size_t>(field)] = false;
   switch (field) {
     case VolcanoField::TARGET_TEMPERATURE:
       return this->clear_requested_(this->state_.target_temperature_c);
@@ -103,6 +119,7 @@ bool VolcanoDevice::clear_requested_for_field_(VolcanoField field) {
 template<typename T>
 void VolcanoDevice::set_requested_(VolcanoField field, DeviceValue<T> &value_field, const T &requested) {
   value_field.requested_ = requested;
+  this->write_acked_[static_cast<size_t>(field)] = false;
   this->pending_deadlines_[static_cast<size_t>(field)] = this->now_() + PENDING_WRITE_TIMEOUT_MS;
   this->fire_callback_();
 }
@@ -209,9 +226,15 @@ void VolcanoDevice::on_write_failed(VolcanoField field) {
     this->fire_callback_();
 }
 
+void VolcanoDevice::on_write_acked(VolcanoField field) { this->write_acked_[static_cast<size_t>(field)] = true; }
+
 void VolcanoDevice::set_target_temperature(float celsius) {
   if (this->ble_client_ == nullptr) {
     ESP_LOGW(TAG, "set_target_temperature() called with no BLE client attached");
+    return;
+  }
+  if (this->state_.target_temperature_c.requested().has_value()) {
+    ESP_LOGW(TAG, "Refusing to set target temperature: a previous request is still outstanding");
     return;
   }
   // Rounded to CMD-001's 0.1 degC wire granularity, so a successful
@@ -227,6 +250,10 @@ void VolcanoDevice::set_heater(bool on) {
     ESP_LOGW(TAG, "set_heater() called with no BLE client attached");
     return;
   }
+  if (this->state_.heater.requested().has_value()) {
+    ESP_LOGW(TAG, "Refusing to set heater: a previous request is still outstanding");
+    return;
+  }
   if (this->ble_client_->write_heater(on))
     this->set_requested_(VolcanoField::HEATER, this->state_.heater, on);
 }
@@ -234,6 +261,10 @@ void VolcanoDevice::set_heater(bool on) {
 void VolcanoDevice::set_pump(bool on) {
   if (this->ble_client_ == nullptr) {
     ESP_LOGW(TAG, "set_pump() called with no BLE client attached");
+    return;
+  }
+  if (this->state_.pump.requested().has_value()) {
+    ESP_LOGW(TAG, "Refusing to set pump: a previous request is still outstanding");
     return;
   }
   if (this->ble_client_->write_pump(on))
@@ -245,6 +276,10 @@ void VolcanoDevice::set_auto_shutoff_duration(uint16_t seconds) {
     ESP_LOGW(TAG, "set_auto_shutoff_duration() called with no BLE client attached");
     return;
   }
+  if (this->state_.auto_shutoff_duration_s.requested().has_value()) {
+    ESP_LOGW(TAG, "Refusing to set auto-shutoff duration: a previous request is still outstanding");
+    return;
+  }
   if (this->ble_client_->write_auto_shutoff_duration(seconds))
     this->set_requested_(VolcanoField::AUTO_SHUTOFF_DURATION, this->state_.auto_shutoff_duration_s, seconds);
 }
@@ -252,6 +287,10 @@ void VolcanoDevice::set_auto_shutoff_duration(uint16_t seconds) {
 void VolcanoDevice::set_led_brightness(uint8_t percent) {
   if (this->ble_client_ == nullptr) {
     ESP_LOGW(TAG, "set_led_brightness() called with no BLE client attached");
+    return;
+  }
+  if (this->state_.led_brightness_percent.requested().has_value()) {
+    ESP_LOGW(TAG, "Refusing to set LED brightness: a previous request is still outstanding");
     return;
   }
   if (this->ble_client_->write_led_brightness(percent))
@@ -263,6 +302,10 @@ void VolcanoDevice::set_vibration(bool enabled) {
     ESP_LOGW(TAG, "set_vibration() called with no BLE client attached");
     return;
   }
+  if (this->state_.vibration.requested().has_value()) {
+    ESP_LOGW(TAG, "Refusing to set vibration: a previous request is still outstanding");
+    return;
+  }
   if (this->ble_client_->write_vibration(enabled))
     this->set_requested_(VolcanoField::VIBRATION, this->state_.vibration, enabled);
 }
@@ -272,6 +315,10 @@ void VolcanoDevice::set_display_on_cooling(bool enabled) {
     ESP_LOGW(TAG, "set_display_on_cooling() called with no BLE client attached");
     return;
   }
+  if (this->state_.display_on_cooling.requested().has_value()) {
+    ESP_LOGW(TAG, "Refusing to set display on cooling: a previous request is still outstanding");
+    return;
+  }
   if (this->ble_client_->write_display_on_cooling(enabled))
     this->set_requested_(VolcanoField::DISPLAY_ON_COOLING, this->state_.display_on_cooling, enabled);
 }
@@ -279,6 +326,10 @@ void VolcanoDevice::set_display_on_cooling(bool enabled) {
 void VolcanoDevice::set_display_units_fahrenheit(bool fahrenheit) {
   if (this->ble_client_ == nullptr) {
     ESP_LOGW(TAG, "set_display_units_fahrenheit() called with no BLE client attached");
+    return;
+  }
+  if (this->state_.display_units_fahrenheit.requested().has_value()) {
+    ESP_LOGW(TAG, "Refusing to set display units: a previous request is still outstanding");
     return;
   }
   if (this->ble_client_->write_display_units_fahrenheit(fahrenheit))

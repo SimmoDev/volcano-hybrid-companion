@@ -172,7 +172,9 @@ void test_pump_write_confirmed_by_matching_report() {
 }
 
 // STATE-013's silent-drop signature: the device answers a write with a
-// *different* value than what was requested. requested() must still clear
+// *different* value than what was requested, after that write's own
+// ATT-level completion has been observed (on_write_acked()) -- so this
+// report can actually be that write's outcome. requested() must still clear
 // (the write is resolved, just not the way asked), and value() must land on
 // what the device actually reported -- never on the stale request.
 void test_silent_drop_lands_on_devices_reported_value() {
@@ -184,10 +186,82 @@ void test_silent_drop_lands_on_devices_reported_value() {
   CHECK(device.target_temperature().requested().has_value());
   CHECK(*device.target_temperature().requested() == 200.0f);
 
-  device.on_target_temperature(150.0f);  // device reports the previous target
+  device.on_write_acked(VolcanoField::TARGET_TEMPERATURE);  // the write itself reached the device
+  device.on_target_temperature(150.0f);                     // device reports the previous target
   CHECK(!device.target_temperature().requested().has_value());
   CHECK(device.target_temperature().is_known());
   CHECK(device.target_temperature().value() == 150.0f);
+}
+
+// The false-positive this whole mechanism exists to avoid: a mismatching
+// report for a field arrives *before* that field's write has even reached
+// the device (no on_write_acked() yet) -- e.g. STATE-009's temperature-
+// change pulse notifying the display register while an unrelated write to
+// it is still in flight. This must NOT be treated as a silent drop:
+// requested() stays outstanding (the real confirmation is still to come),
+// though value() still adopts the reported figure, since it may be a
+// legitimate unrelated change (e.g. a panel action).
+void test_unacked_mismatch_does_not_resolve_request() {
+  VolcanoBleClient fake_ble;
+  VolcanoDevice device;
+  device.set_ble_client(&fake_ble);
+
+  device.set_target_temperature(200.0f);
+  CHECK(device.target_temperature().requested().has_value());
+
+  device.on_target_temperature(150.0f);  // arrives before on_write_acked() -- not this write's outcome
+  CHECK(device.target_temperature().requested().has_value());  // still outstanding
+  CHECK(*device.target_temperature().requested() == 200.0f);
+  CHECK(device.target_temperature().value() == 150.0f);  // reported value still adopted
+
+  // The real confirmation, once the write actually reaches the device.
+  device.on_write_acked(VolcanoField::TARGET_TEMPERATURE);
+  device.on_target_temperature(200.0f);
+  CHECK(!device.target_temperature().requested().has_value());
+  CHECK(device.target_temperature().value() == 200.0f);
+}
+
+// A matching report resolves the request immediately regardless of
+// on_write_acked() -- a match is never ambiguous, so it would be wrong to
+// hold it pending on an ack signal that only guards against a false
+// mismatch-triggered resolution.
+void test_matching_report_resolves_without_ack() {
+  VolcanoBleClient fake_ble;
+  VolcanoDevice device;
+  device.set_ble_client(&fake_ble);
+
+  device.set_led_brightness(75);
+  CHECK(device.led_brightness().requested().has_value());
+
+  device.on_led_brightness(75);  // matches, arrives before any on_write_acked()
+  CHECK(!device.led_brightness().requested().has_value());
+  CHECK(device.led_brightness().value() == 75);
+}
+
+// A second command for a field with a request already outstanding must be
+// refused, not overwrite the first request -- otherwise the first write's
+// eventual read-back/notification would resolve whichever request happens
+// to be current when it arrives, rather than the one it actually answers.
+void test_overlapping_write_to_same_field_is_refused() {
+  VolcanoBleClient fake_ble;
+  VolcanoDevice device;
+  device.set_ble_client(&fake_ble);
+
+  device.set_heater(true);
+  CHECK(fake_ble.last_heater == true);
+  CHECK(*device.heater().requested() == true);
+
+  device.set_heater(false);                     // refused: the first request is still outstanding
+  CHECK(fake_ble.last_heater == true);          // no second write was issued (still the first write's value)
+  CHECK(*device.heater().requested() == true);  // first request untouched
+
+  device.on_write_acked(VolcanoField::HEATER);
+  device.on_actuator_state(true, false);
+  CHECK(!device.heater().requested().has_value());
+
+  device.set_heater(false);  // now accepted, the previous request having resolved
+  CHECK(fake_ble.last_heater == false);
+  CHECK(*device.heater().requested() == false);
 }
 
 // A write that never confirms must time out after PENDING_WRITE_TIMEOUT_MS,
@@ -318,6 +392,9 @@ int main() {
   test_write_confirmed_by_matching_report();
   test_pump_write_confirmed_by_matching_report();
   test_silent_drop_lands_on_devices_reported_value();
+  test_unacked_mismatch_does_not_resolve_request();
+  test_matching_report_resolves_without_ack();
+  test_overlapping_write_to_same_field_is_refused();
   test_pending_write_times_out_leaving_value_untouched();
   test_write_failed_clears_requested_immediately();
   test_write_failed_clears_requested_for_read_back_confirmed_fields();

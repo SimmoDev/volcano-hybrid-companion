@@ -102,7 +102,7 @@ The heater and pump entities are named "Heat" and "Air" above to match the label
 
 `auto_shutoff_duration` is in **minutes**, the unit the official app presents it in, converted to the seconds `CHAR-017` encodes. It is distinct from `auto_shutoff_countdown`, which is the live time remaining and is read-only; the duration is what that countdown will load the next time it arms.
 
-The two numbers accept `min_value`, `max_value` and `step`, defaulting to the ranges the protocol documentation records as confirmed accepted (40–230 °C and 1–360 minutes). Widening them does not widen what reaches the device: the component checks every write against the confirmed range itself and refuses anything outside it, whatever the entity advertises.
+The writable numbers — target temperature, auto-shutoff duration and LED brightness — each accept `min_value`, `max_value` and `step`, defaulting to the ranges the protocol documentation records as confirmed accepted (40–230 °C, 1–360 minutes and 0–100% respectively). Widening them does not widen what reaches the device: the component checks every write against the confirmed range itself and refuses anything outside it, whatever the entity advertises.
 
 `hours_of_operation` and `minutes_of_operation` are the two halves of one meter: minutes counts 0–59 and carries into hours, and both advance only while the heater is on rather than tracking wall-clock time.
 

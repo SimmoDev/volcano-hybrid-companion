@@ -524,6 +524,8 @@ void VolcanoBleClient::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
             this->observer_->on_write_failed(VolcanoField::AUTO_SHUTOFF_DURATION);
           break;
         }
+        if (this->observer_ != nullptr)
+          this->observer_->on_write_acked(VolcanoField::AUTO_SHUTOFF_DURATION);
         this->read_auto_shutoff_duration_();
       } else if (param->write.handle == this->heater_on_handle_ || param->write.handle == this->heater_off_handle_) {
         // Per the trigger-characteristics note in docs/protocol/commands.md,
@@ -534,12 +536,16 @@ void VolcanoBleClient::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
           ESP_LOGW(TAG, "Trigger write to handle 0x%04x failed, status=%d", param->write.handle, param->write.status);
           if (this->observer_ != nullptr)
             this->observer_->on_write_failed(VolcanoField::HEATER);
+        } else if (this->observer_ != nullptr) {
+          this->observer_->on_write_acked(VolcanoField::HEATER);
         }
       } else if (param->write.handle == this->pump_on_handle_ || param->write.handle == this->pump_off_handle_) {
         if (param->write.status != ESP_GATT_OK) {
           ESP_LOGW(TAG, "Trigger write to handle 0x%04x failed, status=%d", param->write.handle, param->write.status);
           if (this->observer_ != nullptr)
             this->observer_->on_write_failed(VolcanoField::PUMP);
+        } else if (this->observer_ != nullptr) {
+          this->observer_->on_write_acked(VolcanoField::PUMP);
         }
       } else if (param->write.handle == this->display_register_handle_) {
         // Notifies, so no read-back: decode_display_register_() reports
@@ -557,6 +563,8 @@ void VolcanoBleClient::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
             ESP_LOGW(TAG, "Display/units register write failed, status=%d", param->write.status);
             if (this->observer_ != nullptr)
               this->observer_->on_write_failed(field);
+          } else if (this->observer_ != nullptr) {
+            this->observer_->on_write_acked(field);
           }
         }
       } else if (param->write.handle == this->vibration_handle_) {
@@ -567,6 +575,8 @@ void VolcanoBleClient::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
           ESP_LOGW(TAG, "Vibration write failed, status=%d", param->write.status);
           if (this->observer_ != nullptr)
             this->observer_->on_write_failed(VolcanoField::VIBRATION);
+        } else if (this->observer_ != nullptr) {
+          this->observer_->on_write_acked(VolcanoField::VIBRATION);
         }
       } else if (param->write.handle == this->led_brightness_handle_) {
         if (param->write.status != ESP_GATT_OK) {
@@ -575,6 +585,8 @@ void VolcanoBleClient::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
             this->observer_->on_write_failed(VolcanoField::LED_BRIGHTNESS);
           break;
         }
+        if (this->observer_ != nullptr)
+          this->observer_->on_write_acked(VolcanoField::LED_BRIGHTNESS);
         auto status = esp_ble_gattc_read_char(this->client_->get_gattc_if(), this->client_->get_conn_id(),
                                               this->led_brightness_handle_, ESP_GATT_AUTH_REQ_NONE);
         if (status) {
@@ -587,6 +599,8 @@ void VolcanoBleClient::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
             this->observer_->on_write_failed(VolcanoField::TARGET_TEMPERATURE);
           break;
         }
+        if (this->observer_ != nullptr)
+          this->observer_->on_write_acked(VolcanoField::TARGET_TEMPERATURE);
         // Read-back for the same reason as the auto-shutoff duration above.
         // Per STATE-013, this project's own writes are almost never echoed
         // by a notification, so an explicit read is what actually confirms

@@ -36,6 +36,11 @@ template<typename T> class DeviceValue {
 // sweep (device information, LED brightness, auto-shutoff duration) has
 // completed -- not merely that the link exists. That distinction matters:
 // the gap between the two is seconds long, not milliseconds.
+//
+// CONNECTING begins once service discovery completes (VolcanoBleClient's
+// ESP_GATTC_SEARCH_CMPL_EVT), not at the raw physical link coming up
+// (ESP_GATTC_OPEN_EVT) -- see ADR-0009's Notes for why that earlier window
+// is left as DISCONNECTED rather than a still-earlier CONNECTING.
 enum class ConnectionState {
   DISCONNECTED,
   CONNECTING,
@@ -132,7 +137,12 @@ class VolcanoDevice : public VolcanoBleClientObserver {
   // Commands -- ADR-0009's interface. Requests, not authoritative state
   // changes (ADR-0002): none of these updates value() directly. Each is a
   // no-op, logged by the BLE communication layer, if no connection is
-  // established or the value is outside the confirmed-accepted range.
+  // established or the value is outside the confirmed-accepted range. Each
+  // is also a no-op, logged here, while a previous request for that same
+  // field is still outstanding -- issuing a second write before the first
+  // has resolved would let its eventual read-back/notification resolve
+  // whichever request happens to be current at the time, rather than the
+  // one it actually answers.
   void set_target_temperature(float celsius);
   void set_heater(bool on);
   void set_pump(bool on);
@@ -161,17 +171,22 @@ class VolcanoDevice : public VolcanoBleClientObserver {
   void on_power_supply(const std::string &value) override;
   void on_product_line(const std::string &value) override;
   void on_write_failed(VolcanoField field) override;
+  void on_write_acked(VolcanoField field) override;
 
  private:
   // Updates a field from a device report: adopts the reported value always,
-  // and resolves requested() -- clearing it whether the report matches (a
-  // plain confirm) or not (STATE-013's silent-drop signature, where the
-  // device answers with a value other than the one just requested). Fires
-  // the state callback iff anything about the field actually changed.
-  // `written_by` names the VolcanoField this report can confirm a pending
-  // write against, so its timeout deadline can be cancelled too; omitted
-  // for fields nothing ever writes (current temperature, the countdown,
-  // the runtime meter, device information).
+  // and resolves requested() if the report is trustworthy as this write's
+  // own outcome -- a match always is (unambiguous regardless of source), a
+  // mismatch only once write_acked_ confirms this write's own ATT-level
+  // completion has actually been observed (STATE-013's silent-drop
+  // signature; otherwise an unrelated report for the same field -- e.g.
+  // STATE-009's temperature-change pulse on the display register -- would
+  // look identical to a drop before the write has even reached the
+  // device). Fires the state callback iff anything about the field actually
+  // changed. `written_by` names the VolcanoField this report can confirm a
+  // pending write against, so its timeout deadline and ack flag can be
+  // cancelled too; omitted for fields nothing ever writes (current
+  // temperature, the countdown, the runtime meter, device information).
   template<typename T>
   void update_value_(DeviceValue<T> &field, const T &new_value, optional<VolcanoField> written_by = nullopt);
 
@@ -216,6 +231,13 @@ class VolcanoDevice : public VolcanoBleClientObserver {
   // small -- indexing it by an out-of-range VolcanoField would otherwise be
   // undefined behaviour rather than a compile error.
   std::array<optional<uint32_t>, static_cast<size_t>(VolcanoField::COUNT)> pending_deadlines_;
+
+  // Whether the currently-outstanding write for each field (if any) has had
+  // its own ATT-level completion observed yet (on_write_acked()). False from
+  // the moment a request is made until that ack arrives; a mismatching
+  // report for the field is only trusted as a silent drop once this is
+  // true -- see update_value_(). Reset alongside pending_deadlines_.
+  std::array<bool, static_cast<size_t>(VolcanoField::COUNT)> write_acked_{};
 };
 
 }  // namespace volcano

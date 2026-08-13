@@ -92,6 +92,17 @@ class VolcanoBleClientObserver {
   // outcome (STATE-013's silent drop) is not reported here; VolcanoDevice
   // infers it by comparing a later on_*() report against what it requested.
   virtual void on_write_failed(VolcanoField field) = 0;
+
+  // A write's own ATT-level completion (status == ESP_GATT_OK) for the named
+  // field, fired from ESP_GATTC_WRITE_CHAR_EVT before any state-effect
+  // confirmation for it has necessarily arrived. Exists so VolcanoDevice can
+  // tell "a report just arrived that could plausibly be this write's own
+  // confirmation" from "no write for this field has reached the device yet,
+  // so an incoming report for it cannot possibly be about this write" --
+  // the latter is otherwise indistinguishable from a genuine STATE-013
+  // silent drop, since both look like "a mismatching value arrived while a
+  // request was outstanding". See VolcanoDevice::update_value_().
+  virtual void on_write_acked(VolcanoField field) = 0;
 };
 
 }  // namespace volcano
