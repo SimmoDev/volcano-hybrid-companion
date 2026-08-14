@@ -51,8 +51,16 @@ class VolcanoBleClientObserver {
   virtual void on_current_temperature(bool has_reading, float celsius) = 0;
 
   // CMD-001/STATE-013: reported from a read-back after a write or a
-  // device-originated (e.g. panel) notification.
-  virtual void on_target_temperature(float celsius) = 0;
+  // device-originated (e.g. panel) notification. `from_read` is true only
+  // for the former -- the initial per-connection read and a write's own
+  // read-back are the only two things that ever read this characteristic,
+  // so a read-sourced report is deterministically about this project's own
+  // action, never a panel notification. This lets VolcanoDevice trust a
+  // mismatching read-sourced report as STATE-013's silent-drop signature
+  // while not extending that trust to a mismatching notification, which
+  // could equally be a genuine, unrelated panel change -- indistinguishable
+  // from a drop-echo by payload alone. See VolcanoDevice::update_value_().
+  virtual void on_target_temperature(float celsius, bool from_read) = 0;
 
   // STATE-005: live countdown, seconds.
   virtual void on_auto_shutoff_countdown(uint16_t seconds) = 0;

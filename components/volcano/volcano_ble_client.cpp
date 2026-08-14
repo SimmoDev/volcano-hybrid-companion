@@ -456,7 +456,7 @@ void VolcanoBleClient::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
       } else if (param->read.handle == this->current_temp_handle_) {
         this->decode_current_temperature_(param->read.value, param->read.value_len);
       } else if (param->read.handle == this->target_temp_handle_) {
-        this->decode_target_temperature_(param->read.value, param->read.value_len);
+        this->decode_target_temperature_(param->read.value, param->read.value_len, true);
       } else if (param->read.handle == this->display_register_handle_) {
         this->decode_display_register_(param->read.value, param->read.value_len);
       } else if (param->read.handle == this->vibration_handle_) {
@@ -504,7 +504,7 @@ void VolcanoBleClient::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
       } else if (param->notify.handle == this->current_temp_handle_) {
         this->decode_current_temperature_(param->notify.value, param->notify.value_len);
       } else if (param->notify.handle == this->target_temp_handle_) {
-        this->decode_target_temperature_(param->notify.value, param->notify.value_len);
+        this->decode_target_temperature_(param->notify.value, param->notify.value_len, false);
       } else if (param->notify.handle == this->display_register_handle_) {
         this->decode_display_register_(param->notify.value, param->notify.value_len);
       } else if (param->notify.handle == this->vibration_handle_) {
@@ -680,7 +680,7 @@ void VolcanoBleClient::decode_current_temperature_(const uint8_t *value, uint16_
   }
 }
 
-void VolcanoBleClient::decode_target_temperature_(const uint8_t *value, uint16_t value_len) {
+void VolcanoBleClient::decode_target_temperature_(const uint8_t *value, uint16_t value_len, bool from_read) {
   uint32_t raw;
   if (!decode_decidegrees_c(value, value_len, &raw)) {
     ESP_LOGW(TAG, "Target temperature value too short (%u bytes)", value_len);
@@ -688,7 +688,7 @@ void VolcanoBleClient::decode_target_temperature_(const uint8_t *value, uint16_t
   }
   ESP_LOGI(TAG, "Target temperature: %.1f C", raw / 10.0f);
   if (this->observer_ != nullptr)
-    this->observer_->on_target_temperature(raw / 10.0f);
+    this->observer_->on_target_temperature(raw / 10.0f, from_read);
 }
 
 void VolcanoBleClient::decode_vibration_(const uint8_t *value, uint16_t value_len) {

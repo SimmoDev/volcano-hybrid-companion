@@ -63,7 +63,11 @@ class VolcanoBleClient {
   void decode_status_(const uint8_t *value, uint16_t value_len);
   void decode_countdown_(const uint8_t *value, uint16_t value_len);
   void decode_current_temperature_(const uint8_t *value, uint16_t value_len);
-  void decode_target_temperature_(const uint8_t *value, uint16_t value_len);
+  // `from_read` distinguishes the two things that ever read this
+  // characteristic (the initial per-connection read and a write's own
+  // read-back) from a notification -- see
+  // VolcanoBleClientObserver::on_target_temperature() for why that matters.
+  void decode_target_temperature_(const uint8_t *value, uint16_t value_len, bool from_read);
   void decode_vibration_(const uint8_t *value, uint16_t value_len);
   void decode_display_register_(const uint8_t *value, uint16_t value_len);
   void decode_hours_(const uint8_t *value, uint16_t value_len);

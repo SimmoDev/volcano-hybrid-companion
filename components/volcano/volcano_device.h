@@ -157,7 +157,7 @@ class VolcanoDevice : public VolcanoBleClientObserver {
   void on_disconnected() override;
   void on_actuator_state(bool heater_on, bool pump_on) override;
   void on_current_temperature(bool has_reading, float celsius) override;
-  void on_target_temperature(float celsius) override;
+  void on_target_temperature(float celsius, bool from_read) override;
   void on_auto_shutoff_countdown(uint16_t seconds) override;
   void on_auto_shutoff_duration(uint16_t seconds) override;
   void on_led_brightness(uint8_t percent) override;
@@ -176,19 +176,41 @@ class VolcanoDevice : public VolcanoBleClientObserver {
  private:
   // Updates a field from a device report: adopts the reported value always,
   // and resolves requested() if the report is trustworthy as this write's
-  // own outcome -- a match always is (unambiguous regardless of source), a
-  // mismatch only once write_acked_ confirms this write's own ATT-level
-  // completion has actually been observed (STATE-013's silent-drop
-  // signature; otherwise an unrelated report for the same field -- e.g.
-  // STATE-009's temperature-change pulse on the display register -- would
-  // look identical to a drop before the write has even reached the
-  // device). Fires the state callback iff anything about the field actually
-  // changed. `written_by` names the VolcanoField this report can confirm a
-  // pending write against, so its timeout deadline and ack flag can be
-  // cancelled too; omitted for fields nothing ever writes (current
-  // temperature, the countdown, the runtime meter, device information).
+  // own outcome -- a match always is (unambiguous regardless of source). A
+  // mismatch resolves it too, but only when both `mismatch_can_resolve` is
+  // true and write_acked_ confirms this write's own ATT-level completion has
+  // actually been observed (STATE-013's silent-drop signature).
+  //
+  // `mismatch_can_resolve` exists because a differing report is only
+  // trustworthy as *this write's own* outcome when the report itself is
+  // deterministically about this write, not merely coincident with one being
+  // outstanding. Target temperature's write-triggered read-back is such a
+  // report (nothing else ever reads that characteristic), so it passes
+  // `true`. A notification is not: heater, pump, vibration and the display
+  // register are confirmed only by notification, which carries no request
+  // identity and can be triggered by a bit unrelated to the field being
+  // resolved (e.g. STATE-008's vibration-alert pulse sharing the status
+  // register with the pump bit, or STATE-009's temperature-change pulse
+  // sharing the display register with display-on-cooling/units), so a
+  // mismatch there is not trustworthy evidence of anything about the pending
+  // write. There is also no protocol evidence (per ADR-0005) that any of
+  // these characteristics ever exhibits STATE-013's silent-drop-with-
+  // unchanged-echo behaviour in the first place -- only target temperature
+  // does. A mismatch on one of these fields therefore never resolves
+  // requested() by itself: only a later match, an explicit on_write_failed(),
+  // or the timeout in process() does. Auto-shutoff duration and LED
+  // brightness pass `true` unconditionally: both are read-back-confirmed
+  // with no notify at all, so every report for them while a request is
+  // outstanding is deterministically that request's own read-back.
+  //
+  // Fires the state callback iff anything about the field actually changed.
+  // `written_by` names the VolcanoField this report can confirm a pending
+  // write against, so its timeout deadline and ack flag can be cancelled
+  // too; omitted for fields nothing ever writes (current temperature, the
+  // countdown, the runtime meter, device information).
   template<typename T>
-  void update_value_(DeviceValue<T> &field, const T &new_value, optional<VolcanoField> written_by = nullopt);
+  void update_value_(DeviceValue<T> &field, const T &new_value, optional<VolcanoField> written_by = nullopt,
+                     bool mismatch_can_resolve = true);
 
   // Marks a field unknown and clears any pending request/deadline for it.
   // Returns whether anything changed; does not fire the callback itself --

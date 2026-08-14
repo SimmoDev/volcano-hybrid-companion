@@ -52,7 +52,8 @@ void VolcanoDevice::mark_live_state_unknown_() {
 }
 
 template<typename T>
-void VolcanoDevice::update_value_(DeviceValue<T> &field, const T &new_value, optional<VolcanoField> written_by) {
+void VolcanoDevice::update_value_(DeviceValue<T> &field, const T &new_value, optional<VolcanoField> written_by,
+                                  bool mismatch_can_resolve) {
   bool changed = !field.known_ || !(field.value_ == new_value);
   field.value_ = new_value;
   field.known_ = true;
@@ -61,16 +62,17 @@ void VolcanoDevice::update_value_(DeviceValue<T> &field, const T &new_value, opt
     bool acked = written_by.has_value() && this->write_acked_[static_cast<size_t>(*written_by)];
     // A match is a plain confirm and is trusted regardless of ack state --
     // it is unambiguous no matter what produced it. A mismatch is only
-    // trusted as STATE-013's silent-drop signature once this write's own
-    // ATT-level completion has actually been observed: before that, a
-    // report for this field cannot be this write's outcome at all, since
-    // the write has not yet reached the device -- it is necessarily some
-    // unrelated report (e.g. another field's change decoded from the same
-    // register, or STATE-009's temperature-change pulse), and treating it
-    // as a drop would be a false signal. value_ above already adopted the
-    // reported value regardless, so a legitimate unrelated change (e.g. a
-    // panel action) is still reflected either way.
-    if (matches || acked) {
+    // trusted as STATE-013's silent-drop signature once both
+    // mismatch_can_resolve is true (this report is deterministically about
+    // this write, not merely coincident with one being outstanding -- see
+    // this method's declaration) and this write's own ATT-level completion
+    // has actually been observed: before that, a report for this field
+    // cannot be this write's outcome at all, since the write has not yet
+    // reached the device. value_ above already adopted the reported value
+    // regardless, so a legitimate unrelated change (e.g. a panel action, or
+    // an unrelated bit sharing the same register) is still reflected either
+    // way -- only requested()'s resolution is gated, not value() itself.
+    if (matches || (mismatch_can_resolve && acked)) {
       field.requested_.reset();
       changed = true;
       if (written_by.has_value()) {
@@ -155,8 +157,11 @@ void VolcanoDevice::on_disconnected() {
 }
 
 void VolcanoDevice::on_actuator_state(bool heater_on, bool pump_on) {
-  this->update_value_(this->state_.heater, heater_on, VolcanoField::HEATER);
-  this->update_value_(this->state_.pump, pump_on, VolcanoField::PUMP);
+  // false: notification-only, no unambiguous per-write confirmation channel
+  // exists -- see update_value_()'s declaration for why a mismatch must not
+  // resolve these on its own.
+  this->update_value_(this->state_.heater, heater_on, VolcanoField::HEATER, false);
+  this->update_value_(this->state_.pump, pump_on, VolcanoField::PUMP, false);
 }
 
 void VolcanoDevice::on_current_temperature(bool has_reading, float celsius) {
@@ -171,8 +176,11 @@ void VolcanoDevice::on_current_temperature(bool has_reading, float celsius) {
   this->update_value_(this->state_.current_temperature_c, celsius);
 }
 
-void VolcanoDevice::on_target_temperature(float celsius) {
-  this->update_value_(this->state_.target_temperature_c, celsius, VolcanoField::TARGET_TEMPERATURE);
+void VolcanoDevice::on_target_temperature(float celsius, bool from_read) {
+  // from_read: true only for the write's own read-back (or the initial
+  // per-connection read, when nothing is ever outstanding) -- see
+  // VolcanoBleClientObserver::on_target_temperature().
+  this->update_value_(this->state_.target_temperature_c, celsius, VolcanoField::TARGET_TEMPERATURE, from_read);
 }
 
 void VolcanoDevice::on_auto_shutoff_countdown(uint16_t seconds) {
@@ -188,13 +196,14 @@ void VolcanoDevice::on_led_brightness(uint8_t percent) {
 }
 
 void VolcanoDevice::on_vibration(bool enabled) {
-  this->update_value_(this->state_.vibration, enabled, VolcanoField::VIBRATION);
+  // false: see on_actuator_state() above -- same notification-only reasoning.
+  this->update_value_(this->state_.vibration, enabled, VolcanoField::VIBRATION, false);
 }
 
 void VolcanoDevice::on_display_register(bool display_on_cooling, bool display_units_fahrenheit) {
-  this->update_value_(this->state_.display_on_cooling, display_on_cooling, VolcanoField::DISPLAY_ON_COOLING);
+  this->update_value_(this->state_.display_on_cooling, display_on_cooling, VolcanoField::DISPLAY_ON_COOLING, false);
   this->update_value_(this->state_.display_units_fahrenheit, display_units_fahrenheit,
-                      VolcanoField::DISPLAY_UNITS_FAHRENHEIT);
+                      VolcanoField::DISPLAY_UNITS_FAHRENHEIT, false);
 }
 
 void VolcanoDevice::on_hours_of_operation(uint32_t hours) {
