@@ -131,11 +131,21 @@ static const uint32_t DISPLAY_ON_COOLING_BIT_DISABLED = 0x1000;
 // is a property of those two settings, not of the register.
 static const uint32_t DISPLAY_UNITS_BIT_FAHRENHEIT = 0x0200;
 
-static void subscribe(esphome::ble_client::BLEClient *client, uint16_t handle, const char *name) {
+// esp_ble_gattc_register_for_notify() is asynchronous: on success, completion
+// -- whether the registration itself then succeeds or fails -- always arrives
+// later as ESP_GATTC_REG_FOR_NOTIFY_EVT. A non-OK return here instead means
+// the request was never even enqueued (e.g. the BT stack's internal message
+// queue is full), so no such event will ever follow for this handle. Returns
+// whether an event can be expected, so the caller knows whether to count this
+// subscription in pending_subscriptions_ at all -- counting one that will
+// never be decremented would stall this connection at CONNECTING forever.
+static bool subscribe(esphome::ble_client::BLEClient *client, uint16_t handle, const char *name) {
   auto status = esp_ble_gattc_register_for_notify(client->get_gattc_if(), client->get_remote_bda(), handle);
   if (status) {
     ESP_LOGW(TAG, "esp_ble_gattc_register_for_notify(%s) failed, status=%d", name, status);
+    return false;
   }
+  return true;
 }
 
 void VolcanoBleClient::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if,
@@ -218,8 +228,8 @@ void VolcanoBleClient::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
         // CONN-002: nothing is pushed on subscribing, so the initial value
         // is read explicitly once subscription completes -- see the
         // ESP_GATTC_REG_FOR_NOTIFY_EVT case below.
-        this->pending_subscriptions_++;
-        subscribe(this->client_, this->status_handle_, "status/flags register");
+        if (subscribe(this->client_, this->status_handle_, "status/flags register"))
+          this->pending_subscriptions_++;
       }
 
       auto *vibration_chr = this->client_->get_characteristic(
@@ -230,8 +240,8 @@ void VolcanoBleClient::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
         // Read/Write/Notify: subscribed like the live values rather than
         // read once, so a change made elsewhere is picked up.
         this->vibration_handle_ = vibration_chr->handle;
-        this->pending_subscriptions_++;
-        subscribe(this->client_, this->vibration_handle_, "vibration setting");
+        if (subscribe(this->client_, this->vibration_handle_, "vibration setting"))
+          this->pending_subscriptions_++;
       }
 
       auto *display_register_chr = this->client_->get_characteristic(
@@ -240,8 +250,8 @@ void VolcanoBleClient::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
         ESP_LOGW(TAG, "Display/units register (CHAR-009) not found on device");
       } else {
         this->display_register_handle_ = display_register_chr->handle;
-        this->pending_subscriptions_++;
-        subscribe(this->client_, this->display_register_handle_, "display/units register");
+        if (subscribe(this->client_, this->display_register_handle_, "display/units register"))
+          this->pending_subscriptions_++;
       }
 
       auto *countdown_chr =
@@ -250,8 +260,8 @@ void VolcanoBleClient::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
         ESP_LOGW(TAG, "Auto-shutoff countdown (CHAR-016) not found on device");
       } else {
         this->countdown_handle_ = countdown_chr->handle;
-        this->pending_subscriptions_++;
-        subscribe(this->client_, this->countdown_handle_, "auto-shutoff countdown");
+        if (subscribe(this->client_, this->countdown_handle_, "auto-shutoff countdown"))
+          this->pending_subscriptions_++;
       }
 
       auto *duration_chr =
@@ -271,8 +281,8 @@ void VolcanoBleClient::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
         ESP_LOGW(TAG, "Current temperature (CHAR-013) not found on device");
       } else {
         this->current_temp_handle_ = current_temp_chr->handle;
-        this->pending_subscriptions_++;
-        subscribe(this->client_, this->current_temp_handle_, "current temperature");
+        if (subscribe(this->client_, this->current_temp_handle_, "current temperature"))
+          this->pending_subscriptions_++;
       }
 
       auto *target_temp_chr = this->client_->get_characteristic(
@@ -281,8 +291,8 @@ void VolcanoBleClient::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
         ESP_LOGW(TAG, "Target temperature (CHAR-014) not found on device");
       } else {
         this->target_temp_handle_ = target_temp_chr->handle;
-        this->pending_subscriptions_++;
-        subscribe(this->client_, this->target_temp_handle_, "target temperature");
+        if (subscribe(this->client_, this->target_temp_handle_, "target temperature"))
+          this->pending_subscriptions_++;
       }
 
       auto *hours_chr =
@@ -291,8 +301,8 @@ void VolcanoBleClient::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
         ESP_LOGW(TAG, "Hours of operation (CHAR-022) not found on device");
       } else {
         this->hours_handle_ = hours_chr->handle;
-        this->pending_subscriptions_++;
-        subscribe(this->client_, this->hours_handle_, "hours of operation");
+        if (subscribe(this->client_, this->hours_handle_, "hours of operation"))
+          this->pending_subscriptions_++;
       }
 
       auto *minutes_chr =
@@ -301,8 +311,8 @@ void VolcanoBleClient::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
         ESP_LOGW(TAG, "Minutes of operation (CHAR-023) not found on device");
       } else {
         this->minutes_handle_ = minutes_chr->handle;
-        this->pending_subscriptions_++;
-        subscribe(this->client_, this->minutes_handle_, "minutes of operation");
+        if (subscribe(this->client_, this->minutes_handle_, "minutes of operation"))
+          this->pending_subscriptions_++;
       }
 
       // CHAR-018 through CHAR-021: one-byte Read/Write trigger
