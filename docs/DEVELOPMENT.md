@@ -57,7 +57,7 @@ This is the only place in the repository the split from ADR-0009 is exercised wi
 
 ## Continuous integration and pre-commit hooks
 
-[`.github/workflows/ci.yml`](../.github/workflows/ci.yml) runs on every push and pull request: `esphome config`/`esphome compile` against the example configuration (with a placeholder `secrets.yaml`, per "Validating the component locally" above), `make test` for `VolcanoDevice`'s host-side tests, and a `clang-format --dry-run --Werror` check (see [`docs/CONVENTIONS.md`](CONVENTIONS.md#code-formatting-expectations) for the style and why it's pinned to an exact version). None of the three jobs need real hardware.
+[`.github/workflows/ci.yml`](../.github/workflows/ci.yml) runs on every push and pull request: `esphome config`/`esphome compile` against each example configuration (the Phase 1 dev board's, with a placeholder `secrets.yaml` per "Validating the component locally" above, and the Phase 2 M5Stack Dial hardware bring-up config, which needs no secrets), `make test` for `VolcanoDevice`'s host-side tests, and a `clang-format --dry-run --Werror` check (see [`docs/CONVENTIONS.md`](CONVENTIONS.md#code-formatting-expectations) for the style and why it's pinned to an exact version). None of the three jobs need real hardware.
 
 Three local pre-commit hooks, defined in [`.pre-commit-config.yaml`](../.pre-commit-config.yaml):
 
