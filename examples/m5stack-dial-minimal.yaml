@@ -1,0 +1,112 @@
+# Phase 2 hardware bring-up for the M5Stack Dial (ADR-0010, ADR-0011).
+# Confirms the board flashes and boots, and that each of its four
+# peripherals -- display, touch, rotary encoder, physical button -- works,
+# verified individually against real hardware per ADR-0010's plan. No LVGL,
+# no volcano component, and no wifi/api/web_server yet: this is the
+# confirmed hardware foundation ADR-0011's UI work builds on next, not the
+# UI itself.
+#
+# The Dial is built on the M5StampS3 module (ESP32-S3, 8MB flash), matching
+# the "M5Stack StampS3" PlatformIO board definition -- confirmed against the
+# connected device's USB VID:PID (303A:1001).
+#
+# Each `on_*` handler below logs at DEBUG so `esphome logs` gives a direct,
+# manual way to re-confirm a given peripheral still works, the same
+# verification this file was built up against on real hardware.
+
+esphome:
+  name: volcano-dial-scaffold
+  on_boot:
+    then:
+      - output.set_level:
+          id: dial_backlight_pwm
+          level: 100%
+
+logger:
+
+esp32:
+  board: m5stack-stamps3
+  variant: esp32s3
+  flash_size: 8MB
+  framework:
+    type: esp-idf
+
+# The GC9A01A round panel over SPI. Pins confirmed against a known-working
+# community M5Dial configuration, not just the pinout reference --
+# MOSI/SCK/CS/DC/RST as below; backlight is a separate PWM-driven pin
+# (GPIO9) the panel stays dark without.
+spi:
+  mosi_pin: GPIO5
+  clk_pin: GPIO6
+
+output:
+  - platform: ledc
+    pin: GPIO9
+    id: dial_backlight_pwm
+
+display:
+  - platform: ili9xxx
+    model: GC9A01A
+    cs_pin: GPIO7
+    dc_pin: GPIO4
+    reset_pin: GPIO8
+    invert_colors: true
+    dimensions:
+      width: 240
+      height: 240
+    update_interval: 1s
+    lambda: |-
+      it.fill(Color::BLACK);
+      it.filled_circle(120, 120, 80, Color(255, 100, 0));
+
+# The FT3267 touch panel, which is FT5x06-register-compatible -- confirmed
+# against the same known-working community M5Dial configuration the display
+# pins were checked against.
+i2c:
+  sda: GPIO11
+  scl: GPIO12
+
+touchscreen:
+  platform: ft5x06
+  id: dial_touchscreen
+  address: 0x38
+  on_touch:
+    - lambda: |-
+        ESP_LOGD("main", "Touch at (%d, %d)", touch.x, touch.y);
+
+# The rotary encoder (GPIO40/41, turn-only) and the separate physical
+# button (GPIO42) that provides every "press" action in ADR-0011's
+# navigation model -- the encoder itself has no click.
+sensor:
+  - platform: rotary_encoder
+    name: "Dial Rotary Encoder"
+    id: dial_rotary_encoder
+    resolution: 1
+    pin_a:
+      number: GPIO40
+      mode:
+        input: true
+        pullup: true
+    pin_b:
+      number: GPIO41
+      mode:
+        input: true
+        pullup: true
+    on_value:
+      - lambda: |-
+          ESP_LOGD("main", "Encoder now at %d", (int) x);
+
+binary_sensor:
+  - platform: gpio
+    name: "Dial Button"
+    id: dial_button
+    pin:
+      number: GPIO42
+      mode:
+        input: true
+        pullup: true
+      inverted: true
+    on_press:
+      - logger.log: "Button pressed"
+    on_release:
+      - logger.log: "Button released"
