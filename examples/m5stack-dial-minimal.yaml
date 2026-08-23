@@ -1,13 +1,14 @@
 # Phase 2 hardware bring-up for the M5Stack Dial (ADR-0010, ADR-0011).
 # Confirms the board flashes and boots, that each of its four peripherals --
-# display, touch, rotary encoder, physical button -- works, and that the
+# display, touch, rotary encoder, physical button -- works, that the
 # already-verified volcano component (ADR-0009) also connects and decodes
-# state correctly on this different ESP32-S3 board, all checked
-# individually against real hardware. No LVGL yet, and no wifi/api/
-# web_server yet -- the component needs neither, and ADR-0010's decision to
-# retain them is about the eventual UI-carrying firmware, not this BLE-only
-# verification step. This is the confirmed hardware foundation ADR-0011's UI
-# work builds on next, not the UI itself.
+# state correctly on this different ESP32-S3 board, and that LVGL itself
+# renders and accepts input from all three of touch/encoder/button on this
+# hardware -- all checked individually against real hardware, retiring the
+# one risk ADR-0010 flagged as unverified. Still no wifi/api/web_server --
+# nothing here needs them yet. This is the confirmed foundation ADR-0011's
+# actual UI (the Home page onward) builds on next, not the UI itself: the
+# page below is a minimal input/render check, not part of that design.
 #
 # volcano's own [volcano] log tag reports connection lifecycle and decoded
 # state on connect and on change, the same verification the Phase 1 dev
@@ -67,6 +68,7 @@ output:
 
 display:
   - platform: ili9xxx
+    id: dial_display
     model: GC9A01A
     cs_pin: GPIO7
     dc_pin: GPIO4
@@ -75,10 +77,8 @@ display:
     dimensions:
       width: 240
       height: 240
-    update_interval: 1s
-    lambda: |-
-      it.fill(Color::BLACK);
-      it.filled_circle(120, 120, 80, Color(255, 100, 0));
+    auto_clear_enabled: false
+    update_interval: never
 
 # The FT3267 touch panel, which is FT5x06-register-compatible -- confirmed
 # against the same known-working community M5Dial configuration the display
@@ -131,3 +131,35 @@ binary_sensor:
       - logger.log: "Button pressed"
     on_release:
       - logger.log: "Button released"
+
+# LVGL bring-up (ADR-0010): confirms the framework itself renders on this
+# display and accepts input from both the touchscreen and the encoder/
+# button pair, before any of ADR-0011's actual pages are built. The
+# encoder's enter_button is the physical button, not the encoder's own
+# click -- it has none.
+lvgl:
+  displays:
+    - dial_display
+  encoders:
+    - sensor: dial_rotary_encoder
+      enter_button: dial_button
+  pages:
+    - id: lvgl_bringup_page
+      widgets:
+        - label:
+            id: lvgl_status_label
+            text: "LVGL OK"
+            align: center
+        - button:
+            id: lvgl_test_button
+            align: bottom_mid
+            y: -20
+            width: 120
+            height: 50
+            widgets:
+              - label:
+                  text: "Tap/press"
+            on_click:
+              - lvgl.label.update:
+                  id: lvgl_status_label
+                  text: "Clicked!"
