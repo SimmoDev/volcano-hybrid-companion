@@ -50,8 +50,9 @@ jobs:
         run: esphome config examples/esp32-s3-devkit-minimal.yaml
       - name: esphome compile (dev board)
         run: esphome compile examples/esp32-s3-devkit-minimal.yaml
-      # No secrets.yaml dependency -- this config has no wifi/ble_client
-      # yet, it's Dial hardware bring-up only (ADR-0010).
+      # Shares the same placeholder secrets.yaml created above -- this
+      # config's ble_client needs volcano_mac_address, but not wifi_ssid/
+      # wifi_password, since it has no wifi/api/web_server yet (ADR-0010).
       - name: esphome config (M5Stack Dial)
         run: esphome config examples/m5stack-dial-minimal.yaml
       - name: esphome compile (M5Stack Dial)

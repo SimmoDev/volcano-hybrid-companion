@@ -1,10 +1,18 @@
 # Phase 2 hardware bring-up for the M5Stack Dial (ADR-0010, ADR-0011).
-# Confirms the board flashes and boots, and that each of its four
-# peripherals -- display, touch, rotary encoder, physical button -- works,
-# verified individually against real hardware per ADR-0010's plan. No LVGL,
-# no volcano component, and no wifi/api/web_server yet: this is the
-# confirmed hardware foundation ADR-0011's UI work builds on next, not the
-# UI itself.
+# Confirms the board flashes and boots, that each of its four peripherals --
+# display, touch, rotary encoder, physical button -- works, and that the
+# already-verified volcano component (ADR-0009) also connects and decodes
+# state correctly on this different ESP32-S3 board, all checked
+# individually against real hardware. No LVGL yet, and no wifi/api/
+# web_server yet -- the component needs neither, and ADR-0010's decision to
+# retain them is about the eventual UI-carrying firmware, not this BLE-only
+# verification step. This is the confirmed hardware foundation ADR-0011's UI
+# work builds on next, not the UI itself.
+#
+# volcano's own [volcano] log tag reports connection lifecycle and decoded
+# state on connect and on change, the same verification the Phase 1 dev
+# board example relies on -- see examples/README.md. No entities are
+# declared here since nothing yet consumes them (no web_server, no UI).
 #
 # The Dial is built on the M5StampS3 module (ESP32-S3, 8MB flash), matching
 # the "M5Stack StampS3" PlatformIO board definition -- confirmed against the
@@ -30,6 +38,19 @@ esp32:
   flash_size: 8MB
   framework:
     type: esp-idf
+
+external_components:
+  - source:
+      type: local
+      path: ../components
+
+ble_client:
+  - mac_address: !secret volcano_mac_address
+    id: volcano_ble_client
+
+volcano:
+  id: volcano_component
+  ble_client_id: volcano_ble_client
 
 # The GC9A01A round panel over SPI. Pins confirmed against a known-working
 # community M5Dial configuration, not just the pinout reference --
