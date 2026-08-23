@@ -8,9 +8,9 @@ This project is **not affiliated with, endorsed by, or supported by Storz & Bick
 
 ## Status
 
-Phase 1 is complete. The `volcano` ESPHome component connects to the device and reads status, the auto-shutoff countdown, current temperature, the heater-runtime meter and the device-information strings, plus writes for the auto-shutoff duration, heater/pump on/off, target temperature, display brightness, and the vibration, display-on-cooling and display-units settings — all verified against real hardware. Per [ADR-0009](docs/decisions/ADR-0009-volcano-abstraction-layer-interface.md), the component is split into a BLE communication layer (`VolcanoBleClient`), the hardware-independent Volcano abstraction layer control interfaces depend on (`VolcanoDevice`), and a thin ESPHome integration (`VolcanoComponent`) — also verified against real hardware. BLE protocol discovery continues as a living document — see [`docs/protocol/`](docs/protocol/README.md) for recorded findings.
+Phase 1 is complete, and Phase 2 is now underway. The `volcano` ESPHome component connects to the device and reads status, the auto-shutoff countdown, current temperature, the heater-runtime meter and the device-information strings, plus writes for the auto-shutoff duration, heater/pump on/off, target temperature, display brightness, and the vibration, display-on-cooling and display-units settings — all verified against real hardware. Per [ADR-0009](docs/decisions/ADR-0009-volcano-abstraction-layer-interface.md), the component is split into a BLE communication layer (`VolcanoBleClient`), the hardware-independent Volcano abstraction layer control interfaces depend on (`VolcanoDevice`), and a thin ESPHome integration (`VolcanoComponent`) — also verified against real hardware. BLE protocol discovery continues as a living document — see [`docs/protocol/`](docs/protocol/README.md) for recorded findings.
 
-Initial development is taking place on an ESP32-S3-WROOM-1-N16R8 development board. Once the BLE implementation is mature, development will move to the M5Stack Dial for the user interface.
+Development is now moving to the M5Stack Dial to build the local UI, per [ADR-0004](docs/decisions/ADR-0004-development-hardware-strategy.md). The ESP32-S3-WROOM-1-N16R8 development board remains in use for validating the Volcano component itself, since it stays hardware-independent of the Dial's display/touch/encoder work.
 
 ## Documentation
 
@@ -38,7 +38,7 @@ ESPHome provides the firmware framework this project is built on, and also provi
 - Implement the hardware-independent Volcano component.
 - Expose it as an ESPHome external component.
 
-**Phase 2 — Local standalone remote (next)**
+**Phase 2 — Local standalone remote (current)**
 - Port the working firmware to the M5Stack Dial.
 - Add rotary encoder input, touchscreen, and a local UI.
 - The Dial should fully control the Volcano with no external dependencies.
@@ -72,14 +72,14 @@ These constraints apply for the life of the project, not just Phase 1:
 
 ## Technology Stack
 
-**Primary (Phase 1)**
+**Established (Phase 1, complete)**
 - ESPHome
 - ESP32-S3
 - C++
 - YAML configuration
 - Bluetooth LE
 
-**Future (Phase 2+)**
+**Phase 2 (current)**
 - M5Stack Dial hardware
 - Display UI
 - Touch interface
@@ -101,7 +101,7 @@ volcano-hybrid-companion/
 
 ## Contributing
 
-Not yet open for contributions — Phase 1's foundations (the BLE implementation and the hardware-independent `VolcanoDevice` interface) are in place, but Phase 2 (the M5Stack Dial UI) hasn't started, so there's no additional surface yet for a contributor to build against. This will be revisited once Phase 2 work begins.
+Not yet open for contributions — Phase 1's foundations (the BLE implementation and the hardware-independent `VolcanoDevice` interface) are in place, but Phase 2 (the M5Stack Dial UI) has only just begun, so there's not yet enough surface for a contributor to build against. This will be revisited as Phase 2 work matures.
 
 ## Licence
 
