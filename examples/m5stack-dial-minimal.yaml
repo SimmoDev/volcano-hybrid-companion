@@ -5,9 +5,11 @@
 # now also carries ADR-0011's Home page (current/target temperature with
 # rotary adjustment and write-coalescing debounce, a unit indicator that
 # converts per ADR-0008, Heat/Air buttons, the auto-shutoff countdown,
-# BLE/WiFi status icons), its Navigation Menu, and the split Information
+# BLE/WiFi status icons), its Navigation Menu, Settings (vibration/
+# display-on-cooling/display-units toggles), and the split Information
 # page it names -- About and Diagnostics here, each its own menu entry.
-# Only Settings and the numeric value pages remain unbuilt.
+# Only the numeric value pages (LED brightness, auto-shutoff duration,
+# Dial brightness) remain unbuilt.
 #
 # Still no api/web_server -- nothing here needs them yet; that's ADR-0010's
 # decision to retain them, not yet exercised. WiFi itself is present purely
@@ -36,15 +38,24 @@ esphome:
           level: 100%
       # LVGL auto-adds every newly-created focusable widget to whatever
       # group is current default once an encoder exists (click_focusable:
-      # false on the buttons below only stops a *touch* granting focus,
-      # it doesn't stop this membership) -- confirmed on real hardware:
-      # without this, turning the knob tab-cycled Heat/Air and pressing
-      # it clicked whichever was highlighted. Explicitly evicting them
-      # keeps the Home page's encoder/button reserved for temperature/
-      # menu use only, per ADR-0011.
+      # false on Home's buttons/Settings' switches only stops a *touch*
+      # granting focus, it doesn't stop this membership). Confirmed on
+      # real hardware for Heat/Air already; the same bug hit Settings'
+      # switches too -- every widget here auto-joins the same one
+      # default group at creation regardless of which page it's on, and
+      # nothing had explicitly focused the Menu's roller yet on the very
+      # first button press from Home, so that press landed on whichever
+      # switch the group happened to default-focus and toggled it,
+      # silently writing to the Volcano before the Settings page was
+      # ever even shown. Evicting everything meant to be touch-only
+      # keeps the encoder/button reserved for temperature/menu use on
+      # Home and Settings, per ADR-0011.
       - lambda: |-
           lv_group_remove_obj(id(heat_button));
           lv_group_remove_obj(id(air_button));
+          lv_group_remove_obj(id(settings_vibration_switch));
+          lv_group_remove_obj(id(settings_display_on_cooling_switch));
+          lv_group_remove_obj(id(settings_display_units_switch));
 
 logger:
 
@@ -179,12 +190,79 @@ volcano:
           text: "°F"
       - script.execute: refresh_current_temp_label
       - script.execute: refresh_target_temp_label
+      - lambda: "lv_obj_add_state(id(settings_display_units_switch), LV_STATE_CHECKED);"
+      - lvgl.label.update:
+          id: settings_units_c_label
+          text_color: 0x888888
+      - lvgl.label.update:
+          id: settings_units_f_label
+          text_color: 0x00D9FF
     on_turn_off:
       - lvgl.label.update:
           id: units_label
           text: "°C"
       - script.execute: refresh_current_temp_label
       - script.execute: refresh_target_temp_label
+      - lambda: "lv_obj_remove_state(id(settings_display_units_switch), LV_STATE_CHECKED);"
+      - lvgl.label.update:
+          id: settings_units_c_label
+          text_color: 0x00D9FF
+      - lvgl.label.update:
+          id: settings_units_f_label
+          text_color: 0x888888
+  # Settings page toggles (ADR-0011). Each entity's own on_turn_on/off
+  # keeps its switch and the flanking Off/On (or C/F) labels in sync
+  # with the confirmed device state, including changes made elsewhere
+  # (the Volcano's own panel, say) -- whichever option is currently
+  # active is coloured cyan, the other dim grey.
+  #
+  # Sets LV_STATE_CHECKED via the raw LVGL call, not lvgl.switch.update
+  # (state: {checked: ...}): that action goes through ESPHome's own
+  # LvglComponent::lv_obj_set_state_value helper, which deliberately
+  # fires the same update event a real user toggle does (its own
+  # comment: "fire an event if changed (only needed for CHECKED)"),
+  # risking exactly the kind of write-on-sync feedback loop that turned
+  # out to be caused by something else entirely on this page (see the
+  # group-eviction lambda in on_boot above) -- kept anyway as the more
+  # robust choice now that the actual cause is understood.
+  vibration:
+    id: volcano_vibration
+    internal: true
+    on_turn_on:
+      - lambda: "lv_obj_add_state(id(settings_vibration_switch), LV_STATE_CHECKED);"
+      - lvgl.label.update:
+          id: settings_vibration_off_label
+          text_color: 0x888888
+      - lvgl.label.update:
+          id: settings_vibration_on_label
+          text_color: 0x00D9FF
+    on_turn_off:
+      - lambda: "lv_obj_remove_state(id(settings_vibration_switch), LV_STATE_CHECKED);"
+      - lvgl.label.update:
+          id: settings_vibration_off_label
+          text_color: 0x00D9FF
+      - lvgl.label.update:
+          id: settings_vibration_on_label
+          text_color: 0x888888
+  display_on_cooling:
+    id: volcano_display_on_cooling
+    internal: true
+    on_turn_on:
+      - lambda: "lv_obj_add_state(id(settings_display_on_cooling_switch), LV_STATE_CHECKED);"
+      - lvgl.label.update:
+          id: settings_cooling_off_label
+          text_color: 0x888888
+      - lvgl.label.update:
+          id: settings_cooling_on_label
+          text_color: 0x00D9FF
+    on_turn_off:
+      - lambda: "lv_obj_remove_state(id(settings_display_on_cooling_switch), LV_STATE_CHECKED);"
+      - lvgl.label.update:
+          id: settings_cooling_off_label
+          text_color: 0x00D9FF
+      - lvgl.label.update:
+          id: settings_cooling_on_label
+          text_color: 0x888888
   auto_shutoff_countdown:
     id: volcano_auto_shutoff_countdown
     internal: true
@@ -499,14 +577,20 @@ script:
           else:
             - if:
                 condition:
-                  lambda: 'return id(nav_menu_roller).get_selected_text() == "Diagnostics";'
+                  lambda: 'return id(nav_menu_roller).get_selected_text() == "Settings";'
                 then:
-                  - lvgl.page.show: diagnostics_page
+                  - lvgl.page.show: settings_page
                 else:
-                  # Only "About" left among the current options -- add
-                  # another explicit branch here, not a new bare else,
-                  # once a fourth option exists.
-                  - lvgl.page.show: about_page
+                  - if:
+                      condition:
+                        lambda: 'return id(nav_menu_roller).get_selected_text() == "Diagnostics";'
+                      then:
+                        - lvgl.page.show: diagnostics_page
+                      else:
+                        # Only "About" left among the current options --
+                        # add another explicit branch here, not a new
+                        # bare else, once a fifth option exists.
+                        - lvgl.page.show: about_page
 
 # Blinks the BLE status icon while CONNECTING (ble_connecting, set by
 # ble_client's on_connect/on_disconnect and volcano's connected above).
@@ -548,11 +632,11 @@ font:
 # Rotary-adjusted target temperature, with ADR-0011's write-coalescing
 # debounce, is implemented -- see the rotary_encoder sensor's on_value
 # and the commit_target_temperature/refresh_target_temp_label scripts
-# above. The Navigation Menu (below) lists Home plus About and
-# Diagnostics -- ADR-0011's Information page, split in two rather than
-# cramming six lines of device facts onto one (see the comment above
-# about_page/diagnostics_page). Settings and the numeric value pages
-# don't exist yet; each becomes a real menu entry once built.
+# above. The Navigation Menu (below) lists Home, Settings, Diagnostics,
+# and About, in that order -- the latter two are ADR-0011's Information
+# page, split in two rather than cramming six lines of device facts onto
+# one (see the comment above about_page/diagnostics_page). The numeric
+# value pages don't exist yet; each becomes a real menu entry once built.
 lvgl:
   displays:
     - dial_display
@@ -724,6 +808,7 @@ lvgl:
               outline_width: 0
             options:
               - "Home"
+              - "Settings"
               - "Diagnostics"
               - "About"
             # Touch only -- guarded on the triggering indev being the
@@ -739,6 +824,169 @@ lvgl:
                     lambda: "return lv_indev_get_type(lv_indev_get_act()) == LV_INDEV_TYPE_POINTER;"
                   then:
                     - script.execute: confirm_menu_selection
+
+    # Settings (ADR-0011): touch toggles for vibration, display-on-
+    # cooling, and display units, matching VolcanoDevice's existing
+    # boolean fields. Read-only in the sense that there's no on_load/
+    # on_click of its own beyond the toggles themselves: dial_button's
+    # on_release already returns to the Menu from here, same as About/
+    # Diagnostics.
+    #
+    # Same caption-then-control pairing as About/Diagnostics (a page-
+    # level flex column, each pair its own two widgets) rather than
+    # full-width label-left/switch-right rows -- those needed
+    # flex_align_main: space_between to push the switch to the row's
+    # right edge, but that positions it based on each row's *own* total
+    # content width, so it landed at a different x on every row once the
+    # captions were different lengths (worse once Units also had a
+    # trailing "°F" label, which pushed its switch further left still).
+    # Compact, centred control clusters side-step that: every switch
+    # sits at the same place, page-centre, regardless of what flanks it.
+    # This also keeps rows narrower, which the round display needed --
+    # 90%-wide rows were clipping the leading "V" of "Vibration" against
+    # the bezel at this page's outer rows, confirmed on real hardware.
+    - id: settings_page
+      bg_color: 0x000000
+      bg_opa: cover
+      # scrollable: false and a tight pad_row -- six stacked children
+      # (3 captions + 3 control clusters) at the theme's default row
+      # gap overflowed the page's own height, which both pushed
+      # Vibration's caption up into the bezel and made the page
+      # scrollable (LVGL's default for any obj/page whose content
+      # exceeds its bounds) when it should stay static like every
+      # other page. Confirmed on real hardware.
+      scrollable: false
+      layout:
+        type: flex
+        flex_flow: column
+        flex_align_main: center
+        flex_align_cross: center
+        flex_align_track: center
+        pad_row: 8
+      widgets:
+        - label:
+            text_color: 0xFFFFFF
+            text: "Vibration"
+        - obj:
+            width: size_content
+            height: size_content
+            bg_opa: 0%
+            border_width: 0
+            pad_top: 0
+            pad_left: 0
+            pad_right: 0
+            pad_bottom: 2
+            layout:
+              type: flex
+              flex_flow: row
+              flex_align_main: center
+              flex_align_cross: center
+              pad_column: 8
+            widgets:
+              - label:
+                  id: settings_vibration_off_label
+                  text_color: 0x00D9FF
+                  text: "Off"
+              - switch:
+                  id: settings_vibration_switch
+                  click_focusable: false
+                  indicator:
+                    checked:
+                      bg_color: 0x00D9FF
+                  on_value:
+                    - if:
+                        condition:
+                          lambda: "return x;"
+                        then:
+                          - switch.turn_on: volcano_vibration
+                        else:
+                          - switch.turn_off: volcano_vibration
+              - label:
+                  id: settings_vibration_on_label
+                  text_color: 0x888888
+                  text: "On"
+        - label:
+            text_color: 0xFFFFFF
+            text: "Display on Cooling"
+        - obj:
+            width: size_content
+            height: size_content
+            bg_opa: 0%
+            border_width: 0
+            pad_top: 0
+            pad_left: 0
+            pad_right: 0
+            pad_bottom: 2
+            layout:
+              type: flex
+              flex_flow: row
+              flex_align_main: center
+              flex_align_cross: center
+              pad_column: 8
+            widgets:
+              - label:
+                  id: settings_cooling_off_label
+                  text_color: 0x00D9FF
+                  text: "Off"
+              - switch:
+                  id: settings_display_on_cooling_switch
+                  click_focusable: false
+                  indicator:
+                    checked:
+                      bg_color: 0x00D9FF
+                  on_value:
+                    - if:
+                        condition:
+                          lambda: "return x;"
+                        then:
+                          - switch.turn_on: volcano_display_on_cooling
+                        else:
+                          - switch.turn_off: volcano_display_on_cooling
+              - label:
+                  id: settings_cooling_on_label
+                  text_color: 0x888888
+                  text: "On"
+        - label:
+            text_color: 0xFFFFFF
+            text: "Units"
+        - obj:
+            width: size_content
+            height: size_content
+            bg_opa: 0%
+            border_width: 0
+            pad_top: 0
+            pad_left: 0
+            pad_right: 0
+            pad_bottom: 2
+            layout:
+              type: flex
+              flex_flow: row
+              flex_align_main: center
+              flex_align_cross: center
+              pad_column: 8
+            widgets:
+              - label:
+                  id: settings_units_c_label
+                  text_color: 0x00D9FF
+                  text: "°C"
+              - switch:
+                  id: settings_display_units_switch
+                  click_focusable: false
+                  indicator:
+                    checked:
+                      bg_color: 0x00D9FF
+                  on_value:
+                    - if:
+                        condition:
+                          lambda: "return x;"
+                        then:
+                          - switch.turn_on: volcano_display_units_fahrenheit
+                        else:
+                          - switch.turn_off: volcano_display_units_fahrenheit
+              - label:
+                  id: settings_units_f_label
+                  text_color: 0x888888
+                  text: "°F"
 
     # About and Diagnostics (ADR-0011's Information page, split in two --
     # read-only, so no on_load/on_click of their own: dial_button's
