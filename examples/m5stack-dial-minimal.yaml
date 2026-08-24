@@ -8,9 +8,11 @@
 # BLE/WiFi status icons), its Navigation Menu, Settings (vibration/
 # display-on-cooling/display-units toggles), and the split Information
 # page it names -- About and Diagnostics here, each its own menu entry.
-# LED Brightness and Auto-Shutoff Duration are also built now, following
-# ADR-0011's shared rotary-adjusted-value template. Only Dial Brightness
-# remains unbuilt among the numeric pages.
+# LED Brightness, Auto-Shutoff Duration, and Dial Brightness are also
+# built now, following ADR-0011's shared rotary-adjusted-value template
+# -- Dial Brightness is the odd one out, local Dial hardware rather than
+# a VolcanoDevice field, per that ADR's deliberate carve-out. All of
+# ADR-0011's pages now exist.
 #
 # Still no api/web_server -- nothing here needs them yet; that's ADR-0010's
 # decision to retain them, not yet exercised. WiFi itself is present purely
@@ -34,9 +36,23 @@ esphome:
     version: "0.1.0"
   on_boot:
     then:
+      # Dial Brightness (ADR-0011) is deliberately not a VolcanoDevice
+      # field -- it's local Dial hardware, so it's a plain restore_value
+      # global (dial_brightness_pct) rather than a volcano: number entity,
+      # persisted via ESPHome's own preference/NVS facilities rather than
+      # anything the component or the Volcano itself is involved in. The
+      # backlight is set from it here (not a hardcoded 100%) so a reboot
+      # restores the last brightness the user picked; pending_dial_
+      # brightness (the page's own turn-in-progress value, same write-
+      # coalescing shape as every other rotary-adjusted page) is seeded
+      # from it too, since -- unlike a VolcanoDevice field -- nothing ever
+      # reports this value asynchronously to seed it the way an on_value
+      # trigger would.
       - output.set_level:
           id: dial_backlight_pwm
-          level: 100%
+          level: !lambda "return id(dial_brightness_pct) / 100.0f;"
+      - lambda: "id(pending_dial_brightness) = id(dial_brightness_pct);"
+      - script.execute: refresh_dial_brightness_label
       # LVGL auto-adds every newly-created focusable widget to whatever
       # group is current default once an encoder exists (click_focusable:
       # false on Home's buttons/Settings' switches only stops a *touch*
@@ -50,10 +66,10 @@ esphome:
       # silently writing to the Volcano before the Settings page was
       # ever even shown. Evicting everything meant to be touch-only
       # keeps the encoder/button reserved for temperature/menu use on
-      # Home and Settings, per ADR-0011. The LED Brightness and Auto-
-      # Shutoff Duration pages' step-size buttons are the same story:
-      # click_focusable: false alone doesn't stop group membership, so
-      # they need evicting too.
+      # Home and Settings, per ADR-0011. The LED Brightness, Auto-Shutoff
+      # Duration, and Dial Brightness pages' step-size buttons are the
+      # same story: click_focusable: false alone doesn't stop group
+      # membership, so they need evicting too.
       - lambda: |-
           lv_group_remove_obj(id(heat_button));
           lv_group_remove_obj(id(air_button));
@@ -65,6 +81,24 @@ esphome:
           lv_group_remove_obj(id(auto_shutoff_duration_step_1_button));
           lv_group_remove_obj(id(auto_shutoff_duration_step_10_button));
           lv_group_remove_obj(id(auto_shutoff_duration_step_30_button));
+          lv_group_remove_obj(id(dial_brightness_step_1_button));
+          lv_group_remove_obj(id(dial_brightness_step_10_button));
+
+# ESPHome's default flash_write_interval (60s) batches restore_value
+# global writes (dial_brightness_pct below) in RAM and only actually
+# commits them to NVS periodically -- confirmed by reading ESPHome's own
+# source (components/preferences/syncer.h, components/esp32/
+# preferences.cpp): RestoringGlobalsComponent::update() (itself only
+# polled once a second) merely queues a pending save, and that pending
+# save only reaches nvs_set_blob()/nvs_commit() when this component's
+# own interval fires. A graceful reboot also flushes it via on_shutdown,
+# but an abrupt power loss (the USB cable being unplugged, say) doesn't
+# run that -- confirmed on real hardware: a brightness change followed
+# immediately by unplugging didn't survive. Shortening the interval
+# narrows that window without switching to a sync-every-loop-iteration
+# extreme (USE_PREFERENCES_SYNC_EVERY_LOOP) that isn't needed here.
+preferences:
+  flash_write_interval: 1s
 
 logger:
 
@@ -173,6 +207,26 @@ globals:
     restore_value: false
     initial_value: "NAN"
   - id: auto_shutoff_duration_step
+    type: float
+    restore_value: false
+    initial_value: "1.0"
+  # Dial Brightness (ADR-0011): local Dial hardware, not a VolcanoDevice
+  # field, so this is a plain restore_value global rather than a
+  # volcano: number entity -- ESPHome's own preference/NVS facilities
+  # persist it across reboots. dial_brightness_pct is the confirmed,
+  # persisted value the PWM output and a fresh boot both read from;
+  # pending_dial_brightness is the page's own turn-in-progress value,
+  # same write-coalescing shape as every other rotary-adjusted page,
+  # seeded from dial_brightness_pct in on_boot above (see that comment).
+  - id: dial_brightness_pct
+    type: float
+    restore_value: true
+    initial_value: "100"
+  - id: pending_dial_brightness
+    type: float
+    restore_value: false
+    initial_value: "100"
+  - id: dial_brightness_step
     type: float
     restore_value: false
     initial_value: "1.0"
@@ -551,8 +605,34 @@ sensor:
                         - script.execute: refresh_auto_shutoff_duration_label
                         - script.execute: commit_auto_shutoff_duration
                       else:
-                        - lambda: |-
-                            id(last_encoder_raw) = x;
+                        - if:
+                            condition:
+                              lvgl.page.is_showing: dial_brightness_page
+                            then:
+                              # No NaN guard here, unlike the branches
+                              # above -- pending_dial_brightness is always
+                              # a real number by the time this page could
+                              # ever be showing (seeded from the persisted
+                              # dial_brightness_pct in on_boot), since
+                              # nothing async has to report it first the
+                              # way a VolcanoDevice field does.
+                              - lambda: |-
+                                  float delta = x - id(last_encoder_raw);
+                                  id(last_encoder_raw) = x;
+                                  float next = id(pending_dial_brightness) + delta * id(dial_brightness_step);
+                                  // 1%, not 0% -- 0% turns the backlight
+                                  // fully off, which would make the page
+                                  // itself unreadable to turn back up.
+                                  if (next < 1.0f)
+                                    next = 1.0f;
+                                  if (next > 100.0f)
+                                    next = 100.0f;
+                                  id(pending_dial_brightness) = next;
+                              - script.execute: refresh_dial_brightness_label
+                              - script.execute: commit_dial_brightness
+                            else:
+                              - lambda: |-
+                                  id(last_encoder_raw) = x;
 
 binary_sensor:
   - platform: gpio
@@ -703,6 +783,31 @@ script:
             char buf[8];
             snprintf(buf, sizeof(buf), "%.0f", v);
             return std::string(buf);
+  # Dial Brightness's own commit/refresh pair -- same debounce shape as
+  # every other rotary-adjusted page, per ADR-0011, even though there's
+  # no BLE round trip to wait out here: the delay just gives the same
+  # feel as every other numeric page rather than writing the PWM level
+  # on every single detent. Persists dial_brightness_pct (the confirmed
+  # value on_boot restores from and the PWM output otherwise reflects)
+  # here, not on every raw turn, for the same reason.
+  - id: commit_dial_brightness
+    mode: restart
+    then:
+      - delay: 300ms
+      - globals.set:
+          id: dial_brightness_pct
+          value: !lambda "return id(pending_dial_brightness);"
+      - output.set_level:
+          id: dial_backlight_pwm
+          level: !lambda "return id(pending_dial_brightness) / 100.0f;"
+  - id: refresh_dial_brightness_label
+    then:
+      - lvgl.label.update:
+          id: dial_brightness_value_label
+          text: !lambda |-
+            char buf[8];
+            snprintf(buf, sizeof(buf), "%.0f", id(pending_dial_brightness));
+            return std::string(buf);
   - id: refresh_time_of_operation_label
     then:
       - lvgl.label.update:
@@ -749,15 +854,22 @@ script:
                             else:
                               - if:
                                   condition:
-                                    lambda: 'return id(nav_menu_roller).get_selected_text() == "Diagnostics";'
+                                    lambda: 'return id(nav_menu_roller).get_selected_text() == "Dial Brightness";'
                                   then:
-                                    - lvgl.page.show: diagnostics_page
+                                    - lvgl.page.show: dial_brightness_page
                                   else:
-                                    # Only "About" left among the current
-                                    # options -- add another explicit
-                                    # branch here, not a new bare else,
-                                    # once a seventh option exists.
-                                    - lvgl.page.show: about_page
+                                    - if:
+                                        condition:
+                                          lambda: 'return id(nav_menu_roller).get_selected_text() == "Diagnostics";'
+                                        then:
+                                          - lvgl.page.show: diagnostics_page
+                                        else:
+                                          # Only "About" left among the
+                                          # current options -- add another
+                                          # explicit branch here, not a
+                                          # new bare else, once an eighth
+                                          # option exists.
+                                          - lvgl.page.show: about_page
 
 # Blinks the BLE status icon while CONNECTING (ble_connecting, set by
 # ble_client's on_connect/on_disconnect and volcano's connected above).
@@ -800,12 +912,11 @@ font:
 # debounce, is implemented -- see the rotary_encoder sensor's on_value
 # and the commit_target_temperature/refresh_target_temp_label scripts
 # above. The Navigation Menu (below) lists Home, Settings, LED Brightness,
-# Auto-Shutoff Duration, Diagnostics, and About, in that order -- the
-# latter two are ADR-0011's Information page, split in two rather than
-# cramming six lines of device facts onto one (see the comment above
-# about_page/diagnostics_page). Dial Brightness doesn't exist yet; it
-# becomes a real menu entry once built, following LED Brightness/Auto-
-# Shutoff Duration's pages as the template.
+# Auto-Shutoff Duration, Dial Brightness, Diagnostics, and About, in that
+# order -- the latter two are ADR-0011's Information page, split in two
+# rather than cramming six lines of device facts onto one (see the
+# comment above about_page/diagnostics_page). Every page ADR-0011 names
+# now exists.
 lvgl:
   displays:
     - dial_display
@@ -980,6 +1091,7 @@ lvgl:
               - "Settings"
               - "LED Brightness"
               - "Auto-Shutoff Duration"
+              - "Dial Brightness"
               - "Diagnostics"
               - "About"
             # Touch only -- guarded on the triggering indev being the
@@ -1393,6 +1505,105 @@ lvgl:
                         bg_color: 0x333333
                     - lvgl.widget.update:
                         id: auto_shutoff_duration_step_30_button
+                        bg_color: 0xFF7A00
+
+    # Dial Brightness (ADR-0011's shared numeric-value page template,
+    # third and final instance): same shape as LED Brightness (1-100%,
+    # clamped at 1 rather than 0 so the backlight can never be turned
+    # fully off from here -- 0% would make the page itself unreadable to
+    # turn back up -- so the same two step buttons, 1/10), but this is
+    # *not* a VolcanoDevice field -- it's the Dial's own backlight,
+    # read/written directly against ESPHome's output component and
+    # persisted via a restore_value global (dial_brightness_pct) rather
+    # than anything flowing through the Volcano abstraction layer. See
+    # the comments on dial_brightness_pct/pending_dial_brightness
+    # (globals above) and commit_dial_brightness/refresh_dial_
+    # brightness_label (scripts above) for the mechanism; ADR-0002's
+    # boundary is why this isn't a volcano: number entity even though it
+    # reuses the same page template.
+    - id: dial_brightness_page
+      bg_color: 0x000000
+      bg_opa: cover
+      scrollable: false
+      layout:
+        type: flex
+        flex_flow: column
+        flex_align_main: center
+        flex_align_cross: center
+        flex_align_track: center
+        pad_row: 8
+      widgets:
+        - label:
+            text_color: 0xFFFFFF
+            text: "Dial Brightness"
+            pad_bottom: 8
+        - label:
+            id: dial_brightness_value_label
+            text_font: font_temp
+            text_color: 0x00D9FF
+            text: "--"
+        - label:
+            text_color: 0x00D9FF
+            text: "%"
+        - obj:
+            width: size_content
+            height: size_content
+            bg_opa: 0%
+            border_width: 0
+            pad_all: 0
+            pad_top: 8
+            layout:
+              type: flex
+              flex_flow: row
+              flex_align_main: center
+              flex_align_cross: center
+              pad_column: 12
+            widgets:
+              - button:
+                  id: dial_brightness_step_1_button
+                  width: 48
+                  height: 48
+                  radius: circle
+                  shadow_width: 0
+                  outline_width: 0
+                  bg_color: 0xFF7A00
+                  click_focusable: false
+                  widgets:
+                    - label:
+                        text: "1"
+                        align: center
+                  on_click:
+                    - globals.set:
+                        id: dial_brightness_step
+                        value: "1.0"
+                    - lvgl.widget.update:
+                        id: dial_brightness_step_1_button
+                        bg_color: 0xFF7A00
+                    - lvgl.widget.update:
+                        id: dial_brightness_step_10_button
+                        bg_color: 0x333333
+              - button:
+                  id: dial_brightness_step_10_button
+                  width: 48
+                  height: 48
+                  radius: circle
+                  shadow_width: 0
+                  outline_width: 0
+                  bg_color: 0x333333
+                  click_focusable: false
+                  widgets:
+                    - label:
+                        text: "10"
+                        align: center
+                  on_click:
+                    - globals.set:
+                        id: dial_brightness_step
+                        value: "10.0"
+                    - lvgl.widget.update:
+                        id: dial_brightness_step_1_button
+                        bg_color: 0x333333
+                    - lvgl.widget.update:
+                        id: dial_brightness_step_10_button
                         bg_color: 0xFF7A00
 
     # About and Diagnostics (ADR-0011's Information page, split in two --
