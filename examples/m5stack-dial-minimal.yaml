@@ -1869,7 +1869,20 @@ lvgl:
             # ESPHOME_PROJECT_VERSION comes from the esphome: project:
             # block above -- this firmware's own version, distinct from
             # the Volcano's own firmware/BLE firmware versions below.
-            text: !lambda "return std::string(ESPHOME_PROJECT_VERSION);"
+            # Reformatted from plain semver ("0.1.0") to match the
+            # Volcano's own V-prefixed, zero-padded four-group style
+            # ("V01.03.00.00") per user feedback that the mismatch stood
+            # out visually. The fourth group is always "00" -- semver
+            # only carries three, and the Volcano's own version strings
+            # are opaque to this side anyway (ADR-0008), so there's
+            # nothing meaningful to put there.
+            text: !lambda |-
+              std::string v = ESPHOME_PROJECT_VERSION;
+              int major = 0, minor = 0, patch = 0;
+              sscanf(v.c_str(), "%d.%d.%d", &major, &minor, &patch);
+              char buf[16];
+              snprintf(buf, sizeof(buf), "V%02d.%02d.%02d.00", major, minor, patch);
+              return std::string(buf);
         - label:
             text_color: 0x00D9FF
             text: "Volcano FW:"
