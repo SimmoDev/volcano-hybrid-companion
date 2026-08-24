@@ -8,9 +8,9 @@
 # BLE/WiFi status icons), its Navigation Menu, Settings (vibration/
 # display-on-cooling/display-units toggles), and the split Information
 # page it names -- About and Diagnostics here, each its own menu entry.
-# The LED Brightness numeric page is also built now, following ADR-0011's
-# shared rotary-adjusted-value template. Only Auto-Shutoff Duration and
-# Dial Brightness remain unbuilt among the numeric pages.
+# LED Brightness and Auto-Shutoff Duration are also built now, following
+# ADR-0011's shared rotary-adjusted-value template. Only Dial Brightness
+# remains unbuilt among the numeric pages.
 #
 # Still no api/web_server -- nothing here needs them yet; that's ADR-0010's
 # decision to retain them, not yet exercised. WiFi itself is present purely
@@ -50,9 +50,10 @@ esphome:
       # silently writing to the Volcano before the Settings page was
       # ever even shown. Evicting everything meant to be touch-only
       # keeps the encoder/button reserved for temperature/menu use on
-      # Home and Settings, per ADR-0011. The LED Brightness page's step-
-      # size buttons are the same story: click_focusable: false alone
-      # doesn't stop group membership, so they need evicting too.
+      # Home and Settings, per ADR-0011. The LED Brightness and Auto-
+      # Shutoff Duration pages' step-size buttons are the same story:
+      # click_focusable: false alone doesn't stop group membership, so
+      # they need evicting too.
       - lambda: |-
           lv_group_remove_obj(id(heat_button));
           lv_group_remove_obj(id(air_button));
@@ -61,6 +62,9 @@ esphome:
           lv_group_remove_obj(id(settings_display_units_switch));
           lv_group_remove_obj(id(led_brightness_step_1_button));
           lv_group_remove_obj(id(led_brightness_step_10_button));
+          lv_group_remove_obj(id(auto_shutoff_duration_step_1_button));
+          lv_group_remove_obj(id(auto_shutoff_duration_step_10_button));
+          lv_group_remove_obj(id(auto_shutoff_duration_step_30_button));
 
 logger:
 
@@ -157,6 +161,18 @@ globals:
   # sweep of the 0-100 range doesn't need 100 detents of fine adjustment.
   # Not persisted across reboot; always starts at the fine (1) step.
   - id: led_brightness_step
+    type: float
+    restore_value: false
+    initial_value: "1.0"
+  # Auto-Shutoff Duration's own equivalents of the LED Brightness pair
+  # above -- same write-coalescing shape, same step-size-buttons idea,
+  # just three steps (1/10/30) instead of two since 1-360 minutes is a
+  # wider range than 0-100%.
+  - id: pending_auto_shutoff_duration_min
+    type: float
+    restore_value: false
+    initial_value: "NAN"
+  - id: auto_shutoff_duration_step
     type: float
     restore_value: false
     initial_value: "1.0"
@@ -310,6 +326,18 @@ volcano:
           id: pending_led_brightness
           value: !lambda "return x;"
       - script.execute: refresh_led_brightness_label
+  # Same shape again -- unit_of_measurement is minutes already (see the
+  # component's own number_schema), so no conversion is needed here; the
+  # minutes-to-seconds conversion for the underlying write happens inside
+  # VolcanoAutoShutoffDurationNumber::control() itself, not this UI.
+  auto_shutoff_duration:
+    id: volcano_auto_shutoff_duration
+    internal: true
+    on_value:
+      - globals.set:
+          id: pending_auto_shutoff_duration_min
+          value: !lambda "return x;"
+      - script.execute: refresh_auto_shutoff_duration_label
   heater:
     id: volcano_heater
     internal: true
@@ -505,8 +533,26 @@ sensor:
                   - script.execute: refresh_led_brightness_label
                   - script.execute: commit_led_brightness
                 else:
-                  - lambda: |-
-                      id(last_encoder_raw) = x;
+                  - if:
+                      condition:
+                        lvgl.page.is_showing: auto_shutoff_duration_page
+                      then:
+                        - lambda: |-
+                            float delta = x - id(last_encoder_raw);
+                            id(last_encoder_raw) = x;
+                            if (std::isnan(id(pending_auto_shutoff_duration_min)))
+                              return;
+                            float next = id(pending_auto_shutoff_duration_min) + delta * id(auto_shutoff_duration_step);
+                            if (next < 1.0f)
+                              next = 1.0f;
+                            if (next > 360.0f)
+                              next = 360.0f;
+                            id(pending_auto_shutoff_duration_min) = next;
+                        - script.execute: refresh_auto_shutoff_duration_label
+                        - script.execute: commit_auto_shutoff_duration
+                      else:
+                        - lambda: |-
+                            id(last_encoder_raw) = x;
 
 binary_sensor:
   - platform: gpio
@@ -634,6 +680,29 @@ script:
             char buf[8];
             snprintf(buf, sizeof(buf), "%.0f", v);
             return std::string(buf);
+  # Auto-Shutoff Duration's own commit/refresh pair, same shape again.
+  - id: commit_auto_shutoff_duration
+    mode: restart
+    then:
+      - delay: 300ms
+      - if:
+          condition:
+            lambda: "return !std::isnan(id(pending_auto_shutoff_duration_min));"
+          then:
+            - number.set:
+                id: volcano_auto_shutoff_duration
+                value: !lambda "return id(pending_auto_shutoff_duration_min);"
+  - id: refresh_auto_shutoff_duration_label
+    then:
+      - lvgl.label.update:
+          id: auto_shutoff_duration_value_label
+          text: !lambda |-
+            float v = id(pending_auto_shutoff_duration_min);
+            if (std::isnan(v))
+              return std::string("--");
+            char buf[8];
+            snprintf(buf, sizeof(buf), "%.0f", v);
+            return std::string(buf);
   - id: refresh_time_of_operation_label
     then:
       - lvgl.label.update:
@@ -674,15 +743,21 @@ script:
                       else:
                         - if:
                             condition:
-                              lambda: 'return id(nav_menu_roller).get_selected_text() == "Diagnostics";'
+                              lambda: 'return id(nav_menu_roller).get_selected_text() == "Auto-Shutoff Duration";'
                             then:
-                              - lvgl.page.show: diagnostics_page
+                              - lvgl.page.show: auto_shutoff_duration_page
                             else:
-                              # Only "About" left among the current
-                              # options -- add another explicit branch
-                              # here, not a new bare else, once a sixth
-                              # option exists.
-                              - lvgl.page.show: about_page
+                              - if:
+                                  condition:
+                                    lambda: 'return id(nav_menu_roller).get_selected_text() == "Diagnostics";'
+                                  then:
+                                    - lvgl.page.show: diagnostics_page
+                                  else:
+                                    # Only "About" left among the current
+                                    # options -- add another explicit
+                                    # branch here, not a new bare else,
+                                    # once a seventh option exists.
+                                    - lvgl.page.show: about_page
 
 # Blinks the BLE status icon while CONNECTING (ble_connecting, set by
 # ble_client's on_connect/on_disconnect and volcano's connected above).
@@ -725,12 +800,12 @@ font:
 # debounce, is implemented -- see the rotary_encoder sensor's on_value
 # and the commit_target_temperature/refresh_target_temp_label scripts
 # above. The Navigation Menu (below) lists Home, Settings, LED Brightness,
-# Diagnostics, and About, in that order -- the latter two are ADR-0011's
-# Information page, split in two rather than cramming six lines of device
-# facts onto one (see the comment above about_page/diagnostics_page).
-# Auto-Shutoff Duration and Dial Brightness don't exist yet; each becomes
-# a real menu entry once built, following LED Brightness's page as the
-# template.
+# Auto-Shutoff Duration, Diagnostics, and About, in that order -- the
+# latter two are ADR-0011's Information page, split in two rather than
+# cramming six lines of device facts onto one (see the comment above
+# about_page/diagnostics_page). Dial Brightness doesn't exist yet; it
+# becomes a real menu entry once built, following LED Brightness/Auto-
+# Shutoff Duration's pages as the template.
 lvgl:
   displays:
     - dial_display
@@ -904,6 +979,7 @@ lvgl:
               - "Home"
               - "Settings"
               - "LED Brightness"
+              - "Auto-Shutoff Duration"
               - "Diagnostics"
               - "About"
             # Touch only -- guarded on the triggering indev being the
@@ -1194,6 +1270,129 @@ lvgl:
                         bg_color: 0x333333
                     - lvgl.widget.update:
                         id: led_brightness_step_10_button
+                        bg_color: 0xFF7A00
+
+    # Auto-Shutoff Duration (ADR-0011's shared numeric-value page
+    # template, second instance) -- same shape as LED Brightness above,
+    # just three step buttons (1/10/30) instead of two, since 1-360
+    # minutes is a wider range than 0-100%. See LED Brightness's own
+    # comment block above for the write-coalescing/group-eviction
+    # reasoning this page follows identically.
+    - id: auto_shutoff_duration_page
+      bg_color: 0x000000
+      bg_opa: cover
+      scrollable: false
+      layout:
+        type: flex
+        flex_flow: column
+        flex_align_main: center
+        flex_align_cross: center
+        flex_align_track: center
+        pad_row: 8
+      widgets:
+        - label:
+            text_color: 0xFFFFFF
+            text: "Auto-Shutoff Duration"
+            pad_bottom: 8
+        - label:
+            id: auto_shutoff_duration_value_label
+            text_font: font_temp
+            text_color: 0x00D9FF
+            text: "--"
+        - label:
+            text_color: 0x00D9FF
+            text: "min"
+        - obj:
+            width: size_content
+            height: size_content
+            bg_opa: 0%
+            border_width: 0
+            pad_all: 0
+            pad_top: 8
+            layout:
+              type: flex
+              flex_flow: row
+              flex_align_main: center
+              flex_align_cross: center
+              pad_column: 10
+            widgets:
+              - button:
+                  id: auto_shutoff_duration_step_1_button
+                  width: 48
+                  height: 48
+                  radius: circle
+                  shadow_width: 0
+                  outline_width: 0
+                  bg_color: 0xFF7A00
+                  click_focusable: false
+                  widgets:
+                    - label:
+                        text: "1"
+                        align: center
+                  on_click:
+                    - globals.set:
+                        id: auto_shutoff_duration_step
+                        value: "1.0"
+                    - lvgl.widget.update:
+                        id: auto_shutoff_duration_step_1_button
+                        bg_color: 0xFF7A00
+                    - lvgl.widget.update:
+                        id: auto_shutoff_duration_step_10_button
+                        bg_color: 0x333333
+                    - lvgl.widget.update:
+                        id: auto_shutoff_duration_step_30_button
+                        bg_color: 0x333333
+              - button:
+                  id: auto_shutoff_duration_step_10_button
+                  width: 48
+                  height: 48
+                  radius: circle
+                  shadow_width: 0
+                  outline_width: 0
+                  bg_color: 0x333333
+                  click_focusable: false
+                  widgets:
+                    - label:
+                        text: "10"
+                        align: center
+                  on_click:
+                    - globals.set:
+                        id: auto_shutoff_duration_step
+                        value: "10.0"
+                    - lvgl.widget.update:
+                        id: auto_shutoff_duration_step_1_button
+                        bg_color: 0x333333
+                    - lvgl.widget.update:
+                        id: auto_shutoff_duration_step_10_button
+                        bg_color: 0xFF7A00
+                    - lvgl.widget.update:
+                        id: auto_shutoff_duration_step_30_button
+                        bg_color: 0x333333
+              - button:
+                  id: auto_shutoff_duration_step_30_button
+                  width: 48
+                  height: 48
+                  radius: circle
+                  shadow_width: 0
+                  outline_width: 0
+                  bg_color: 0x333333
+                  click_focusable: false
+                  widgets:
+                    - label:
+                        text: "30"
+                        align: center
+                  on_click:
+                    - globals.set:
+                        id: auto_shutoff_duration_step
+                        value: "30.0"
+                    - lvgl.widget.update:
+                        id: auto_shutoff_duration_step_1_button
+                        bg_color: 0x333333
+                    - lvgl.widget.update:
+                        id: auto_shutoff_duration_step_10_button
+                        bg_color: 0x333333
+                    - lvgl.widget.update:
+                        id: auto_shutoff_duration_step_30_button
                         bg_color: 0xFF7A00
 
     # About and Diagnostics (ADR-0011's Information page, split in two --
