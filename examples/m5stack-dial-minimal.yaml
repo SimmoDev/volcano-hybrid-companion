@@ -1,19 +1,17 @@
-# Phase 2 hardware bring-up for the M5Stack Dial (ADR-0010, ADR-0011).
-# Confirms the board flashes and boots, that each of its four peripherals --
-# display, touch, rotary encoder, physical button -- works, that the
-# already-verified volcano component (ADR-0009) also connects and decodes
-# state correctly on this different ESP32-S3 board, and that LVGL itself
-# renders and accepts input from all three of touch/encoder/button on this
-# hardware -- all checked individually against real hardware, retiring the
-# one risk ADR-0010 flagged as unverified. Still no wifi/api/web_server --
-# nothing here needs them yet. This is the confirmed foundation ADR-0011's
-# actual UI (the Home page onward) builds on next, not the UI itself: the
-# page below is a minimal input/render check, not part of that design.
+# M5Stack Dial firmware, growing incrementally per ADR-0010/ADR-0011.
+# Hardware bring-up is done -- display, touch, rotary encoder, physical
+# button, the volcano component, and LVGL itself are all individually
+# confirmed against real hardware (see git history for that trail). This
+# now also carries ADR-0011's Home page: current/target temperature (with
+# a unit indicator that follows the device's own Celsius/Fahrenheit
+# setting, converting the displayed numbers to match per ADR-0008),
+# Heat/Air buttons, the auto-shutoff countdown, and a BLE status
+# indicator, all reading real device state through the volcano component.
 #
-# volcano's own [volcano] log tag reports connection lifecycle and decoded
-# state on connect and on change, the same verification the Phase 1 dev
-# board example relies on -- see examples/README.md. No entities are
-# declared here since nothing yet consumes them (no web_server, no UI).
+# Still no wifi/api/web_server -- nothing here needs them yet; that's
+# ADR-0010's decision to retain them, exercised once a page actually needs
+# WiFi (the status icon). Rotary-adjusted temperature and the Navigation
+# Menu are also not built yet -- see the comment above the Home page.
 #
 # The Dial is built on the M5StampS3 module (ESP32-S3, 8MB flash), matching
 # the "M5Stack StampS3" PlatformIO board definition -- confirmed against the
@@ -30,6 +28,17 @@ esphome:
       - output.set_level:
           id: dial_backlight_pwm
           level: 100%
+      # LVGL auto-adds every newly-created focusable widget to whatever
+      # group is current default once an encoder exists (click_focusable:
+      # false on the buttons below only stops a *touch* granting focus,
+      # it doesn't stop this membership) -- confirmed on real hardware:
+      # without this, turning the knob tab-cycled Heat/Air and pressing
+      # it clicked whichever was highlighted. Explicitly evicting them
+      # keeps the Home page's encoder/button reserved for temperature/
+      # menu use only, per ADR-0011.
+      - lambda: |-
+          lv_group_remove_obj(id(heat_button));
+          lv_group_remove_obj(id(air_button));
 
 logger:
 
@@ -52,6 +61,84 @@ ble_client:
 volcano:
   id: volcano_component
   ble_client_id: volcano_ble_client
+  # Internal: consumed directly by the Home page's LVGL widgets below via
+  # each entity's own automation triggers, not exposed anywhere else yet
+  # (no api/web_server in this config).
+  connected:
+    id: volcano_connected
+    internal: true
+    on_press:
+      - lvgl.led.update:
+          id: ble_status_led
+          color: 0x00CC44
+    on_release:
+      - lvgl.led.update:
+          id: ble_status_led
+          color: 0xCC0000
+  # Values are always Celsius on this side of the component (ADR-0008);
+  # display_units_fahrenheit is the device's own display setting, and
+  # converting for presentation is this control interface's job, not
+  # the component's -- see the refresh_*_temp_label scripts below.
+  current_temperature:
+    id: volcano_current_temperature
+    internal: true
+    on_value:
+      - script.execute: refresh_current_temp_label
+  target_temperature:
+    id: volcano_target_temperature
+    internal: true
+    on_value:
+      - script.execute: refresh_target_temp_label
+  display_units_fahrenheit:
+    id: volcano_display_units_fahrenheit
+    internal: true
+    on_turn_on:
+      - lvgl.label.update:
+          id: units_label
+          text: "°F"
+      - script.execute: refresh_current_temp_label
+      - script.execute: refresh_target_temp_label
+    on_turn_off:
+      - lvgl.label.update:
+          id: units_label
+          text: "°C"
+      - script.execute: refresh_current_temp_label
+      - script.execute: refresh_target_temp_label
+  auto_shutoff_countdown:
+    id: volcano_auto_shutoff_countdown
+    internal: true
+    on_value:
+      - lvgl.label.update:
+          id: countdown_label
+          text: !lambda |-
+            if (std::isnan(x))
+              return std::string("--:--");
+            int total = (int) x;
+            char buf[8];
+            snprintf(buf, sizeof(buf), "%02d:%02d", total / 60, total % 60);
+            return std::string(buf);
+  heater:
+    id: volcano_heater
+    internal: true
+    on_turn_on:
+      - lvgl.widget.update:
+          id: heat_button
+          bg_color: 0xFF7A00
+    on_turn_off:
+      - lvgl.widget.update:
+          id: heat_button
+          bg_color: 0x333333
+  pump:
+    id: volcano_pump
+    internal: true
+    on_turn_on:
+      - lvgl.widget.update:
+          id: air_button
+          bg_color: 0xFF7A00
+    on_turn_off:
+      - lvgl.widget.update:
+          id: air_button
+          bg_color: 0x333333
 
 # The GC9A01A round panel over SPI. Pins confirmed against a known-working
 # community M5Dial configuration, not just the pinout reference --
@@ -132,11 +219,61 @@ binary_sensor:
     on_release:
       - logger.log: "Button released"
 
-# LVGL bring-up (ADR-0010): confirms the framework itself renders on this
-# display and accepts input from both the touchscreen and the encoder/
-# button pair, before any of ADR-0011's actual pages are built. The
-# encoder's enter_button is the physical button, not the encoder's own
-# click -- it has none.
+# Shared by both temperature entities' on_value and by
+# display_units_fahrenheit's on_turn_on/on_turn_off (ADR-0008: the component
+# always reports Celsius, so a unit change re-renders the last known value
+# rather than waiting for the device's next report). Kept as two scripts,
+# not one parameterised by which label/sensor to use, since ESPHome's YAML
+# automations have no clean way to pass that in -- duplicating this much
+# is simpler than the indirection needed to avoid it.
+script:
+  - id: refresh_current_temp_label
+    then:
+      - lvgl.label.update:
+          id: current_temp_label
+          text: !lambda |-
+            float c = id(volcano_current_temperature).state;
+            if (std::isnan(c))
+              return std::string("--");
+            float v = id(volcano_display_units_fahrenheit).state ? (c * 9.0f / 5.0f + 32.0f) : c;
+            char buf[8];
+            snprintf(buf, sizeof(buf), "%.0f", v);
+            return std::string(buf);
+  - id: refresh_target_temp_label
+    then:
+      - lvgl.label.update:
+          id: target_temp_label
+          text: !lambda |-
+            float c = id(volcano_target_temperature).state;
+            if (std::isnan(c))
+              return std::string("--");
+            float v = id(volcano_display_units_fahrenheit).state ? (c * 9.0f / 5.0f + 32.0f) : c;
+            char buf[8];
+            snprintf(buf, sizeof(buf), "%.0f", v);
+            return std::string(buf);
+
+# DSEG7 Classic Bold (SIL OFL 1.1 -- see examples/fonts/DSEG-LICENSE.txt),
+# chosen per ADR-0010/ADR-0011 so the Home page's temperature readouts
+# echo the Volcano's own digital display. One size for both temperatures
+# -- the device's own panel shows current and target at the same size,
+# not a large/small hierarchy.
+font:
+  - file: "fonts/DSEG7Classic-Bold.ttf"
+    id: font_temp
+    size: 48
+
+# The Home page (ADR-0011): current temperature (orange) and target
+# temperature (cyan) echoing the Volcano's own display palette, touch-only
+# Heat/Air actuator buttons, the auto-shutoff countdown, and a BLE
+# connection-state indicator (green = connected, red = not). Exact
+# colours/layout are implementation detail per ADR-0011's Notes, not fixed
+# by the ADR -- refined here against the real round display.
+#
+# Not yet implemented, both deliberately out of scope for this increment:
+# rotary-adjusted target temperature (needs the write-coalescing debounce
+# ADR-0011 specifies, its own follow-up) and the button opening a
+# Navigation Menu (nothing to navigate to yet -- no other pages exist).
+# A WiFi status icon is also deferred: this config has no wifi yet.
 lvgl:
   displays:
     - dial_display
@@ -144,22 +281,86 @@ lvgl:
     - sensor: dial_rotary_encoder
       enter_button: dial_button
   pages:
-    - id: lvgl_bringup_page
+    - id: home_page
+      bg_color: 0x000000
+      bg_opa: cover
       widgets:
         - label:
-            id: lvgl_status_label
-            text: "LVGL OK"
+            id: current_temp_label
             align: center
-        - button:
-            id: lvgl_test_button
+            y: -40
+            text_font: font_temp
+            text_color: 0xFF7A00
+            text_align: center
+            text: "--"
+        - label:
+            id: target_temp_label
+            align: center
+            y: 24
+            text_font: font_temp
+            text_color: 0x00D9FF
+            text_align: center
+            text: "--"
+        - label:
+            id: units_label
+            align: center
+            y: 64
+            text_font: montserrat_20
+            text_color: 0x00D9FF
+            text_align: center
+            text: "°C"
+        - label:
+            id: countdown_label
             align: bottom_mid
-            y: -20
-            width: 120
-            height: 50
+            y: -18
+            text_color: 0xFFFFFF
+            text_align: center
+            text: "--:--"
+        - led:
+            id: ble_status_led
+            align: top_mid
+            y: 14
+            width: 12
+            height: 12
+            color: 0xCC0000
+            brightness: 100%
+        # click_focusable: false keeps these touch-only, per ADR-0011 --
+        # without it, LVGL auto-joins every clickable widget to the
+        # encoder's default group, so turning the knob was tab-cycling
+        # between them and pressing the button was clicking whichever
+        # one was highlighted. The Home page's encoder/button are
+        # reserved for temperature/menu, not button focus-cycling.
+        - button:
+            id: heat_button
+            align: left_mid
+            x: 8
+            width: 44
+            height: 48
+            radius: circle
+            shadow_width: 0
+            outline_width: 0
+            bg_color: 0x333333
+            click_focusable: false
             widgets:
               - label:
-                  text: "Tap/press"
+                  text: "Heat"
+                  align: center
             on_click:
-              - lvgl.label.update:
-                  id: lvgl_status_label
-                  text: "Clicked!"
+              - switch.toggle: volcano_heater
+        - button:
+            id: air_button
+            align: right_mid
+            x: -8
+            width: 44
+            height: 48
+            radius: circle
+            shadow_width: 0
+            outline_width: 0
+            bg_color: 0x333333
+            click_focusable: false
+            widgets:
+              - label:
+                  text: "Air"
+                  align: center
+            on_click:
+              - switch.toggle: volcano_pump
