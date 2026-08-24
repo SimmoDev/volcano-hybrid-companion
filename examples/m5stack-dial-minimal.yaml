@@ -19,9 +19,14 @@
 # amplitude control, so a graduated "volume" would have misrepresented
 # what's actually adjustable (see the Dial Sound page's own comment).
 #
-# Still no api/web_server -- nothing here needs them yet; that's ADR-0010's
-# decision to retain them, not yet exercised. WiFi itself is present purely
-# so the WiFi status icon has something real to reflect.
+# web_server is back too, matching the dev-board example exactly (same
+# port/entity names/sorting weights), per ADR-0010's decision to retain
+# it unchanged on the Dial firmware -- Phase 2 scope, not deferred to
+# Phase 3 (Home Assistant/api integration specifically). Every volcano
+# entity keeps driving its own LVGL widgets via its automation triggers
+# exactly as before; web_server exposure (name:/web_server: instead of
+# internal: true) is additive, not a replacement for that. No api: block
+# yet -- that's the Phase 3 concern, not this one.
 #
 # The Dial is built on the M5StampS3 module (ESP32-S3, 8MB flash), matching
 # the "M5Stack StampS3" PlatformIO board definition -- confirmed against the
@@ -41,6 +46,19 @@ esphome:
     version: "0.1.0"
   on_boot:
     then:
+      # Publishes once -- ESPHOME_PROJECT_VERSION is a compile-time
+      # constant, so there's nothing to re-publish later. See the
+      # text_sensor: block below for why this isn't done via that
+      # entity's own lambda:/update_interval: instead.
+      - text_sensor.template.publish:
+          id: dial_firmware_version_text_sensor
+          state: !lambda |-
+            std::string v = ESPHOME_PROJECT_VERSION;
+            int major = 0, minor = 0, patch = 0;
+            sscanf(v.c_str(), "%d.%d.%d", &major, &minor, &patch);
+            char buf[16];
+            snprintf(buf, sizeof(buf), "V%02d.%02d.%02d.00", major, minor, patch);
+            return std::string(buf);
       # Dial Brightness (ADR-0011) is deliberately not a VolcanoDevice
       # field -- it's local Dial hardware, so it's a plain restore_value
       # global (dial_brightness_pct) rather than a volcano: number entity,
@@ -170,10 +188,9 @@ ble_client:
           id: ble_status_icon
           text_color: 0xCC0000
 
-# WiFi is needed only so the Home page's WiFi status icon has something
-# real to reflect -- the volcano component itself is BLE-only and has no
-# dependency on it, and no other WiFi-dependent capability (api/
-# web_server) exists in this config yet, per ADR-0010.
+# WiFi serves two things: the Home page's WiFi status icon, and reaching
+# web_server below from a browser -- the volcano component itself is
+# BLE-only and has no dependency on it.
 wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
@@ -185,6 +202,24 @@ wifi:
     - lvgl.label.update:
         id: wifi_status_icon
         text_color: 0xCC0000
+
+# Brought back per ADR-0010's decision to retain web_server unchanged on
+# the Dial firmware, matching the dev-board example
+# (esp32-s3-devkit-minimal.yaml) exactly -- same port/local/version, same
+# entity names and sorting_weight values, for a manual-testing control
+# surface independent of the Dial's own LVGL UI. Same trust model as that
+# example: no authentication, no TLS, fine on a trusted home network.
+#
+# Needs lvgl's buffer_size cut down (see that comment) to actually fit
+# in RAM alongside BLE on this board -- confirmed via a temporary api:
+# swap-test that the lean ESPHome api: protocol (no HTTP server/bundled
+# web assets/JSON entity-list the way web_server has) fit fine on its
+# own, isolating web_server's own footprint as the specific problem
+# rather than "no network component fits here at all."
+web_server:
+  port: 80
+  local: true
+  version: 3
 
 # Tracks whether the BLE link is up but volcano is not yet READY, so the
 # 500ms interval below can blink the BLE icon while CONNECTING. ble_blink_on
@@ -280,12 +315,20 @@ globals:
 volcano:
   id: volcano_component
   ble_client_id: volcano_ble_client
-  # Internal: consumed directly by the Home page's LVGL widgets below via
-  # each entity's own automation triggers, not exposed anywhere else yet
-  # (no api/web_server in this config).
+  # Every entity below is consumed directly by the Home/Settings/etc.
+  # LVGL widgets via its own automation triggers, exactly as before --
+  # but also named and given a sorting_weight (matching the dev-board
+  # example, esp32-s3-devkit-minimal.yaml, exactly) to expose it on the
+  # web_server page below, per ADR-0010's decision to retain web_server
+  # unchanged on the Dial. name:/web_server: and the automation triggers
+  # are independent: removing internal: true doesn't touch how these
+  # already drive the LVGL UI, it only makes the entity externally
+  # visible too.
   connected:
     id: volcano_connected
-    internal: true
+    name: "Connected"
+    web_server:
+      sorting_weight: 5
     on_press:
       - globals.set:
           id: ble_connecting
@@ -308,12 +351,17 @@ volcano:
   # the component's -- see the refresh_*_temp_label scripts below.
   current_temperature:
     id: volcano_current_temperature
-    internal: true
+    name: "Current temperature"
+    web_server:
+      sorting_weight: 30
     on_value:
       - script.execute: refresh_current_temp_label
   target_temperature:
     id: volcano_target_temperature
-    internal: true
+    name: "Target temperature"
+    web_server:
+      sorting_weight: 40
+    mode: box
     on_value:
       - globals.set:
           id: pending_target_temp_c
@@ -321,7 +369,9 @@ volcano:
       - script.execute: refresh_target_temp_label
   display_units_fahrenheit:
     id: volcano_display_units_fahrenheit
-    internal: true
+    name: "Display in Fahrenheit"
+    web_server:
+      sorting_weight: 90
     on_turn_on:
       - lvgl.label.update:
           id: units_label
@@ -365,7 +415,9 @@ volcano:
   # robust choice now that the actual cause is understood.
   vibration:
     id: volcano_vibration
-    internal: true
+    name: "Vibration"
+    web_server:
+      sorting_weight: 80
     on_turn_on:
       - lambda: "lv_obj_add_state(id(settings_vibration_switch), LV_STATE_CHECKED);"
       - lvgl.label.update:
@@ -384,7 +436,7 @@ volcano:
           text_color: 0x888888
   display_on_cooling:
     id: volcano_display_on_cooling
-    internal: true
+    name: "Display on cooling"
     on_turn_on:
       - lambda: "lv_obj_add_state(id(settings_display_on_cooling_switch), LV_STATE_CHECKED);"
       - lvgl.label.update:
@@ -403,7 +455,9 @@ volcano:
           text_color: 0x888888
   auto_shutoff_countdown:
     id: volcano_auto_shutoff_countdown
-    internal: true
+    name: "Auto-shutoff countdown"
+    web_server:
+      sorting_weight: 50
     on_value:
       - lvgl.label.update:
           id: countdown_label
@@ -420,7 +474,10 @@ volcano:
   # pending_target_temp_c/commit_target_temperature/refresh_target_temp_label.
   led_brightness:
     id: volcano_led_brightness
-    internal: true
+    name: "LED brightness"
+    web_server:
+      sorting_weight: 70
+    mode: box
     on_value:
       - globals.set:
           id: pending_led_brightness
@@ -432,7 +489,10 @@ volcano:
   # VolcanoAutoShutoffDurationNumber::control() itself, not this UI.
   auto_shutoff_duration:
     id: volcano_auto_shutoff_duration
-    internal: true
+    name: "Auto-shutoff duration"
+    web_server:
+      sorting_weight: 60
+    mode: box
     on_value:
       - globals.set:
           id: pending_auto_shutoff_duration_min
@@ -440,7 +500,9 @@ volcano:
       - script.execute: refresh_auto_shutoff_duration_label
   heater:
     id: volcano_heater
-    internal: true
+    name: "Heat"
+    web_server:
+      sorting_weight: 10
     on_turn_on:
       - lvgl.widget.update:
           id: heat_button
@@ -451,7 +513,9 @@ volcano:
           bg_color: 0x333333
   pump:
     id: volcano_pump
-    internal: true
+    name: "Air"
+    web_server:
+      sorting_weight: 20
     on_turn_on:
       - lvgl.widget.update:
           id: air_button
@@ -466,35 +530,45 @@ volcano:
   # way the temperature/countdown labels above need it.
   firmware_version:
     id: volcano_firmware_version
-    internal: true
+    name: "Firmware version"
+    web_server:
+      sorting_weight: 70
     on_value:
       - lvgl.label.update:
           id: about_volcano_firmware_value
           text: !lambda "return x;"
   ble_firmware_version:
     id: volcano_ble_firmware_version
-    internal: true
+    name: "BLE firmware version"
+    web_server:
+      sorting_weight: 80
     on_value:
       - lvgl.label.update:
           id: about_volcano_ble_firmware_value
           text: !lambda "return x;"
   product_line:
     id: volcano_product_line
-    internal: true
+    name: "Product line"
+    web_server:
+      sorting_weight: 50
     on_value:
       - lvgl.label.update:
           id: about_product_line_value
           text: !lambda "return x;"
   serial_number:
     id: volcano_serial_number
-    internal: true
+    name: "Serial number"
+    web_server:
+      sorting_weight: 10
     on_value:
       - lvgl.label.update:
           id: diagnostics_serial_value
           text: !lambda "return x;"
   power_supply:
     id: volcano_power_supply
-    internal: true
+    name: "Power supply"
+    web_server:
+      sorting_weight: 20
     on_value:
       - lvgl.label.update:
           id: diagnostics_power_supply_value
@@ -505,12 +579,16 @@ volcano:
   # via the same script.
   hours_of_operation:
     id: volcano_hours_of_operation
-    internal: true
+    name: "Hours of operation"
+    web_server:
+      sorting_weight: 30
     on_value:
       - script.execute: refresh_time_of_operation_label
   minutes_of_operation:
     id: volcano_minutes_of_operation
-    internal: true
+    name: "Minutes of operation"
+    web_server:
+      sorting_weight: 40
     on_value:
       - script.execute: refresh_time_of_operation_label
 
@@ -583,9 +661,6 @@ touchscreen:
     # same per-widget cost the group-eviction pattern already has
     # elsewhere in this file.
 
-# The rotary encoder (GPIO40/41, turn-only) and the separate physical
-# button (GPIO42) that provides every "press" action in ADR-0011's
-# navigation model -- the encoder itself has no click.
 sensor:
   - platform: rotary_encoder
     name: "Dial Rotary Encoder"
@@ -1034,6 +1109,48 @@ font:
     id: font_temp
     size: 48
 
+# The Dial's own firmware version, exposed on web_server -- same
+# V-prefixed, zero-padded four-group reformatting as the About page's
+# own label (see that page's comment for why), duplicated here rather
+# than shared since a template text_sensor and an LVGL label update are
+# two different mechanisms with no clean way to share one lambda
+# between them. entity_category: diagnostic groups it alongside the
+# Volcano's own device-info entities on the web page, which all set the
+# same category in the component's own schema -- icon matches
+# firmware_version's own (mdi:chip) for the same reason, both being "the
+# microcontroller's own firmware version" in the same sense.
+#
+# web_server only sorts entities that declare an explicit sorting_weight
+# at all -- confirmed by reading WebServer::add_sorting_info_(), which
+# skips the field entirely for any entity absent from sorting_entitys_
+# -- so leaving any of the Volcano's diagnostic-category entities
+# unweighted let them jump ahead of the weighted ones (unweighted lands
+# *ahead* of weighted, confirmed on real hardware, twice: once for
+# firmware_version/ble_firmware_version/serial_number/power_supply/
+# product_line, again for hours_of_operation/minutes_of_operation).
+# All of them (all in the volcano: block above) now have explicit
+# weights, ordered to match the About/Diagnostics LVGL pages' own
+# layout per user request, not grouped by "version numbers together"
+# as an earlier revision had it: serial_number: 10, power_supply: 20,
+# hours_of_operation: 30, minutes_of_operation: 40, product_line: 50,
+# this entity: 60, firmware_version: 70, ble_firmware_version: 80.
+#
+# No lambda:/update_interval: here -- template text_sensor's update()
+# (the only thing that would ever call a lambda: here) simply never
+# runs when update_interval is "never" (confirmed by reading
+# PollingComponent's own handling of that value), so the entity stayed
+# permanently unpublished/empty on real hardware. Fixed by publishing
+# it explicitly, once, from on_boot instead (see that lambda above) --
+# text_sensor.template.publish exists for exactly this.
+text_sensor:
+  - platform: template
+    id: dial_firmware_version_text_sensor
+    name: "Dial firmware version"
+    icon: "mdi:chip"
+    entity_category: diagnostic
+    web_server:
+      sorting_weight: 60
+
 # The Home page (ADR-0011): current temperature (orange) and target
 # temperature (cyan) echoing the Volcano's own display palette, touch-only
 # Heat/Air actuator buttons, the auto-shutoff countdown, and BLE/WiFi
@@ -1052,7 +1169,23 @@ font:
 # split in two rather than cramming six lines of device facts onto one
 # (see the comment above about_page/diagnostics_page). Every page
 # ADR-0011 names now exists.
+#
+# buffer_size cut to LVGL's own documented minimum (1/8th) -- left
+# unset (which defaults to a *full-screen* single buffer, confirmed by
+# reading lvgl_esphome.cpp's setup(): buffer_frac 0 becomes frac 1, not
+# some small default) it was allocating 240*240*2 = 115200 bytes of
+# permanent internal DRAM for the draw buffer alone, on a board with no
+# PSRAM (confirmed: the M5StampS3 module here is the plain ESP32-S3FN8
+# variant, no R2/R8 PSRAM suffix -- unlike the dev-board example, which
+# has real PSRAM and needs no such trimming). That single buffer was
+# most of what stood between working BLE and BLE's own malloc failing
+# once web_server was added back -- see the comment above web_server:
+# for the diagnostic trail. At 1/8th (14400 bytes) LVGL needs more
+# flush passes per full-screen redraw (a page transition may show a
+# brief wipe rather than the whole page appearing at once), a real
+# trade-off against BLE actually working at all with web_server present.
 lvgl:
+  buffer_size: 12.5%
   displays:
     - dial_display
   encoders:
