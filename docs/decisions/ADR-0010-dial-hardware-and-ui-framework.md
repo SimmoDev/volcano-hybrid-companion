@@ -10,7 +10,7 @@ Accepted
 
 This ADR does not touch the Volcano component. [ADR-0009](ADR-0009-volcano-abstraction-layer-interface.md) already made `VolcanoDevice` hardware-independent specifically so a control interface's hardware could be built and iterated on without it; this decision is entirely about the plumbing a new control interface — the Dial local UI — needs underneath it, per [ADR-0002](ADR-0002-volcano-component-architecture.md)'s boundary. What that control interface actually shows and how it is navigated is [ADR-0011](ADR-0011-dial-ui-navigation-architecture.md)'s concern, not this one.
 
-The Dial's relevant hardware: a 1.28", 240×240 round TFT (GC9A01 driver, SPI) with a capacitive touch panel (FT3267, I²C); a rotary encoder that reports turn direction and position but has no push action of its own; and a separate physical button beneath the screen, felt by a user as "pressing the dial" even though it is electrically independent of the encoder. All of this needs to coexist with the WiFi/`api`/`web_server` stack Phase 1 already built and hardware-verified for the dev board example.
+The Dial's relevant hardware: a 1.28", 240×240 round TFT (GC9A01 driver, SPI) with a capacitive touch panel (FT3267, I²C); a rotary encoder that reports turn direction and position but has no push action of its own; a separate physical button beneath the screen, felt by a user as "pressing the dial" even though it is electrically independent of the encoder; and an onboard PWM-driven buzzer, the Dial's only audio output. All of this needs to coexist with the WiFi/`api`/`web_server` stack Phase 1 already built and hardware-verified for the dev board example.
 
 ## Decision
 
@@ -24,11 +24,13 @@ The Dial's relevant hardware: a 1.28", 240×240 round TFT (GC9A01 driver, SPI) w
 
 **DSEG7, a digital/seven-segment-style font released under the SIL Open Font License, is embedded for numeric display** — chosen so the Dial's temperature and value readouts can visually echo the Volcano's own display, and embeddable in firmware without a licensing concern. Exact colour values, widget styling, and pixel layout are left to implementation and code, not fixed here.
 
+**The onboard buzzer is wired up through ESPHome's own PWM output and melody-playback components**, the same "reuse ESPHome's component model" reasoning as the display/touch/encoder above, rather than a bespoke tone generator. It provides the audio feedback [ADR-0011](ADR-0011-dial-ui-navigation-architecture.md) defines. Exact pin assignment and component configuration are implementation detail, confirmed when compiled and verified against real hardware, not fixed by this ADR.
+
 ## Consequences
 
 **Benefits**
 
-- Reuses ESPHome's own component model for every piece of new hardware (display, touch, encoder, button), consistent with ADR-0003's reasoning for choosing ESPHome in the first place — no bespoke ESP-IDF driver stack to build and maintain alongside it.
+- Reuses ESPHome's own component model for every piece of new hardware (display, touch, encoder, button, buzzer), consistent with ADR-0003's reasoning for choosing ESPHome in the first place — no bespoke ESP-IDF driver stack to build and maintain alongside it.
 - LVGL's widget/event system gives ADR-0011's page-and-navigation model a foundation to build on rather than requiring bespoke hit-testing, focus handling, and screen management to be written from scratch.
 - Because `VolcanoDevice` already has zero hardware dependency (ADR-0009), this entire hardware/framework layer can be developed and iterated on independently of BLE work, the same separation of concerns ADR-0004 established between Phase 1 and Phase 2 hardware.
 - Retaining `wifi`/`api`/`web_server` means Phase 1's hardware-verified manual test surface — the `web_server` page — keeps working unchanged; nothing about Phase 2 regresses it or requires re-validating it from scratch.

@@ -11,8 +11,13 @@
 # LED Brightness, Auto-Shutoff Duration, and Dial Brightness are also
 # built now, following ADR-0011's shared rotary-adjusted-value template
 # -- Dial Brightness is the odd one out, local Dial hardware rather than
-# a VolcanoDevice field, per that ADR's deliberate carve-out. All of
-# ADR-0011's pages now exist.
+# a VolcanoDevice field, per that ADR's deliberate carve-out. Every
+# rotary turn and button press also gets a short click/beep through the
+# Dial's onboard buzzer (GPIO3, per ADR-0010's later amendment), audible
+# everywhere and mutable via the Dial Sound page. A numeric 0-100% Dial
+# Volume was tried first but abandoned -- this buzzer has no true
+# amplitude control, so a graduated "volume" would have misrepresented
+# what's actually adjustable (see the Dial Sound page's own comment).
 #
 # Still no api/web_server -- nothing here needs them yet; that's ADR-0010's
 # decision to retain them, not yet exercised. WiFi itself is present purely
@@ -53,6 +58,36 @@ esphome:
           level: !lambda "return id(dial_brightness_pct) / 100.0f;"
       - lambda: "id(pending_dial_brightness) = id(dial_brightness_pct);"
       - script.execute: refresh_dial_brightness_label
+      # Dial Sound (ADR-0011): a plain restore_value global (dial_sound_
+      # enabled), same "not a VolcanoDevice field" carve-out as Dial
+      # Brightness. rtttl has no YAML-level action for changing gain at
+      # runtime, so this calls its public set_gain() directly via lambda
+      # -- the same "call the raw API when no automation action exists"
+      # pattern already used for LVGL's lv_group_remove_obj/
+      # lv_obj_add_state elsewhere in this file.
+      #
+      # This started as a graduated 0-100% Dial Volume page, mapping
+      # onto the ledc output's PWM duty cycle (rtttl's "gain" is
+      # literally that duty cycle, not a perceptual volume -- confirmed
+      # by reading rtttl.cpp's set_level(this->gain_) call). Abandoned
+      # after real-hardware testing found it wasn't usable as a volume
+      # control at all: a piezo buzzer is loudest around 50% duty and
+      # silent at both 0% and 100%, and its harmonic content (so which
+      # overtone the buzzer resonates most strongly at, and therefore
+      # both its pitch *and* loudness) shifts with duty cycle too --
+      # confirmed by ear as non-monotonic loudness across the range and
+      # a real, noticeable pitch drift, neither fixable by adjusting the
+      # mapping formula alone. Simplified to what this hardware can
+      # actually do: on or off, fixed at 50% duty (the loudest, least
+      # distorted point) when on.
+      - lambda: "id(dial_rtttl).set_gain(id(dial_sound_enabled) ? 0.5f : 0.0f);"
+      - lambda: |-
+          if (id(dial_sound_enabled)) {
+            lv_obj_add_state(id(sound_switch), LV_STATE_CHECKED);
+          } else {
+            lv_obj_remove_state(id(sound_switch), LV_STATE_CHECKED);
+          }
+      - script.execute: refresh_sound_labels
       # LVGL auto-adds every newly-created focusable widget to whatever
       # group is current default once an encoder exists (click_focusable:
       # false on Home's buttons/Settings' switches only stops a *touch*
@@ -67,9 +102,9 @@ esphome:
       # ever even shown. Evicting everything meant to be touch-only
       # keeps the encoder/button reserved for temperature/menu use on
       # Home and Settings, per ADR-0011. The LED Brightness, Auto-Shutoff
-      # Duration, and Dial Brightness pages' step-size buttons are the
-      # same story: click_focusable: false alone doesn't stop group
-      # membership, so they need evicting too.
+      # Duration, and Dial Brightness pages' step-size buttons, and the
+      # Dial Sound page's switch, are the same story: click_focusable: false
+      # alone doesn't stop group membership, so they need evicting too.
       - lambda: |-
           lv_group_remove_obj(id(heat_button));
           lv_group_remove_obj(id(air_button));
@@ -83,6 +118,7 @@ esphome:
           lv_group_remove_obj(id(auto_shutoff_duration_step_30_button));
           lv_group_remove_obj(id(dial_brightness_step_1_button));
           lv_group_remove_obj(id(dial_brightness_step_10_button));
+          lv_group_remove_obj(id(sound_switch));
 
 # ESPHome's default flash_write_interval (60s) batches restore_value
 # global writes (dial_brightness_pct below) in RAM and only actually
@@ -230,6 +266,16 @@ globals:
     type: float
     restore_value: false
     initial_value: "1.0"
+  # Dial Sound (ADR-0011): local Dial hardware, not a VolcanoDevice
+  # field, same carve-out as Dial Brightness above -- but a plain bool,
+  # not a percentage. A graduated 0-100% Dial Volume was tried first
+  # (see the on_boot comment for the full story) and abandoned: this
+  # buzzer has no true amplitude control, so mute/unmute is the most
+  # this hardware can honestly offer.
+  - id: dial_sound_enabled
+    type: bool
+    restore_value: true
+    initial_value: "true"
 
 volcano:
   id: volcano_component
@@ -480,6 +526,26 @@ output:
   - platform: ledc
     pin: GPIO9
     id: dial_backlight_pwm
+  # The Dial's onboard buzzer (ADR-0010), confirmed against the same
+  # community M5Dial reference the display pins were checked against.
+  # GPIO3 is a strapping pin (sampled at reset to select the JTAG
+  # interface) but is safe to use as a plain PWM output here, same as
+  # M5Stack's own library and every known-working community config for
+  # this exact board use it for the buzzer.
+  - platform: ledc
+    pin: GPIO3
+    id: dial_buzzer_pwm
+
+# rtttl plays short melodies/tones through the buzzer output above --
+# used for click/beep feedback (ADR-0011) rather than a bespoke tone
+# generator, per ADR-0010. gain here is just an initial default; on_boot
+# overwrites it from the persisted dial_sound_enabled global before this
+# could ever audibly matter (0.5 = 50% duty, the loudest/least-distorted
+# point for this buzzer -- see on_boot's comment).
+rtttl:
+  id: dial_rtttl
+  output: dial_buzzer_pwm
+  gain: 50%
 
 display:
   - platform: ili9xxx
@@ -509,6 +575,13 @@ touchscreen:
   on_touch:
     - lambda: |-
         ESP_LOGD("main", "Touch at (%d, %d)", touch.x, touch.y);
+    # A single global on_touch beep was tried here first but beeped on
+    # every touch anywhere on the page, not just an actual button/
+    # switch/menu row -- per user feedback on real hardware. Feedback is
+    # instead wired per-widget below (each button's on_click, each
+    # switch's on_value, the Menu roller's touch-guarded on_click), the
+    # same per-widget cost the group-eviction pattern already has
+    # elsewhere in this file.
 
 # The rotary encoder (GPIO40/41, turn-only) and the separate physical
 # button (GPIO42) that provides every "press" action in ADR-0011's
@@ -531,6 +604,32 @@ sensor:
     on_value:
       - lambda: |-
           ESP_LOGD("main", "Encoder now at %d", (int) x);
+      # Audio feedback (ADR-0011): every rotary turn gets a short click,
+      # page-agnostic -- this fires here, before the per-page gating
+      # below, so it plays uniformly regardless of what (if anything) a
+      # given page does with the turn. Silent whenever dial_sound_
+      # enabled is off, via rtttl's own gain (set from that global
+      # on_boot/whenever the Dial Sound switch is toggled), no separate mute
+      # check needed here. Short and high-pitched, deliberately distinct
+      # from the button beep below -- per user feedback the first
+      # attempt (d=32,o=6,b=100, ~75ms) read as a beep rather than a
+      # click.
+      #
+      # d= only accepts {1,2,4,8,16,32} (confirmed by reading rtttl.cpp's
+      # own play() validation) -- an earlier attempt at d=64 to shorten
+      # this further was silently rejected (Rtttl::play() logs an error
+      # and returns without playing anything), which is why the click
+      # disappeared entirely rather than just sounding different. Kept
+      # within the valid set; shortened/raised via bpm/octave instead.
+      #
+      # Octave brought down from o=7 to o=6 after real-hardware feedback
+      # that the click (o=7, ~2.8kHz) sounded noticeably louder than the
+      # beep (o=5, ~550-660Hz) at the same gain -- this buzzer's own
+      # frequency response, not the gain setting, most likely explains
+      # the gap (small piezo buzzers commonly resonate strongest well
+      # above 1kHz), so narrowing the pitch gap between the two tones
+      # narrows the perceived loudness gap too, without touching gain.
+      - rtttl.play: "click:d=32,o=6,b=250:c"
       # Home page rotary semantics (ADR-0011): turning adjusts target
       # temperature directly -- but only on Home. This raw sensor-level
       # listener fires regardless of which page is showing, so it must
@@ -631,6 +730,11 @@ sensor:
                               - script.execute: refresh_dial_brightness_label
                               - script.execute: commit_dial_brightness
                             else:
+                              # The Dial Sound page is a plain switch, not a
+                              # rotary-adjusted value -- no branch needed
+                              # for it here, just the same fallback every
+                              # other non-rotary-adjusted page already
+                              # uses.
                               - lambda: |-
                                   id(last_encoder_raw) = x;
 
@@ -664,6 +768,17 @@ binary_sensor:
     # Menu already falls into it.
     on_press:
       - logger.log: "Button pressed"
+      # Audio feedback (ADR-0011): a short beep, distinct from the
+      # rotary click above, page-agnostic like it -- fires on the press
+      # itself (not on_release, unlike the navigation logic below) so
+      # the beep confirms the physical press was registered immediately,
+      # matching what a real button normally feels like. A quick rising
+      # two-note phrase (c then e, a major third) rather than one flat
+      # tone -- per user feedback a single note read as a cold, error-
+      # chime-like sound; an ascending interval reads as a warmer,
+      # positive confirmation instead. Same string reused verbatim by
+      # every touch button/switch/menu-row's own beep below.
+      - rtttl.play: "beep:d=16,o=5,b=160:c,e"
     on_release:
       - logger.log: "Button released"
       - if:
@@ -808,6 +923,19 @@ script:
             char buf[8];
             snprintf(buf, sizeof(buf), "%.0f", id(pending_dial_brightness));
             return std::string(buf);
+  # Dial Sound's flank-label colours (Off/On, same active-cyan/inactive-grey
+  # convention as Settings' toggles) -- shared between on_boot (so the
+  # restored dial_sound_enabled value is reflected immediately) and the
+  # switch's own on_value below, rather than duplicating the two
+  # lvgl.label.update calls in both places.
+  - id: refresh_sound_labels
+    then:
+      - lvgl.label.update:
+          id: sound_off_label
+          text_color: !lambda "return id(dial_sound_enabled) ? lv_color_hex(0x888888) : lv_color_hex(0x00D9FF);"
+      - lvgl.label.update:
+          id: sound_on_label
+          text_color: !lambda "return id(dial_sound_enabled) ? lv_color_hex(0x00D9FF) : lv_color_hex(0x888888);"
   - id: refresh_time_of_operation_label
     then:
       - lvgl.label.update:
@@ -860,16 +988,23 @@ script:
                                   else:
                                     - if:
                                         condition:
-                                          lambda: 'return id(nav_menu_roller).get_selected_text() == "Diagnostics";'
+                                          lambda: 'return id(nav_menu_roller).get_selected_text() == "Dial Sound";'
                                         then:
-                                          - lvgl.page.show: diagnostics_page
+                                          - lvgl.page.show: sound_page
                                         else:
-                                          # Only "About" left among the
-                                          # current options -- add another
-                                          # explicit branch here, not a
-                                          # new bare else, once an eighth
-                                          # option exists.
-                                          - lvgl.page.show: about_page
+                                          - if:
+                                              condition:
+                                                lambda: 'return id(nav_menu_roller).get_selected_text() == "Diagnostics";'
+                                              then:
+                                                - lvgl.page.show: diagnostics_page
+                                              else:
+                                                # Only "About" left among
+                                                # the current options --
+                                                # add another explicit
+                                                # branch here, not a new
+                                                # bare else, once a ninth
+                                                # option exists.
+                                                - lvgl.page.show: about_page
 
 # Blinks the BLE status icon while CONNECTING (ble_connecting, set by
 # ble_client's on_connect/on_disconnect and volcano's connected above).
@@ -912,11 +1047,11 @@ font:
 # debounce, is implemented -- see the rotary_encoder sensor's on_value
 # and the commit_target_temperature/refresh_target_temp_label scripts
 # above. The Navigation Menu (below) lists Home, Settings, LED Brightness,
-# Auto-Shutoff Duration, Dial Brightness, Diagnostics, and About, in that
-# order -- the latter two are ADR-0011's Information page, split in two
-# rather than cramming six lines of device facts onto one (see the
-# comment above about_page/diagnostics_page). Every page ADR-0011 names
-# now exists.
+# Auto-Shutoff Duration, Dial Brightness, Dial Sound, Diagnostics, and About,
+# in that order -- the latter two are ADR-0011's Information page,
+# split in two rather than cramming six lines of device facts onto one
+# (see the comment above about_page/diagnostics_page). Every page
+# ADR-0011 names now exists.
 lvgl:
   displays:
     - dial_display
@@ -1003,6 +1138,7 @@ lvgl:
                   text: "Heat"
                   align: center
             on_click:
+              - rtttl.play: "beep:d=16,o=5,b=160:c,e"
               - switch.toggle: volcano_heater
         - button:
             id: air_button
@@ -1020,6 +1156,7 @@ lvgl:
                   text: "Air"
                   align: center
             on_click:
+              - rtttl.play: "beep:d=16,o=5,b=160:c,e"
               - switch.toggle: volcano_pump
 
     # The Navigation Menu (ADR-0011): rotary turn moves the highlighted
@@ -1092,6 +1229,7 @@ lvgl:
               - "LED Brightness"
               - "Auto-Shutoff Duration"
               - "Dial Brightness"
+              - "Dial Sound"
               - "Diagnostics"
               - "About"
             # Touch only -- guarded on the triggering indev being the
@@ -1106,6 +1244,7 @@ lvgl:
                   condition:
                     lambda: "return lv_indev_get_type(lv_indev_get_act()) == LV_INDEV_TYPE_POINTER;"
                   then:
+                    - rtttl.play: "beep:d=16,o=5,b=160:c,e"
                     - script.execute: confirm_menu_selection
 
     # Settings (ADR-0011): touch toggles for vibration, display-on-
@@ -1177,6 +1316,7 @@ lvgl:
                     checked:
                       bg_color: 0x00D9FF
                   on_value:
+                    - rtttl.play: "beep:d=16,o=5,b=160:c,e"
                     - if:
                         condition:
                           lambda: "return x;"
@@ -1218,6 +1358,7 @@ lvgl:
                     checked:
                       bg_color: 0x00D9FF
                   on_value:
+                    - rtttl.play: "beep:d=16,o=5,b=160:c,e"
                     - if:
                         condition:
                           lambda: "return x;"
@@ -1259,6 +1400,7 @@ lvgl:
                     checked:
                       bg_color: 0x00D9FF
                   on_value:
+                    - rtttl.play: "beep:d=16,o=5,b=160:c,e"
                     - if:
                         condition:
                           lambda: "return x;"
@@ -1351,6 +1493,7 @@ lvgl:
                         text: "1"
                         align: center
                   on_click:
+                    - rtttl.play: "beep:d=16,o=5,b=160:c,e"
                     - globals.set:
                         id: led_brightness_step
                         value: "1.0"
@@ -1374,6 +1517,7 @@ lvgl:
                         text: "10"
                         align: center
                   on_click:
+                    - rtttl.play: "beep:d=16,o=5,b=160:c,e"
                     - globals.set:
                         id: led_brightness_step
                         value: "10.0"
@@ -1442,6 +1586,7 @@ lvgl:
                         text: "1"
                         align: center
                   on_click:
+                    - rtttl.play: "beep:d=16,o=5,b=160:c,e"
                     - globals.set:
                         id: auto_shutoff_duration_step
                         value: "1.0"
@@ -1468,6 +1613,7 @@ lvgl:
                         text: "10"
                         align: center
                   on_click:
+                    - rtttl.play: "beep:d=16,o=5,b=160:c,e"
                     - globals.set:
                         id: auto_shutoff_duration_step
                         value: "10.0"
@@ -1494,6 +1640,7 @@ lvgl:
                         text: "30"
                         align: center
                   on_click:
+                    - rtttl.play: "beep:d=16,o=5,b=160:c,e"
                     - globals.set:
                         id: auto_shutoff_duration_step
                         value: "30.0"
@@ -1573,6 +1720,7 @@ lvgl:
                         text: "1"
                         align: center
                   on_click:
+                    - rtttl.play: "beep:d=16,o=5,b=160:c,e"
                     - globals.set:
                         id: dial_brightness_step
                         value: "1.0"
@@ -1596,6 +1744,7 @@ lvgl:
                         text: "10"
                         align: center
                   on_click:
+                    - rtttl.play: "beep:d=16,o=5,b=160:c,e"
                     - globals.set:
                         id: dial_brightness_step
                         value: "10.0"
@@ -1605,6 +1754,85 @@ lvgl:
                     - lvgl.widget.update:
                         id: dial_brightness_step_10_button
                         bg_color: 0xFF7A00
+
+    # Dial Sound (ADR-0011): a single on/off toggle for the audio feedback
+    # (rotary click, button/touch beep) wired throughout this file.
+    # Local Dial UI configuration, not a VolcanoDevice field, so a
+    # restore_value global (dial_sound_enabled) rather than a volcano:
+    # entity -- the same ADR-0002 carve-out as Dial Brightness. A
+    # graduated 0-100% Dial Volume page, following Dial Brightness's own
+    # numeric-page shape, was built first and abandoned: this buzzer has
+    # no true amplitude control (see the on_boot/globals comments for
+    # the full story), so a numeric percentage would have claimed a
+    # precision this hardware can't actually deliver -- a plain switch
+    # is the honest fit. Same caption-then-flanked-switch pattern as
+    # Settings' toggles, standalone on its own page here rather than
+    # folded into Settings, since this isn't a VolcanoDevice boolean.
+    - id: sound_page
+      bg_color: 0x000000
+      bg_opa: cover
+      scrollable: false
+      layout:
+        type: flex
+        flex_flow: column
+        flex_align_main: center
+        flex_align_cross: center
+        flex_align_track: center
+        pad_row: 8
+      widgets:
+        - label:
+            text_color: 0xFFFFFF
+            text: "Dial Sound"
+        - obj:
+            width: size_content
+            height: size_content
+            bg_opa: 0%
+            border_width: 0
+            pad_top: 0
+            pad_left: 0
+            pad_right: 0
+            pad_bottom: 2
+            layout:
+              type: flex
+              flex_flow: row
+              flex_align_main: center
+              flex_align_cross: center
+              pad_column: 8
+            widgets:
+              - label:
+                  id: sound_off_label
+                  text_color: 0x888888
+                  text: "Off"
+              - switch:
+                  id: sound_switch
+                  click_focusable: false
+                  indicator:
+                    checked:
+                      bg_color: 0x00D9FF
+                  # Sets dial_sound_enabled/gain first, so the beep
+                  # below actually reflects the state just switched to
+                  # -- silent if this just muted, audible if it just
+                  # unmuted, a small free confirmation of the result.
+                  on_value:
+                    - if:
+                        condition:
+                          lambda: "return x;"
+                        then:
+                          - globals.set:
+                              id: dial_sound_enabled
+                              value: "true"
+                          - lambda: "id(dial_rtttl).set_gain(0.5f);"
+                        else:
+                          - globals.set:
+                              id: dial_sound_enabled
+                              value: "false"
+                          - lambda: "id(dial_rtttl).set_gain(0.0f);"
+                    - script.execute: refresh_sound_labels
+                    - rtttl.play: "beep:d=16,o=5,b=160:c,e"
+              - label:
+                  id: sound_on_label
+                  text_color: 0x00D9FF
+                  text: "On"
 
     # About and Diagnostics (ADR-0011's Information page, split in two --
     # read-only, so no on_load/on_click of their own: dial_button's

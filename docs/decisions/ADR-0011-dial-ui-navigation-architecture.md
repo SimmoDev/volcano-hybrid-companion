@@ -20,7 +20,7 @@ The screen itself is small: 1.28" and round, so content near the corners of a na
 
 ### Page model
 
-The UI is a fixed set of full-screen pages: **Home**, a **Navigation Menu**, **Settings**, three instances of a shared **numeric value page** (LED Brightness, Auto-Shutoff Duration, Dial Brightness), and **Information**. Each page optionally uses touch buttons and optionally the rotary encoder; none of them share screen space with another.
+The UI is a fixed set of full-screen pages: **Home**, a **Navigation Menu**, **Settings**, three instances of a shared **numeric value page** (LED Brightness, Auto-Shutoff Duration, Dial Brightness), a **Dial Sound** toggle page, and **Information**. Each page optionally uses touch buttons and optionally the rotary encoder; none of them share screen space with another.
 
 ### Input semantics
 
@@ -53,6 +53,12 @@ One page template, reused for three values that share an identical interaction s
 - **Auto-Shutoff Duration** — shown in minutes, within the confirmed 1–360 minute range, a `VolcanoDevice` field.
 - **Dial Brightness** — 0–100%, controlling the Dial's own backlight. This is *not* a `VolcanoDevice` field: it is local Dial hardware configuration, read and written directly against ESPHome's own facilities and persisted so it survives a reboot. Reusing the numeric-page template here is a UI convenience; it is not a claim that this value flows through the Volcano abstraction layer, and it must not be implemented as though it did — see [ADR-0002](ADR-0002-volcano-component-architecture.md)'s boundary.
 
+### Audio feedback
+
+Every rotary turn plays a short click, and every button press — physical or a touch on a button/switch/menu row — plays a short beep, via the Dial's onboard buzzer ([ADR-0010](ADR-0010-dial-hardware-and-ui-framework.md)). This applies uniformly across every page, independent of whatever else a given turn or press does there — it is feedback that input was registered, not a page-specific behaviour.
+
+A dedicated **Dial Sound** page mutes it: a single on/off toggle, not a graduated volume — the Dial's onboard buzzer has no true amplitude control (it is a fixed PWM-driven piezo buzzer, not a speaker with a real volume range), so a numeric percentage would misrepresent what is actually adjustable. Same touch-toggle pattern as Settings, standalone on its own page rather than folded into Settings since it configures the Dial's own UI rather than a `VolcanoDevice` field.
+
 ### Information page
 
 - The five device-information strings: firmware version, BLE firmware version, serial number, power supply, product line.
@@ -84,7 +90,7 @@ Every touchable element must be large enough to hit reliably with a fingertip an
 
 - Six distinct elements on the Home page (two temperatures, two buttons, a countdown, two status icons) on a small round screen is a real layout risk this ADR does not fully resolve; the precise arrangement needs validating against real hardware, not just decided on paper.
 - The button's dual meaning — confirm on the Menu, back everywhere else — is simple as a rule but means the same physical action does different things depending on which page is showing, which needs to be learnable in practice; that is a presentation concern for implementation, not something this ADR can guarantee on its own.
-- Leaving Dial Brightness's persistence and read/write path outside `VolcanoDevice` is a deliberate, narrow carve-out; this ADR does not establish a general pattern for where further local-only Dial settings would live beyond "not the Volcano component," should more of them arise later.
+- Leaving Dial Brightness's persistence and read/write path outside `VolcanoDevice` is a deliberate, narrow carve-out; this ADR does not formally establish a general pattern for where further local-only Dial settings would live beyond "not the Volcano component." Dial Sound, added later, followed the identical shape (a plain restore_value global, its own page), so a de facto pattern exists in practice even without being named as a rule here.
 
 ## Alternatives considered
 
@@ -106,5 +112,5 @@ Separate, independently-implemented LED Brightness, Auto-Shutoff Duration, and D
 
 ## Notes
 
-- Reference [ADR-0002](ADR-0002-volcano-component-architecture.md) for the control-interface boundary this architecture stays inside — in particular, Dial Brightness's deliberate exemption from `VolcanoDevice` — [ADR-0009](ADR-0009-volcano-abstraction-layer-interface.md) for the connection-state and write-confirmation behaviour this UI reads rather than reimplements, and [ADR-0010](ADR-0010-dial-hardware-and-ui-framework.md) for the hardware and rendering foundation this architecture is built on.
+- Reference [ADR-0002](ADR-0002-volcano-component-architecture.md) for the control-interface boundary this architecture stays inside — in particular, Dial Brightness's and Dial Sound's deliberate exemption from `VolcanoDevice` — [ADR-0009](ADR-0009-volcano-abstraction-layer-interface.md) for the connection-state and write-confirmation behaviour this UI reads rather than reimplements, and [ADR-0010](ADR-0010-dial-hardware-and-ui-framework.md) for the hardware and rendering foundation this architecture is built on.
 - This ADR fixes the page set and navigation model; it does not fix pixel layout, exact colours, or icon artwork, all of which are implementation detail expected to be refined once real Dial hardware is available to test against.
