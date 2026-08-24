@@ -2,18 +2,16 @@
 # Hardware bring-up is done -- display, touch, rotary encoder, physical
 # button, the volcano component, and LVGL itself are all individually
 # confirmed against real hardware (see git history for that trail). This
-# now also carries ADR-0011's Home page: current/target temperature (with
-# a unit indicator that follows the device's own Celsius/Fahrenheit
-# setting, converting the displayed numbers to match per ADR-0008),
-# rotary-adjusted target temperature with write-coalescing debounce,
-# Heat/Air buttons, the auto-shutoff countdown, and BLE/WiFi status icons,
-# all reading real device state through the volcano component.
+# now also carries ADR-0011's Home page (current/target temperature with
+# rotary adjustment and write-coalescing debounce, a unit indicator that
+# converts per ADR-0008, Heat/Air buttons, the auto-shutoff countdown,
+# BLE/WiFi status icons) and its Navigation Menu, though the latter only
+# lists "Home" so far -- Settings, the numeric value pages, and
+# Information don't exist yet, each becomes a real menu entry once built.
 #
 # Still no api/web_server -- nothing here needs them yet; that's ADR-0010's
-# decision to retain them, not yet exercised. WiFi itself is now present,
-# purely so the WiFi status icon has something real to reflect. The
-# Navigation Menu is also not built yet -- see the comment above the Home
-# page.
+# decision to retain them, not yet exercised. WiFi itself is present purely
+# so the WiFi status icon has something real to reflect.
 #
 # The Dial is built on the M5StampS3 module (ESP32-S3, 8MB flash), matching
 # the "M5Stack StampS3" PlatformIO board definition -- confirmed against the
@@ -313,10 +311,41 @@ binary_sensor:
         input: true
         pullup: true
       inverted: true
+    # Button semantics (ADR-0011): from Home, opens the Navigation Menu;
+    # from the Menu, confirms whatever the roller is currently scrolled to
+    # -- read directly here rather than via the roller's own on_click
+    # (which is touch-only, see its comment), since LVGL's group/edit-mode
+    # click routing doesn't distinguish a physical-button confirm from the
+    # button press that just opened the menu. Only one real destination
+    # exists yet, so this always goes to Home rather than branching on the
+    # selected text -- needed once Settings/the numeric pages/Information
+    # exist as real options.
+    #
+    # Fires on_release: on press, the button is still physically down at
+    # the moment the roller gains focus, which LVGL reads as an immediate
+    # confirm against it.
+    #
+    # The two branches below are mutually exclusive (if/else, not two
+    # separate ifs) because lvgl.page.show is synchronous -- a second,
+    # independent is_showing check would run after the first had already
+    # switched pages and match immediately.
     on_press:
       - logger.log: "Button pressed"
     on_release:
       - logger.log: "Button released"
+      - if:
+          condition:
+            lvgl.page.is_showing: home_page
+          then:
+            - lvgl.page.show: menu_page
+          else:
+            - if:
+                condition:
+                  lvgl.page.is_showing: menu_page
+                then:
+                  - lambda: |-
+                      ESP_LOGD("main", "Menu confirmed: %s", id(nav_menu_roller).get_selected_text().c_str());
+                  - lvgl.page.show: home_page
 
 # Shared by both temperature entities' on_value and by
 # display_units_fahrenheit's on_turn_on/on_turn_off (ADR-0008: the component
@@ -411,12 +440,12 @@ font:
 # layout are implementation detail per ADR-0011's Notes, not fixed by the
 # ADR -- refined here against the real round display.
 #
-# Not yet implemented, deliberately out of scope for this increment: the
-# button opening a Navigation Menu (nothing to navigate to yet -- no
-# other pages exist). Rotary-adjusted target temperature, with ADR-0011's
-# write-coalescing debounce, is implemented -- see the rotary_encoder
-# sensor's on_value and the commit_target_temperature/
-# refresh_target_temp_label scripts above.
+# Rotary-adjusted target temperature, with ADR-0011's write-coalescing
+# debounce, is implemented -- see the rotary_encoder sensor's on_value
+# and the commit_target_temperature/refresh_target_temp_label scripts
+# above. The Navigation Menu (below) currently lists only "Home" --
+# Settings, the numeric value pages, and Information don't exist yet;
+# each becomes a real menu entry once its page is built.
 lvgl:
   displays:
     - dial_display
@@ -521,3 +550,74 @@ lvgl:
                   align: center
             on_click:
               - switch.toggle: volcano_pump
+
+    # The Navigation Menu (ADR-0011): rotary turn moves the highlighted
+    # row, a press or a direct touch confirms it. A roller is LVGL's
+    # built-in fit for exactly this -- unlike Home's Heat/Air, this is
+    # the one place on the Dial where the encoder's default-group
+    # behaviour (the same auto-add that had to be defeated on Home) is
+    # what's wanted, so no click_focusable/group eviction here.
+    - id: menu_page
+      bg_color: 0x000000
+      bg_opa: cover
+      # Forces the roller straight into edit mode on every page load, so
+      # the very first turn scrolls it immediately -- LVGL otherwise
+      # needs an initial press to enter edit mode before rotation does
+      # anything, which ADR-0011 doesn't call for (it wants turning to
+      # move the highlight directly, no extra step first).
+      on_load:
+        - lvgl.widget.focus:
+            id: nav_menu_roller
+            editing: true
+      widgets:
+        - roller:
+            id: nav_menu_roller
+            align: center
+            width: 90%
+            height: 110px
+            visible_row_count: 3
+            # bg_opa: cover -- bg_color alone doesn't paint anything.
+            # border_width: 0 -- a plain themed border, unrelated to the
+            # outline states below (border_width/outline_width are
+            # separate LVGL style properties).
+            bg_color: 0x000000
+            bg_opa: cover
+            border_width: 0
+            text_color: 0xFFFFFF
+            selected:
+              bg_color: 0x333333
+              text_color: 0x00D9FF
+            # Kills the default theme's focus outline (focused/focus_key)
+            # and its edit-state outline (edited -- this roller is forced
+            # permanently into edit mode below), redundant given the
+            # selected row above already shows what's highlighted.
+            # Deliberately flat, not nested under a literal main: key --
+            # ESPHome's LVGL widget config (collect_parts in
+            # widgets/__init__.py) seeds the main part's default state
+            # from this widget's own top-level properties, then merges in
+            # any state named as a sibling top-level key (focused,
+            # focus_key, edited, ...); a literal `main:` key is itself
+            # treated as one of those states and replaces the seeded
+            # default outright rather than merging with it, silently
+            # discarding align/width/height/bg_color/text_color above.
+            focused:
+              outline_width: 0
+            focus_key:
+              outline_width: 0
+            edited:
+              outline_width: 0
+            options:
+              - "Home"
+            # Touch only -- guarded on the triggering indev being the
+            # touchscreen, not the encoder/button. A physical-button
+            # confirm is handled separately by dial_button's own
+            # on_release, which reads the roller directly instead of
+            # going through this click event: LVGL's group/edit-mode
+            # click routing doesn't distinguish a button confirm from the
+            # button press that opened the menu in the first place.
+            on_click:
+              - if:
+                  condition:
+                    lambda: "return lv_indev_get_type(lv_indev_get_act()) == LV_INDEV_TYPE_POINTER;"
+                  then:
+                    - lvgl.page.show: home_page
