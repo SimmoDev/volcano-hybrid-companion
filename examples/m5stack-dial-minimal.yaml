@@ -5,14 +5,15 @@
 # now also carries ADR-0011's Home page: current/target temperature (with
 # a unit indicator that follows the device's own Celsius/Fahrenheit
 # setting, converting the displayed numbers to match per ADR-0008),
+# rotary-adjusted target temperature with write-coalescing debounce,
 # Heat/Air buttons, the auto-shutoff countdown, and BLE/WiFi status icons,
 # all reading real device state through the volcano component.
 #
 # Still no api/web_server -- nothing here needs them yet; that's ADR-0010's
 # decision to retain them, not yet exercised. WiFi itself is now present,
-# purely so the WiFi status icon has something real to reflect. Rotary-
-# adjusted temperature and the Navigation Menu are also not built yet --
-# see the comment above the Home page.
+# purely so the WiFi status icon has something real to reflect. The
+# Navigation Menu is also not built yet -- see the comment above the Home
+# page.
 #
 # The Dial is built on the M5StampS3 module (ESP32-S3, 8MB flash), matching
 # the "M5Stack StampS3" PlatformIO board definition -- confirmed against the
@@ -94,6 +95,17 @@ wifi:
 # Tracks whether the BLE link is up but volcano is not yet READY, so the
 # 500ms interval below can blink the BLE icon while CONNECTING. ble_blink_on
 # is that interval's own toggle state, not read anywhere else.
+#
+# pending_target_temp_c is the Home page's own local notion of the target
+# temperature (ADR-0011's write-coalescing): the encoder adjusts it and the
+# label always renders it immediately, but VolcanoDevice only hears about
+# it once commit_target_temperature's debounce settles. Every confirmed
+# report from the device re-seeds it too, so an external change (the
+# Volcano's own panel, say) is reflected the same way a local turn is.
+# NaN until the first real report -- the encoder is a no-op until then,
+# rather than adjusting from a meaningless baseline. last_encoder_raw is
+# the rotary_encoder sensor's own running count, needed only to compute
+# each turn's delta.
 globals:
   - id: ble_connecting
     type: bool
@@ -103,6 +115,14 @@ globals:
     type: bool
     restore_value: false
     initial_value: "false"
+  - id: pending_target_temp_c
+    type: float
+    restore_value: false
+    initial_value: "NAN"
+  - id: last_encoder_raw
+    type: float
+    restore_value: false
+    initial_value: "0"
 
 volcano:
   id: volcano_component
@@ -142,6 +162,9 @@ volcano:
     id: volcano_target_temperature
     internal: true
     on_value:
+      - globals.set:
+          id: pending_target_temp_c
+          value: !lambda "return x;"
       - script.execute: refresh_target_temp_label
   display_units_fahrenheit:
     id: volcano_display_units_fahrenheit
@@ -257,6 +280,28 @@ sensor:
     on_value:
       - lambda: |-
           ESP_LOGD("main", "Encoder now at %d", (int) x);
+      # Home page rotary semantics (ADR-0011): turning adjusts target
+      # temperature directly, no menu/focus concept on this page. x is
+      # the sensor's own running count, not a per-turn delta, hence
+      # last_encoder_raw -- tracked unconditionally, even before the
+      # first connection, so a turn made while disconnected doesn't
+      # register as one huge delta once pending_target_temp_c is finally
+      # known. 1 degree C per detent; clamped to CMD-001's confirmed-
+      # accepted range (40-230 C) so pending_target_temp_c never drifts
+      # somewhere VolcanoBleClient would refuse anyway.
+      - lambda: |-
+          float delta = x - id(last_encoder_raw);
+          id(last_encoder_raw) = x;
+          if (std::isnan(id(pending_target_temp_c)))
+            return;
+          float next = id(pending_target_temp_c) + delta * 1.0f;
+          if (next < 40.0f)
+            next = 40.0f;
+          if (next > 230.0f)
+            next = 230.0f;
+          id(pending_target_temp_c) = next;
+      - script.execute: refresh_target_temp_label
+      - script.execute: commit_target_temperature
 
 binary_sensor:
   - platform: gpio
@@ -293,12 +338,35 @@ script:
             char buf[8];
             snprintf(buf, sizeof(buf), "%.0f", v);
             return std::string(buf);
+  # ADR-0011's write-coalescing: fires 300ms after the encoder last
+  # moved (mode: restart cancels and restarts the delay on every new
+  # turn), not once per detent. VolcanoDevice refuses a second write to
+  # a field while one is already outstanding (ADR-0009) and a confirmed
+  # round trip is ~150-250ms on real hardware -- writing on every detent
+  # would silently drop most of them. Guarded against a stale NaN
+  # baseline; VolcanoBleClient's own range check would refuse it anyway,
+  # but this avoids attempting a meaningless write in the first place.
+  - id: commit_target_temperature
+    mode: restart
+    then:
+      - delay: 300ms
+      - if:
+          condition:
+            lambda: "return !std::isnan(id(pending_target_temp_c));"
+          then:
+            - number.set:
+                id: volcano_target_temperature
+                value: !lambda "return id(pending_target_temp_c);"
+  # Reads pending_target_temp_c, not volcano_target_temperature.state --
+  # this is the label a rotary turn updates immediately, before
+  # commit_target_temperature's debounced write even fires, let alone
+  # confirms.
   - id: refresh_target_temp_label
     then:
       - lvgl.label.update:
           id: target_temp_label
           text: !lambda |-
-            float c = id(volcano_target_temperature).state;
+            float c = id(pending_target_temp_c);
             if (std::isnan(c))
               return std::string("--");
             float v = id(volcano_display_units_fahrenheit).state ? (c * 9.0f / 5.0f + 32.0f) : c;
@@ -343,10 +411,12 @@ font:
 # layout are implementation detail per ADR-0011's Notes, not fixed by the
 # ADR -- refined here against the real round display.
 #
-# Not yet implemented, both deliberately out of scope for this increment:
-# rotary-adjusted target temperature (needs the write-coalescing debounce
-# ADR-0011 specifies, its own follow-up) and the button opening a
-# Navigation Menu (nothing to navigate to yet -- no other pages exist).
+# Not yet implemented, deliberately out of scope for this increment: the
+# button opening a Navigation Menu (nothing to navigate to yet -- no
+# other pages exist). Rotary-adjusted target temperature, with ADR-0011's
+# write-coalescing debounce, is implemented -- see the rotary_encoder
+# sensor's on_value and the commit_target_temperature/
+# refresh_target_temp_label scripts above.
 lvgl:
   displays:
     - dial_display
