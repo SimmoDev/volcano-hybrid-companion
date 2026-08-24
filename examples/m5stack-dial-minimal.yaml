@@ -8,8 +8,9 @@
 # BLE/WiFi status icons), its Navigation Menu, Settings (vibration/
 # display-on-cooling/display-units toggles), and the split Information
 # page it names -- About and Diagnostics here, each its own menu entry.
-# Only the numeric value pages (LED brightness, auto-shutoff duration,
-# Dial brightness) remain unbuilt.
+# The LED Brightness numeric page is also built now, following ADR-0011's
+# shared rotary-adjusted-value template. Only Auto-Shutoff Duration and
+# Dial Brightness remain unbuilt among the numeric pages.
 #
 # Still no api/web_server -- nothing here needs them yet; that's ADR-0010's
 # decision to retain them, not yet exercised. WiFi itself is present purely
@@ -49,13 +50,17 @@ esphome:
       # silently writing to the Volcano before the Settings page was
       # ever even shown. Evicting everything meant to be touch-only
       # keeps the encoder/button reserved for temperature/menu use on
-      # Home and Settings, per ADR-0011.
+      # Home and Settings, per ADR-0011. The LED Brightness page's step-
+      # size buttons are the same story: click_focusable: false alone
+      # doesn't stop group membership, so they need evicting too.
       - lambda: |-
           lv_group_remove_obj(id(heat_button));
           lv_group_remove_obj(id(air_button));
           lv_group_remove_obj(id(settings_vibration_switch));
           lv_group_remove_obj(id(settings_display_on_cooling_switch));
           lv_group_remove_obj(id(settings_display_units_switch));
+          lv_group_remove_obj(id(led_brightness_step_1_button));
+          lv_group_remove_obj(id(led_brightness_step_10_button));
 
 logger:
 
@@ -121,6 +126,11 @@ wifi:
 # rather than adjusting from a meaningless baseline. last_encoder_raw is
 # the rotary_encoder sensor's own running count, needed only to compute
 # each turn's delta.
+#
+# pending_led_brightness is the LED Brightness page's own equivalent of
+# pending_target_temp_c -- same write-coalescing shape (ADR-0011), same
+# NaN-until-first-report guard, sharing last_encoder_raw since only one
+# rotary-adjusted page is ever showing at a time.
 globals:
   - id: ble_connecting
     type: bool
@@ -138,6 +148,18 @@ globals:
     type: float
     restore_value: false
     initial_value: "0"
+  - id: pending_led_brightness
+    type: float
+    restore_value: false
+    initial_value: "NAN"
+  # How much one detent adjusts pending_led_brightness by -- the LED
+  # Brightness page's own step-size buttons (1/10) set this, so a full
+  # sweep of the 0-100 range doesn't need 100 detents of fine adjustment.
+  # Not persisted across reboot; always starts at the fine (1) step.
+  - id: led_brightness_step
+    type: float
+    restore_value: false
+    initial_value: "1.0"
 
 volcano:
   id: volcano_component
@@ -276,6 +298,18 @@ volcano:
             char buf[8];
             snprintf(buf, sizeof(buf), "%02d:%02d", total / 60, total % 60);
             return std::string(buf);
+  # Rotary-adjusted per ADR-0011's shared numeric-page template, same
+  # write-coalescing shape as target_temperature above -- pending_led_
+  # brightness/commit_led_brightness/refresh_led_brightness_label mirror
+  # pending_target_temp_c/commit_target_temperature/refresh_target_temp_label.
+  led_brightness:
+    id: volcano_led_brightness
+    internal: true
+    on_value:
+      - globals.set:
+          id: pending_led_brightness
+          value: !lambda "return x;"
+      - script.execute: refresh_led_brightness_label
   heater:
     id: volcano_heater
     internal: true
@@ -427,6 +461,14 @@ sensor:
       # detent; clamped to CMD-001's confirmed-accepted range (40-230 C)
       # so pending_target_temp_c never drifts somewhere VolcanoBleClient
       # would refuse anyway.
+      #
+      # LED Brightness follows the same shape once its page is showing --
+      # 1% per detent, clamped 0-100. Mutually exclusive branches (if/else,
+      # not independent ifs) for the same reason as confirm_menu_selection's
+      # chain: only one rotary-adjusted page is ever showing at a time, and
+      # every branch must still update last_encoder_raw so a turn made
+      # elsewhere doesn't register as one huge delta once back on a
+      # rotary-adjusted page.
       - if:
           condition:
             lvgl.page.is_showing: home_page
@@ -445,8 +487,26 @@ sensor:
             - script.execute: refresh_target_temp_label
             - script.execute: commit_target_temperature
           else:
-            - lambda: |-
-                id(last_encoder_raw) = x;
+            - if:
+                condition:
+                  lvgl.page.is_showing: led_brightness_page
+                then:
+                  - lambda: |-
+                      float delta = x - id(last_encoder_raw);
+                      id(last_encoder_raw) = x;
+                      if (std::isnan(id(pending_led_brightness)))
+                        return;
+                      float next = id(pending_led_brightness) + delta * id(led_brightness_step);
+                      if (next < 0.0f)
+                        next = 0.0f;
+                      if (next > 100.0f)
+                        next = 100.0f;
+                      id(pending_led_brightness) = next;
+                  - script.execute: refresh_led_brightness_label
+                  - script.execute: commit_led_brightness
+                else:
+                  - lambda: |-
+                      id(last_encoder_raw) = x;
 
 binary_sensor:
   - platform: gpio
@@ -549,6 +609,31 @@ script:
             char buf[8];
             snprintf(buf, sizeof(buf), "%.0f", v);
             return std::string(buf);
+  # LED Brightness's own commit/refresh pair, same shape as
+  # commit_target_temperature/refresh_target_temp_label above -- see those
+  # comments for why the debounce and the NaN guard exist.
+  - id: commit_led_brightness
+    mode: restart
+    then:
+      - delay: 300ms
+      - if:
+          condition:
+            lambda: "return !std::isnan(id(pending_led_brightness));"
+          then:
+            - number.set:
+                id: volcano_led_brightness
+                value: !lambda "return id(pending_led_brightness);"
+  - id: refresh_led_brightness_label
+    then:
+      - lvgl.label.update:
+          id: led_brightness_value_label
+          text: !lambda |-
+            float v = id(pending_led_brightness);
+            if (std::isnan(v))
+              return std::string("--");
+            char buf[8];
+            snprintf(buf, sizeof(buf), "%.0f", v);
+            return std::string(buf);
   - id: refresh_time_of_operation_label
     then:
       - lvgl.label.update:
@@ -583,14 +668,21 @@ script:
                 else:
                   - if:
                       condition:
-                        lambda: 'return id(nav_menu_roller).get_selected_text() == "Diagnostics";'
+                        lambda: 'return id(nav_menu_roller).get_selected_text() == "LED Brightness";'
                       then:
-                        - lvgl.page.show: diagnostics_page
+                        - lvgl.page.show: led_brightness_page
                       else:
-                        # Only "About" left among the current options --
-                        # add another explicit branch here, not a new
-                        # bare else, once a fifth option exists.
-                        - lvgl.page.show: about_page
+                        - if:
+                            condition:
+                              lambda: 'return id(nav_menu_roller).get_selected_text() == "Diagnostics";'
+                            then:
+                              - lvgl.page.show: diagnostics_page
+                            else:
+                              # Only "About" left among the current
+                              # options -- add another explicit branch
+                              # here, not a new bare else, once a sixth
+                              # option exists.
+                              - lvgl.page.show: about_page
 
 # Blinks the BLE status icon while CONNECTING (ble_connecting, set by
 # ble_client's on_connect/on_disconnect and volcano's connected above).
@@ -632,11 +724,13 @@ font:
 # Rotary-adjusted target temperature, with ADR-0011's write-coalescing
 # debounce, is implemented -- see the rotary_encoder sensor's on_value
 # and the commit_target_temperature/refresh_target_temp_label scripts
-# above. The Navigation Menu (below) lists Home, Settings, Diagnostics,
-# and About, in that order -- the latter two are ADR-0011's Information
-# page, split in two rather than cramming six lines of device facts onto
-# one (see the comment above about_page/diagnostics_page). The numeric
-# value pages don't exist yet; each becomes a real menu entry once built.
+# above. The Navigation Menu (below) lists Home, Settings, LED Brightness,
+# Diagnostics, and About, in that order -- the latter two are ADR-0011's
+# Information page, split in two rather than cramming six lines of device
+# facts onto one (see the comment above about_page/diagnostics_page).
+# Auto-Shutoff Duration and Dial Brightness don't exist yet; each becomes
+# a real menu entry once built, following LED Brightness's page as the
+# template.
 lvgl:
   displays:
     - dial_display
@@ -809,6 +903,7 @@ lvgl:
             options:
               - "Home"
               - "Settings"
+              - "LED Brightness"
               - "Diagnostics"
               - "About"
             # Touch only -- guarded on the triggering indev being the
@@ -987,6 +1082,119 @@ lvgl:
                   id: settings_units_f_label
                   text_color: 0x888888
                   text: "°F"
+
+    # LED Brightness (ADR-0011's shared numeric-value page template, first
+    # instance): rotary turn adjusts the value directly, same write-
+    # coalescing debounce as Home's target temperature (see the
+    # rotary_encoder sensor's on_value and commit_led_brightness/
+    # refresh_led_brightness_label above). A button press returns to the
+    # Menu via dial_button's existing else-branch -- this page is neither
+    # home_page nor menu_page, so no change was needed there.
+    #
+    # Caption-then-value flex column, same as About/Diagnostics/Settings,
+    # rather than Home's hand-placed y-offsets -- simpler and side-steps
+    # the overlap bug Home's naive vertical stack hit originally. Caption
+    # white, value/unit cyan, matching Settings' white-caption/cyan-
+    # control convention. The heading gets extra pad_bottom on top of the
+    # page's own pad_row, so it sits further from the value than the
+    # value sits from the "%" below it.
+    #
+    # Step-size buttons (1/10, 48x48 fully round, same shape and orange
+    # active colour as Home's Heat/Air): a straight 0-100 sweep at 1 per
+    # detent is a lot of turning for a coarse change, so these pick how
+    # much one detent adjusts pending_led_brightness by (led_brightness_
+    # step, read in the rotary_encoder sensor's on_value above). Selected
+    # step is orange, the other dim grey -- same active/inactive
+    # convention as Home's actuator buttons, not Settings' cyan (these
+    # are actions, not a state toggle). click_focusable: false plus the
+    # on_boot group eviction above, same as Heat/Air -- these are real
+    # button widgets, so they'd otherwise auto-join the
+    # encoder's default group and eat a physical-button press meant for
+    # something else.
+    - id: led_brightness_page
+      bg_color: 0x000000
+      bg_opa: cover
+      scrollable: false
+      layout:
+        type: flex
+        flex_flow: column
+        flex_align_main: center
+        flex_align_cross: center
+        flex_align_track: center
+        pad_row: 8
+      widgets:
+        - label:
+            text_color: 0xFFFFFF
+            text: "LED Brightness"
+            pad_bottom: 8
+        - label:
+            id: led_brightness_value_label
+            text_font: font_temp
+            text_color: 0x00D9FF
+            text: "--"
+        - label:
+            text_color: 0x00D9FF
+            text: "%"
+        - obj:
+            width: size_content
+            height: size_content
+            bg_opa: 0%
+            border_width: 0
+            pad_all: 0
+            pad_top: 8
+            layout:
+              type: flex
+              flex_flow: row
+              flex_align_main: center
+              flex_align_cross: center
+              pad_column: 12
+            widgets:
+              - button:
+                  id: led_brightness_step_1_button
+                  width: 48
+                  height: 48
+                  radius: circle
+                  shadow_width: 0
+                  outline_width: 0
+                  bg_color: 0xFF7A00
+                  click_focusable: false
+                  widgets:
+                    - label:
+                        text: "1"
+                        align: center
+                  on_click:
+                    - globals.set:
+                        id: led_brightness_step
+                        value: "1.0"
+                    - lvgl.widget.update:
+                        id: led_brightness_step_1_button
+                        bg_color: 0xFF7A00
+                    - lvgl.widget.update:
+                        id: led_brightness_step_10_button
+                        bg_color: 0x333333
+              - button:
+                  id: led_brightness_step_10_button
+                  width: 48
+                  height: 48
+                  radius: circle
+                  shadow_width: 0
+                  outline_width: 0
+                  bg_color: 0x333333
+                  click_focusable: false
+                  widgets:
+                    - label:
+                        text: "10"
+                        align: center
+                  on_click:
+                    - globals.set:
+                        id: led_brightness_step
+                        value: "10.0"
+                    - lvgl.widget.update:
+                        id: led_brightness_step_1_button
+                        bg_color: 0x333333
+                    - lvgl.widget.update:
+                        id: led_brightness_step_10_button
+                        bg_color: 0xFF7A00
 
     # About and Diagnostics (ADR-0011's Information page, split in two --
     # read-only, so no on_load/on_click of their own: dial_button's
