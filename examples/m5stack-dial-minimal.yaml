@@ -5,9 +5,9 @@
 # now also carries ADR-0011's Home page (current/target temperature with
 # rotary adjustment and write-coalescing debounce, a unit indicator that
 # converts per ADR-0008, Heat/Air buttons, the auto-shutoff countdown,
-# BLE/WiFi status icons) and its Navigation Menu, though the latter only
-# lists "Home" so far -- Settings, the numeric value pages, and
-# Information don't exist yet, each becomes a real menu entry once built.
+# BLE/WiFi status icons), its Navigation Menu, and the split Information
+# page it names -- About and Diagnostics here, each its own menu entry.
+# Only Settings and the numeric value pages remain unbuilt.
 #
 # Still no api/web_server -- nothing here needs them yet; that's ADR-0010's
 # decision to retain them, not yet exercised. WiFi itself is present purely
@@ -23,6 +23,12 @@
 
 esphome:
   name: volcano-dial-scaffold
+  # ESPHOME_PROJECT_VERSION (used on the About page below) is compiled
+  # from this -- our own firmware's version, distinct from the Volcano's
+  # own firmware/BLE firmware versions the volcano component reports.
+  project:
+    name: "volcano-hybrid-companion.dial"
+    version: "0.1.0"
   on_boot:
     then:
       - output.set_level:
@@ -214,6 +220,59 @@ volcano:
       - lvgl.widget.update:
           id: air_button
           bg_color: 0x333333
+  # Device-information strings, per ADR-0009 exempt from the disconnect-
+  # clears-unknown rule other fields follow -- known once read, they stay
+  # known across a dropout, so no NaN/"unknown" handling is needed the
+  # way the temperature/countdown labels above need it.
+  firmware_version:
+    id: volcano_firmware_version
+    internal: true
+    on_value:
+      - lvgl.label.update:
+          id: about_volcano_firmware_value
+          text: !lambda "return x;"
+  ble_firmware_version:
+    id: volcano_ble_firmware_version
+    internal: true
+    on_value:
+      - lvgl.label.update:
+          id: about_volcano_ble_firmware_value
+          text: !lambda "return x;"
+  product_line:
+    id: volcano_product_line
+    internal: true
+    on_value:
+      - lvgl.label.update:
+          id: about_product_line_value
+          text: !lambda "return x;"
+  serial_number:
+    id: volcano_serial_number
+    internal: true
+    on_value:
+      - lvgl.label.update:
+          id: diagnostics_serial_value
+          text: !lambda "return x;"
+  power_supply:
+    id: volcano_power_supply
+    internal: true
+    on_value:
+      - lvgl.label.update:
+          id: diagnostics_power_supply_value
+          text: !lambda "return x;"
+  # Time of operation stays combined onto one value (ADR-0011) rather
+  # than splitting hours/minutes into their own rows -- both notify
+  # independently, so either one changing refreshes the shared label
+  # via the same script.
+  hours_of_operation:
+    id: volcano_hours_of_operation
+    internal: true
+    on_value:
+      - script.execute: refresh_time_of_operation_label
+  minutes_of_operation:
+    id: volcano_minutes_of_operation
+    internal: true
+    on_value:
+      - script.execute: refresh_time_of_operation_label
 
 # The GC9A01A round panel over SPI. Pins confirmed against a known-working
 # community M5Dial configuration, not just the pinout reference --
@@ -279,27 +338,37 @@ sensor:
       - lambda: |-
           ESP_LOGD("main", "Encoder now at %d", (int) x);
       # Home page rotary semantics (ADR-0011): turning adjusts target
-      # temperature directly, no menu/focus concept on this page. x is
-      # the sensor's own running count, not a per-turn delta, hence
-      # last_encoder_raw -- tracked unconditionally, even before the
-      # first connection, so a turn made while disconnected doesn't
-      # register as one huge delta once pending_target_temp_c is finally
-      # known. 1 degree C per detent; clamped to CMD-001's confirmed-
-      # accepted range (40-230 C) so pending_target_temp_c never drifts
-      # somewhere VolcanoBleClient would refuse anyway.
-      - lambda: |-
-          float delta = x - id(last_encoder_raw);
-          id(last_encoder_raw) = x;
-          if (std::isnan(id(pending_target_temp_c)))
-            return;
-          float next = id(pending_target_temp_c) + delta * 1.0f;
-          if (next < 40.0f)
-            next = 40.0f;
-          if (next > 230.0f)
-            next = 230.0f;
-          id(pending_target_temp_c) = next;
-      - script.execute: refresh_target_temp_label
-      - script.execute: commit_target_temperature
+      # temperature directly -- but only on Home. This raw sensor-level
+      # listener fires regardless of which page is showing, so it must
+      # gate itself; without this it was also adjusting and writing
+      # target temperature in the background while navigating the Menu.
+      # x is the sensor's own running count, not a per-turn delta, hence
+      # last_encoder_raw -- tracked unconditionally on every page (even
+      # before the first connection), so a turn made elsewhere doesn't
+      # register as one huge delta once back on Home. 1 degree C per
+      # detent; clamped to CMD-001's confirmed-accepted range (40-230 C)
+      # so pending_target_temp_c never drifts somewhere VolcanoBleClient
+      # would refuse anyway.
+      - if:
+          condition:
+            lvgl.page.is_showing: home_page
+          then:
+            - lambda: |-
+                float delta = x - id(last_encoder_raw);
+                id(last_encoder_raw) = x;
+                if (std::isnan(id(pending_target_temp_c)))
+                  return;
+                float next = id(pending_target_temp_c) + delta * 1.0f;
+                if (next < 40.0f)
+                  next = 40.0f;
+                if (next > 230.0f)
+                  next = 230.0f;
+                id(pending_target_temp_c) = next;
+            - script.execute: refresh_target_temp_label
+            - script.execute: commit_target_temperature
+          else:
+            - lambda: |-
+                id(last_encoder_raw) = x;
 
 binary_sensor:
   - platform: gpio
@@ -313,22 +382,22 @@ binary_sensor:
       inverted: true
     # Button semantics (ADR-0011): from Home, opens the Navigation Menu;
     # from the Menu, confirms whatever the roller is currently scrolled to
-    # -- read directly here rather than via the roller's own on_click
-    # (which is touch-only, see its comment), since LVGL's group/edit-mode
-    # click routing doesn't distinguish a physical-button confirm from the
-    # button press that just opened the menu. Only one real destination
-    # exists yet, so this always goes to Home rather than branching on the
-    # selected text -- needed once Settings/the numeric pages/Information
-    # exist as real options.
+    # (via confirm_menu_selection, not the roller's own on_click, which
+    # is touch-only -- see its comment); from every other page, returns
+    # to the Menu. Read directly rather than via LVGL's own group/edit-
+    # mode click routing, which doesn't distinguish a physical-button
+    # confirm from the button press that just opened the menu.
     #
     # Fires on_release: on press, the button is still physically down at
-    # the moment the roller gains focus, which LVGL reads as an immediate
-    # confirm against it.
+    # the moment the newly-shown page's focused widget appears, which
+    # LVGL can read as an immediate confirm against it.
     #
-    # The two branches below are mutually exclusive (if/else, not two
-    # separate ifs) because lvgl.page.show is synchronous -- a second,
-    # independent is_showing check would run after the first had already
-    # switched pages and match immediately.
+    # The branches below are mutually exclusive (if/else, not independent
+    # ifs) because lvgl.page.show is synchronous -- an independent
+    # is_showing check run afterwards would see the page the prior branch
+    # just switched to and match immediately. The final else needs no
+    # changes as more pages are added: everything that isn't Home or the
+    # Menu already falls into it.
     on_press:
       - logger.log: "Button pressed"
     on_release:
@@ -343,9 +412,9 @@ binary_sensor:
                 condition:
                   lvgl.page.is_showing: menu_page
                 then:
-                  - lambda: |-
-                      ESP_LOGD("main", "Menu confirmed: %s", id(nav_menu_roller).get_selected_text().c_str());
-                  - lvgl.page.show: home_page
+                  - script.execute: confirm_menu_selection
+                else:
+                  - lvgl.page.show: menu_page
 
 # Shared by both temperature entities' on_value and by
 # display_units_fahrenheit's on_turn_on/on_turn_off (ADR-0008: the component
@@ -402,6 +471,42 @@ script:
             char buf[8];
             snprintf(buf, sizeof(buf), "%.0f", v);
             return std::string(buf);
+  - id: refresh_time_of_operation_label
+    then:
+      - lvgl.label.update:
+          id: diagnostics_time_of_operation_value
+          text: !lambda |-
+            float h = id(volcano_hours_of_operation).state;
+            float m = id(volcano_minutes_of_operation).state;
+            if (std::isnan(h) || std::isnan(m))
+              return std::string("--");
+            char buf[16];
+            snprintf(buf, sizeof(buf), "%.0fh %.0fm", h, m);
+            return std::string(buf);
+  # Shared by both the roller's on_click (touch, guarded to POINTER
+  # there) and dial_button's on_release (button, on the Menu page) --
+  # one place to add a branch when a new page/option is added, rather
+  # than keeping the touch and button paths in sync by hand.
+  - id: confirm_menu_selection
+    then:
+      - lambda: |-
+          ESP_LOGD("main", "Menu confirmed: %s", id(nav_menu_roller).get_selected_text().c_str());
+      - if:
+          condition:
+            lambda: 'return id(nav_menu_roller).get_selected_text() == "Home";'
+          then:
+            - lvgl.page.show: home_page
+          else:
+            - if:
+                condition:
+                  lambda: 'return id(nav_menu_roller).get_selected_text() == "Diagnostics";'
+                then:
+                  - lvgl.page.show: diagnostics_page
+                else:
+                  # Only "About" left among the current options -- add
+                  # another explicit branch here, not a new bare else,
+                  # once a fourth option exists.
+                  - lvgl.page.show: about_page
 
 # Blinks the BLE status icon while CONNECTING (ble_connecting, set by
 # ble_client's on_connect/on_disconnect and volcano's connected above).
@@ -443,9 +548,11 @@ font:
 # Rotary-adjusted target temperature, with ADR-0011's write-coalescing
 # debounce, is implemented -- see the rotary_encoder sensor's on_value
 # and the commit_target_temperature/refresh_target_temp_label scripts
-# above. The Navigation Menu (below) currently lists only "Home" --
-# Settings, the numeric value pages, and Information don't exist yet;
-# each becomes a real menu entry once its page is built.
+# above. The Navigation Menu (below) lists Home plus About and
+# Diagnostics -- ADR-0011's Information page, split in two rather than
+# cramming six lines of device facts onto one (see the comment above
+# about_page/diagnostics_page). Settings and the numeric value pages
+# don't exist yet; each becomes a real menu entry once built.
 lvgl:
   displays:
     - dial_display
@@ -565,7 +672,16 @@ lvgl:
       # needs an initial press to enter edit mode before rotation does
       # anything, which ADR-0011 doesn't call for (it wants turning to
       # move the highlight directly, no extra step first).
+      #
+      # on_load fires on LV_EVENT_SCREEN_LOAD_START, at the *start* of
+      # the transition -- confirmed on real hardware that calling
+      # lvgl.widget.focus here doesn't stick (editing read back false
+      # immediately after, and rotation never moved the selection): the
+      # transition's own focus handling runs after this event and
+      # overwrites it. The delay pushes this past the animation
+      # (page.show's own default time), so it runs after that settles.
       on_load:
+        - delay: 100ms
         - lvgl.widget.focus:
             id: nav_menu_roller
             editing: true
@@ -608,6 +724,8 @@ lvgl:
               outline_width: 0
             options:
               - "Home"
+              - "Diagnostics"
+              - "About"
             # Touch only -- guarded on the triggering indev being the
             # touchscreen, not the encoder/button. A physical-button
             # confirm is handled separately by dial_button's own
@@ -620,4 +738,86 @@ lvgl:
                   condition:
                     lambda: "return lv_indev_get_type(lv_indev_get_act()) == LV_INDEV_TYPE_POINTER;"
                   then:
-                    - lvgl.page.show: home_page
+                    - script.execute: confirm_menu_selection
+
+    # About and Diagnostics (ADR-0011's Information page, split in two --
+    # read-only, so no on_load/on_click of their own: dial_button's
+    # on_release already returns to the Menu from any page that isn't
+    # Home or the Menu itself. A flex column layout stacks the labels
+    # automatically, rather than hand-picking y offsets the way Home's
+    # widgets needed to.
+    # Each fact is a caption/value pair (cyan/white) rather than one
+    # combined label, per feedback that a single "Label: value" line
+    # read too plain.
+    - id: about_page
+      bg_color: 0x000000
+      bg_opa: cover
+      layout:
+        type: flex
+        flex_flow: column
+        flex_align_main: center
+        flex_align_cross: center
+        flex_align_track: center
+      widgets:
+        - label:
+            text_color: 0x00D9FF
+            text: "Product:"
+        - label:
+            id: about_product_line_value
+            text_color: 0xFFFFFF
+            text: "--"
+        - label:
+            text_color: 0x00D9FF
+            text: "Dial FW:"
+        - label:
+            id: about_dial_firmware_value
+            text_color: 0xFFFFFF
+            # ESPHOME_PROJECT_VERSION comes from the esphome: project:
+            # block above -- this firmware's own version, distinct from
+            # the Volcano's own firmware/BLE firmware versions below.
+            text: !lambda "return std::string(ESPHOME_PROJECT_VERSION);"
+        - label:
+            text_color: 0x00D9FF
+            text: "Volcano FW:"
+        - label:
+            id: about_volcano_firmware_value
+            text_color: 0xFFFFFF
+            text: "--"
+        - label:
+            text_color: 0x00D9FF
+            text: "BLE FW:"
+        - label:
+            id: about_volcano_ble_firmware_value
+            text_color: 0xFFFFFF
+            text: "--"
+    - id: diagnostics_page
+      bg_color: 0x000000
+      bg_opa: cover
+      layout:
+        type: flex
+        flex_flow: column
+        flex_align_main: center
+        flex_align_cross: center
+        flex_align_track: center
+      widgets:
+        - label:
+            text_color: 0x00D9FF
+            text: "Serial:"
+        - label:
+            id: diagnostics_serial_value
+            text_color: 0xFFFFFF
+            text: "--"
+        - label:
+            text_color: 0x00D9FF
+            text: "Power:"
+        - label:
+            id: diagnostics_power_supply_value
+            text_color: 0xFFFFFF
+            text: "--"
+        - label:
+            text_color: 0x00D9FF
+            text: "Time of Operation:"
+        - label:
+            id: diagnostics_time_of_operation_value
+            text_color: 0xFFFFFF
+            text: "--"
