@@ -10,7 +10,7 @@ This project is **not affiliated with, endorsed by, or supported by Storz & Bick
 
 Phase 1 is complete, and Phase 2 is now underway. The `volcano` ESPHome component connects to the device and reads status, the auto-shutoff countdown, current temperature, the heater-runtime meter and the device-information strings, plus writes for the auto-shutoff duration, heater/pump on/off, target temperature, display brightness, and the vibration, display-on-cooling and display-units settings — all verified against real hardware. Per [ADR-0009](docs/decisions/ADR-0009-volcano-abstraction-layer-interface.md), the component is split into a BLE communication layer (`VolcanoBleClient`), the hardware-independent Volcano abstraction layer control interfaces depend on (`VolcanoDevice`), and a thin ESPHome integration (`VolcanoComponent`) — also verified against real hardware. BLE protocol discovery continues as a living document — see [`docs/protocol/`](docs/protocol/README.md) for recorded findings.
 
-Development is now moving to the M5Stack Dial to build the local UI, per [ADR-0004](docs/decisions/ADR-0004-development-hardware-strategy.md). The ESP32-S3-WROOM-1-N16R8 development board remains in use for validating the Volcano component itself, since it stays hardware-independent of the Dial's display/touch/encoder work.
+The M5Stack Dial's local UI is complete: every page [ADR-0011](docs/decisions/ADR-0011-dial-ui-navigation-architecture.md) names — Home, Navigation Menu, Settings, LED Brightness, Auto-Shutoff Duration, Dial Brightness, Dial Sound, About and Diagnostics — is built and verified against real hardware, per [ADR-0010](docs/decisions/ADR-0010-dial-hardware-and-ui-framework.md)'s hardware/UI framework choices and ADR-0011's navigation model. The Dial controls the Volcano fully on its own — no phone, browser, or Home Assistant required — and also retains the `web_server` page Phase 1 established, unchanged. See [`examples/README.md`](examples/README.md#m5stack-dial-minimalyaml) for what each page does. The ESP32-S3-WROOM-1-N16R8 development board remains available for isolating BLE-only issues from Dial-specific hardware, per [ADR-0004](docs/decisions/ADR-0004-development-hardware-strategy.md).
 
 ## Documentation
 
@@ -38,7 +38,7 @@ ESPHome provides the firmware framework this project is built on, and also provi
 - Implement the hardware-independent Volcano component.
 - Expose it as an ESPHome external component.
 
-**Phase 2 — Local standalone remote (current)**
+**Phase 2 — Local standalone remote (complete)**
 - Port the working firmware to the M5Stack Dial.
 - Add rotary encoder input, touchscreen, and a local UI.
 - The Dial should fully control the Volcano with no external dependencies.
@@ -79,7 +79,7 @@ These constraints apply for the life of the project, not just Phase 1:
 - YAML configuration
 - Bluetooth LE
 
-**Phase 2 (current)**
+**Phase 2 (complete)**
 - M5Stack Dial hardware
 - Display UI
 - Touch interface
@@ -101,7 +101,7 @@ volcano-hybrid-companion/
 
 ## Contributing
 
-Not yet open for contributions — Phase 1's foundations (the BLE implementation and the hardware-independent `VolcanoDevice` interface) are in place, but Phase 2 (the M5Stack Dial UI) has only just begun, so there's not yet enough surface for a contributor to build against. This will be revisited as Phase 2 work matures.
+Not yet open for contributions. Both Phase 1 (the BLE foundation) and Phase 2 (the M5Stack Dial UI) are now complete, but the project doesn't yet have a contribution process — issue triage, review expectations, and so on — defined.
 
 ## Licence
 
