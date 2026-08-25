@@ -374,10 +374,10 @@ volcano:
       - lambda: "lv_obj_add_state(id(settings_display_units_switch), LV_STATE_CHECKED);"
       - lvgl.label.update:
           id: settings_units_c_label
-          text_color: 0x888888
+          text_color: &dim_grey 0x888888
       - lvgl.label.update:
           id: settings_units_f_label
-          text_color: 0x00D9FF
+          text_color: &cyan 0x00D9FF
     on_turn_off:
       - lvgl.label.update:
           id: units_label
@@ -387,10 +387,10 @@ volcano:
       - lambda: "lv_obj_remove_state(id(settings_display_units_switch), LV_STATE_CHECKED);"
       - lvgl.label.update:
           id: settings_units_c_label
-          text_color: 0x00D9FF
+          text_color: *cyan
       - lvgl.label.update:
           id: settings_units_f_label
-          text_color: 0x888888
+          text_color: *dim_grey
   # Settings page toggles (ADR-0011). Each entity's own on_turn_on/off
   # keeps its switch and the flanking Off/On (or C/F) labels in sync
   # with the confirmed device state, including changes made elsewhere
@@ -415,18 +415,18 @@ volcano:
       - lambda: "lv_obj_add_state(id(settings_vibration_switch), LV_STATE_CHECKED);"
       - lvgl.label.update:
           id: settings_vibration_off_label
-          text_color: 0x888888
+          text_color: *dim_grey
       - lvgl.label.update:
           id: settings_vibration_on_label
-          text_color: 0x00D9FF
+          text_color: *cyan
     on_turn_off:
       - lambda: "lv_obj_remove_state(id(settings_vibration_switch), LV_STATE_CHECKED);"
       - lvgl.label.update:
           id: settings_vibration_off_label
-          text_color: 0x00D9FF
+          text_color: *cyan
       - lvgl.label.update:
           id: settings_vibration_on_label
-          text_color: 0x888888
+          text_color: *dim_grey
   display_on_cooling:
     id: volcano_display_on_cooling
     name: "Display on cooling"
@@ -434,18 +434,18 @@ volcano:
       - lambda: "lv_obj_add_state(id(settings_display_on_cooling_switch), LV_STATE_CHECKED);"
       - lvgl.label.update:
           id: settings_cooling_off_label
-          text_color: 0x888888
+          text_color: *dim_grey
       - lvgl.label.update:
           id: settings_cooling_on_label
-          text_color: 0x00D9FF
+          text_color: *cyan
     on_turn_off:
       - lambda: "lv_obj_remove_state(id(settings_display_on_cooling_switch), LV_STATE_CHECKED);"
       - lvgl.label.update:
           id: settings_cooling_off_label
-          text_color: 0x00D9FF
+          text_color: *cyan
       - lvgl.label.update:
           id: settings_cooling_on_label
-          text_color: 0x888888
+          text_color: *dim_grey
   auto_shutoff_countdown:
     id: volcano_auto_shutoff_countdown
     name: "Auto-shutoff countdown"
@@ -499,11 +499,11 @@ volcano:
     on_turn_on:
       - lvgl.widget.update:
           id: heat_button
-          bg_color: 0xFF7A00
+          bg_color: &orange 0xFF7A00
     on_turn_off:
       - lvgl.widget.update:
           id: heat_button
-          bg_color: 0x333333
+          bg_color: &dark_grey 0x333333
   pump:
     id: volcano_pump
     name: "Air"
@@ -512,11 +512,11 @@ volcano:
     on_turn_on:
       - lvgl.widget.update:
           id: air_button
-          bg_color: 0xFF7A00
+          bg_color: *orange
     on_turn_off:
       - lvgl.widget.update:
           id: air_button
-          bg_color: 0x333333
+          bg_color: *dark_grey
   # Device-information strings, per ADR-0009 exempt from the disconnect-
   # clears-unknown rule other fields follow -- known once read, they stay
   # known across a dropout, so no NaN/"unknown" handling is needed the
@@ -1177,7 +1177,7 @@ lvgl:
       enter_button: dial_button
   pages:
     - id: home_page
-      bg_color: 0x000000
+      bg_color: &black 0x000000
       bg_opa: cover
       widgets:
         - label:
@@ -1185,7 +1185,7 @@ lvgl:
             align: center
             y: -40
             text_font: font_temp
-            text_color: 0xFF7A00
+            text_color: *orange
             text_align: center
             text: "--"
         - label:
@@ -1193,7 +1193,7 @@ lvgl:
             align: center
             y: 24
             text_font: font_temp
-            text_color: 0x00D9FF
+            text_color: *cyan
             text_align: center
             text: "--"
         - label:
@@ -1201,14 +1201,14 @@ lvgl:
             align: center
             y: 64
             text_font: montserrat_20
-            text_color: 0x00D9FF
+            text_color: *cyan
             text_align: center
             text: "°C"
         - label:
             id: countdown_label
             align: bottom_mid
             y: -18
-            text_color: 0xFFFFFF
+            text_color: &white 0xFFFFFF
             text_align: center
             text: "--:--"
         # LV_SYMBOL_BLUETOOTH/LV_SYMBOL_WIFI (LVGL's own bundled icon
@@ -1248,7 +1248,7 @@ lvgl:
             radius: circle
             shadow_width: 0
             outline_width: 0
-            bg_color: 0x333333
+            bg_color: *dark_grey
             click_focusable: false
             widgets:
               - label:
@@ -1266,7 +1266,7 @@ lvgl:
             radius: circle
             shadow_width: 0
             outline_width: 0
-            bg_color: 0x333333
+            bg_color: *dark_grey
             click_focusable: false
             widgets:
               - label:
@@ -1283,7 +1283,7 @@ lvgl:
     # behaviour (the same auto-add that had to be defeated on Home) is
     # what's wanted, so no click_focusable/group eviction here.
     - id: menu_page
-      bg_color: 0x000000
+      bg_color: *black
       bg_opa: cover
       # Forces the roller straight into edit mode on every page load, so
       # the very first turn scrolls it immediately -- LVGL otherwise
@@ -1314,13 +1314,13 @@ lvgl:
             # border_width: 0 -- a plain themed border, unrelated to the
             # outline states below (border_width/outline_width are
             # separate LVGL style properties).
-            bg_color: 0x000000
+            bg_color: *black
             bg_opa: cover
             border_width: 0
-            text_color: 0xFFFFFF
+            text_color: *white
             selected:
-              bg_color: 0x333333
-              text_color: 0x00D9FF
+              bg_color: *dark_grey
+              text_color: *cyan
             # Kills the default theme's focus outline (focused/focus_key)
             # and its edit-state outline (edited -- this roller is forced
             # permanently into edit mode below), redundant given the
@@ -1385,7 +1385,7 @@ lvgl:
     # 90%-wide rows were clipping the leading "V" of "Vibration" against
     # the bezel at this page's outer rows, confirmed on real hardware.
     - id: settings_page
-      bg_color: 0x000000
+      bg_color: *black
       bg_opa: cover
       # scrollable: false and a tight pad_row -- six stacked children
       # (3 captions + 3 control clusters) at the theme's default row
@@ -1404,7 +1404,7 @@ lvgl:
         pad_row: 8
       widgets:
         - label:
-            text_color: 0xFFFFFF
+            text_color: *white
             text: "Vibration"
         - obj:
             width: size_content
@@ -1424,14 +1424,14 @@ lvgl:
             widgets:
               - label:
                   id: settings_vibration_off_label
-                  text_color: 0x00D9FF
+                  text_color: *cyan
                   text: "Off"
               - switch:
                   id: settings_vibration_switch
                   click_focusable: false
                   indicator:
                     checked:
-                      bg_color: 0x00D9FF
+                      bg_color: *cyan
                   on_value:
                     - rtttl.play: "beep:d=16,o=5,b=160:c,e"
                     - if:
@@ -1443,10 +1443,10 @@ lvgl:
                           - switch.turn_off: volcano_vibration
               - label:
                   id: settings_vibration_on_label
-                  text_color: 0x888888
+                  text_color: *dim_grey
                   text: "On"
         - label:
-            text_color: 0xFFFFFF
+            text_color: *white
             text: "Display on Cooling"
         - obj:
             width: size_content
@@ -1466,14 +1466,14 @@ lvgl:
             widgets:
               - label:
                   id: settings_cooling_off_label
-                  text_color: 0x00D9FF
+                  text_color: *cyan
                   text: "Off"
               - switch:
                   id: settings_display_on_cooling_switch
                   click_focusable: false
                   indicator:
                     checked:
-                      bg_color: 0x00D9FF
+                      bg_color: *cyan
                   on_value:
                     - rtttl.play: "beep:d=16,o=5,b=160:c,e"
                     - if:
@@ -1485,10 +1485,10 @@ lvgl:
                           - switch.turn_off: volcano_display_on_cooling
               - label:
                   id: settings_cooling_on_label
-                  text_color: 0x888888
+                  text_color: *dim_grey
                   text: "On"
         - label:
-            text_color: 0xFFFFFF
+            text_color: *white
             text: "Units"
         - obj:
             width: size_content
@@ -1508,14 +1508,14 @@ lvgl:
             widgets:
               - label:
                   id: settings_units_c_label
-                  text_color: 0x00D9FF
+                  text_color: *cyan
                   text: "°C"
               - switch:
                   id: settings_display_units_switch
                   click_focusable: false
                   indicator:
                     checked:
-                      bg_color: 0x00D9FF
+                      bg_color: *cyan
                   on_value:
                     - rtttl.play: "beep:d=16,o=5,b=160:c,e"
                     - if:
@@ -1527,7 +1527,7 @@ lvgl:
                           - switch.turn_off: volcano_display_units_fahrenheit
               - label:
                   id: settings_units_f_label
-                  text_color: 0x888888
+                  text_color: *dim_grey
                   text: "°F"
 
     # LED Brightness (ADR-0011's shared numeric-value page template, first
@@ -1559,7 +1559,7 @@ lvgl:
     # encoder's default group and eat a physical-button press meant for
     # something else.
     - id: led_brightness_page
-      bg_color: 0x000000
+      bg_color: *black
       bg_opa: cover
       scrollable: false
       layout:
@@ -1571,16 +1571,16 @@ lvgl:
         pad_row: 8
       widgets:
         - label:
-            text_color: 0xFFFFFF
+            text_color: *white
             text: "LED Brightness"
             pad_bottom: 8
         - label:
             id: led_brightness_value_label
             text_font: font_temp
-            text_color: 0x00D9FF
+            text_color: *cyan
             text: "--"
         - label:
-            text_color: 0x00D9FF
+            text_color: *cyan
             text: "%"
         - obj:
             width: size_content
@@ -1603,7 +1603,7 @@ lvgl:
                   radius: circle
                   shadow_width: 0
                   outline_width: 0
-                  bg_color: 0xFF7A00
+                  bg_color: *orange
                   click_focusable: false
                   widgets:
                     - label:
@@ -1616,10 +1616,10 @@ lvgl:
                         value: "1.0"
                     - lvgl.widget.update:
                         id: led_brightness_step_1_button
-                        bg_color: 0xFF7A00
+                        bg_color: *orange
                     - lvgl.widget.update:
                         id: led_brightness_step_10_button
-                        bg_color: 0x333333
+                        bg_color: *dark_grey
               - button:
                   id: led_brightness_step_10_button
                   width: 48
@@ -1627,7 +1627,7 @@ lvgl:
                   radius: circle
                   shadow_width: 0
                   outline_width: 0
-                  bg_color: 0x333333
+                  bg_color: *dark_grey
                   click_focusable: false
                   widgets:
                     - label:
@@ -1640,10 +1640,10 @@ lvgl:
                         value: "10.0"
                     - lvgl.widget.update:
                         id: led_brightness_step_1_button
-                        bg_color: 0x333333
+                        bg_color: *dark_grey
                     - lvgl.widget.update:
                         id: led_brightness_step_10_button
-                        bg_color: 0xFF7A00
+                        bg_color: *orange
 
     # Auto-Shutoff Duration (ADR-0011's shared numeric-value page
     # template, second instance) -- same shape as LED Brightness above,
@@ -1652,7 +1652,7 @@ lvgl:
     # comment block above for the write-coalescing/group-eviction
     # reasoning this page follows identically.
     - id: auto_shutoff_duration_page
-      bg_color: 0x000000
+      bg_color: *black
       bg_opa: cover
       scrollable: false
       layout:
@@ -1664,16 +1664,16 @@ lvgl:
         pad_row: 8
       widgets:
         - label:
-            text_color: 0xFFFFFF
+            text_color: *white
             text: "Auto-Shutoff Duration"
             pad_bottom: 8
         - label:
             id: auto_shutoff_duration_value_label
             text_font: font_temp
-            text_color: 0x00D9FF
+            text_color: *cyan
             text: "--"
         - label:
-            text_color: 0x00D9FF
+            text_color: *cyan
             text: "min"
         - obj:
             width: size_content
@@ -1696,7 +1696,7 @@ lvgl:
                   radius: circle
                   shadow_width: 0
                   outline_width: 0
-                  bg_color: 0xFF7A00
+                  bg_color: *orange
                   click_focusable: false
                   widgets:
                     - label:
@@ -1709,13 +1709,13 @@ lvgl:
                         value: "1.0"
                     - lvgl.widget.update:
                         id: auto_shutoff_duration_step_1_button
-                        bg_color: 0xFF7A00
+                        bg_color: *orange
                     - lvgl.widget.update:
                         id: auto_shutoff_duration_step_10_button
-                        bg_color: 0x333333
+                        bg_color: *dark_grey
                     - lvgl.widget.update:
                         id: auto_shutoff_duration_step_30_button
-                        bg_color: 0x333333
+                        bg_color: *dark_grey
               - button:
                   id: auto_shutoff_duration_step_10_button
                   width: 48
@@ -1723,7 +1723,7 @@ lvgl:
                   radius: circle
                   shadow_width: 0
                   outline_width: 0
-                  bg_color: 0x333333
+                  bg_color: *dark_grey
                   click_focusable: false
                   widgets:
                     - label:
@@ -1736,13 +1736,13 @@ lvgl:
                         value: "10.0"
                     - lvgl.widget.update:
                         id: auto_shutoff_duration_step_1_button
-                        bg_color: 0x333333
+                        bg_color: *dark_grey
                     - lvgl.widget.update:
                         id: auto_shutoff_duration_step_10_button
-                        bg_color: 0xFF7A00
+                        bg_color: *orange
                     - lvgl.widget.update:
                         id: auto_shutoff_duration_step_30_button
-                        bg_color: 0x333333
+                        bg_color: *dark_grey
               - button:
                   id: auto_shutoff_duration_step_30_button
                   width: 48
@@ -1750,7 +1750,7 @@ lvgl:
                   radius: circle
                   shadow_width: 0
                   outline_width: 0
-                  bg_color: 0x333333
+                  bg_color: *dark_grey
                   click_focusable: false
                   widgets:
                     - label:
@@ -1763,13 +1763,13 @@ lvgl:
                         value: "30.0"
                     - lvgl.widget.update:
                         id: auto_shutoff_duration_step_1_button
-                        bg_color: 0x333333
+                        bg_color: *dark_grey
                     - lvgl.widget.update:
                         id: auto_shutoff_duration_step_10_button
-                        bg_color: 0x333333
+                        bg_color: *dark_grey
                     - lvgl.widget.update:
                         id: auto_shutoff_duration_step_30_button
-                        bg_color: 0xFF7A00
+                        bg_color: *orange
 
     # Dial Brightness (ADR-0011's shared numeric-value page template,
     # third and final instance): same shape as LED Brightness (1-100%,
@@ -1786,7 +1786,7 @@ lvgl:
     # boundary is why this isn't a volcano: number entity even though it
     # reuses the same page template.
     - id: dial_brightness_page
-      bg_color: 0x000000
+      bg_color: *black
       bg_opa: cover
       scrollable: false
       layout:
@@ -1798,16 +1798,16 @@ lvgl:
         pad_row: 8
       widgets:
         - label:
-            text_color: 0xFFFFFF
+            text_color: *white
             text: "Dial Brightness"
             pad_bottom: 8
         - label:
             id: dial_brightness_value_label
             text_font: font_temp
-            text_color: 0x00D9FF
+            text_color: *cyan
             text: "--"
         - label:
-            text_color: 0x00D9FF
+            text_color: *cyan
             text: "%"
         - obj:
             width: size_content
@@ -1830,7 +1830,7 @@ lvgl:
                   radius: circle
                   shadow_width: 0
                   outline_width: 0
-                  bg_color: 0xFF7A00
+                  bg_color: *orange
                   click_focusable: false
                   widgets:
                     - label:
@@ -1843,10 +1843,10 @@ lvgl:
                         value: "1.0"
                     - lvgl.widget.update:
                         id: dial_brightness_step_1_button
-                        bg_color: 0xFF7A00
+                        bg_color: *orange
                     - lvgl.widget.update:
                         id: dial_brightness_step_10_button
-                        bg_color: 0x333333
+                        bg_color: *dark_grey
               - button:
                   id: dial_brightness_step_10_button
                   width: 48
@@ -1854,7 +1854,7 @@ lvgl:
                   radius: circle
                   shadow_width: 0
                   outline_width: 0
-                  bg_color: 0x333333
+                  bg_color: *dark_grey
                   click_focusable: false
                   widgets:
                     - label:
@@ -1867,10 +1867,10 @@ lvgl:
                         value: "10.0"
                     - lvgl.widget.update:
                         id: dial_brightness_step_1_button
-                        bg_color: 0x333333
+                        bg_color: *dark_grey
                     - lvgl.widget.update:
                         id: dial_brightness_step_10_button
-                        bg_color: 0xFF7A00
+                        bg_color: *orange
 
     # Dial Sound (ADR-0011): a single on/off toggle for the audio feedback
     # (rotary click, button/touch beep) wired throughout this file.
@@ -1884,7 +1884,7 @@ lvgl:
     # Settings' toggles, standalone on its own page here rather than
     # folded into Settings, since this isn't a VolcanoDevice boolean.
     - id: sound_page
-      bg_color: 0x000000
+      bg_color: *black
       bg_opa: cover
       scrollable: false
       layout:
@@ -1896,7 +1896,7 @@ lvgl:
         pad_row: 8
       widgets:
         - label:
-            text_color: 0xFFFFFF
+            text_color: *white
             text: "Dial Sound"
         - obj:
             width: size_content
@@ -1916,14 +1916,14 @@ lvgl:
             widgets:
               - label:
                   id: sound_off_label
-                  text_color: 0x888888
+                  text_color: *dim_grey
                   text: "Off"
               - switch:
                   id: sound_switch
                   click_focusable: false
                   indicator:
                     checked:
-                      bg_color: 0x00D9FF
+                      bg_color: *cyan
                   # Sets dial_sound_enabled/gain first, so the beep
                   # below actually reflects the state just switched to
                   # -- silent if this just muted, audible if it just
@@ -1946,7 +1946,7 @@ lvgl:
                     - rtttl.play: "beep:d=16,o=5,b=160:c,e"
               - label:
                   id: sound_on_label
-                  text_color: 0x00D9FF
+                  text_color: *cyan
                   text: "On"
 
     # About and Diagnostics (ADR-0011's Information page, split in two --
@@ -1959,7 +1959,7 @@ lvgl:
     # combined label, per feedback that a single "Label: value" line
     # read too plain.
     - id: about_page
-      bg_color: 0x000000
+      bg_color: *black
       bg_opa: cover
       layout:
         type: flex
@@ -1969,18 +1969,18 @@ lvgl:
         flex_align_track: center
       widgets:
         - label:
-            text_color: 0x00D9FF
+            text_color: *cyan
             text: "Product:"
         - label:
             id: about_product_line_value
-            text_color: 0xFFFFFF
+            text_color: *white
             text: "--"
         - label:
-            text_color: 0x00D9FF
+            text_color: *cyan
             text: "Dial FW:"
         - label:
             id: about_dial_firmware_value
-            text_color: 0xFFFFFF
+            text_color: *white
             # ESPHOME_PROJECT_VERSION comes from the esphome: project:
             # block above -- this firmware's own version, distinct from
             # the Volcano's own firmware/BLE firmware versions below.
@@ -1999,21 +1999,21 @@ lvgl:
               snprintf(buf, sizeof(buf), "V%02d.%02d.%02d.00", major, minor, patch);
               return std::string(buf);
         - label:
-            text_color: 0x00D9FF
+            text_color: *cyan
             text: "Volcano FW:"
         - label:
             id: about_volcano_firmware_value
-            text_color: 0xFFFFFF
+            text_color: *white
             text: "--"
         - label:
-            text_color: 0x00D9FF
+            text_color: *cyan
             text: "BLE FW:"
         - label:
             id: about_volcano_ble_firmware_value
-            text_color: 0xFFFFFF
+            text_color: *white
             text: "--"
     - id: diagnostics_page
-      bg_color: 0x000000
+      bg_color: *black
       bg_opa: cover
       layout:
         type: flex
@@ -2023,23 +2023,23 @@ lvgl:
         flex_align_track: center
       widgets:
         - label:
-            text_color: 0x00D9FF
+            text_color: *cyan
             text: "Serial:"
         - label:
             id: diagnostics_serial_value
-            text_color: 0xFFFFFF
+            text_color: *white
             text: "--"
         - label:
-            text_color: 0x00D9FF
+            text_color: *cyan
             text: "Power:"
         - label:
             id: diagnostics_power_supply_value
-            text_color: 0xFFFFFF
+            text_color: *white
             text: "--"
         - label:
-            text_color: 0x00D9FF
+            text_color: *cyan
             text: "Time of Operation:"
         - label:
             id: diagnostics_time_of_operation_value
-            text_color: 0xFFFFFF
+            text_color: *white
             text: "--"
