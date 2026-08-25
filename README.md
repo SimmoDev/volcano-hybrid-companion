@@ -15,6 +15,7 @@ The M5Stack Dial's local UI is complete: every page [ADR-0011](docs/decisions/AD
 ## Documentation
 
 - [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) — how the repository is laid out and how to validate the component locally.
+- [`examples/README.md`](examples/README.md) — what each example configuration does and how to flash it to real hardware.
 - [`docs/protocol/`](docs/protocol/README.md) — what is known about the Volcano Hybrid's BLE protocol, and what is still open.
 - [`docs/decisions/`](docs/decisions/) — the ADR series recording each architectural decision and its reasoning.
 - [`docs/CONVENTIONS.md`](docs/CONVENTIONS.md) — terminology, spelling, Markdown and naming conventions, and commit message style.
