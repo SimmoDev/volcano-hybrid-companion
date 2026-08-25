@@ -1010,58 +1010,66 @@ script:
   # there) and dial_button's on_release (button, on the Menu page) --
   # one place to add a branch when a new page/option is added, rather
   # than keeping the touch and button paths in sync by hand.
+  #
+  # Dispatches on get_selected_index()'s numeric index rather than
+  # get_selected_text(): the roller's options: list below is the single
+  # source of truth for both the displayed label and its index, so
+  # renaming/rewording an option can't silently desync it from this
+  # dispatch the way a duplicated exact-string comparison could -- a
+  # typo or rewrite would simply select a different, wrong index rather
+  # than falling through unnoticed to the final else. The index below
+  # must still match the options: list order.
   - id: confirm_menu_selection
     then:
       - lambda: |-
           ESP_LOGD("main", "Menu confirmed: %s", id(nav_menu_roller).get_selected_text().c_str());
       - if:
           condition:
-            lambda: 'return id(nav_menu_roller).get_selected_text() == "Home";'
+            lambda: "return id(nav_menu_roller).get_selected_index() == 0;"  # Home
           then:
             - lvgl.page.show: home_page
           else:
             - if:
                 condition:
-                  lambda: 'return id(nav_menu_roller).get_selected_text() == "Settings";'
+                  lambda: "return id(nav_menu_roller).get_selected_index() == 1;"  # Settings
                 then:
                   - lvgl.page.show: settings_page
                 else:
                   - if:
                       condition:
-                        lambda: 'return id(nav_menu_roller).get_selected_text() == "LED Brightness";'
+                        lambda: "return id(nav_menu_roller).get_selected_index() == 2;"  # LED Brightness
                       then:
                         - lvgl.page.show: led_brightness_page
                       else:
                         - if:
                             condition:
-                              lambda: 'return id(nav_menu_roller).get_selected_text() == "Auto-Shutoff Duration";'
+                              lambda: "return id(nav_menu_roller).get_selected_index() == 3;"  # Auto-Shutoff Duration
                             then:
                               - lvgl.page.show: auto_shutoff_duration_page
                             else:
                               - if:
                                   condition:
-                                    lambda: 'return id(nav_menu_roller).get_selected_text() == "Dial Brightness";'
+                                    lambda: "return id(nav_menu_roller).get_selected_index() == 4;"  # Dial Brightness
                                   then:
                                     - lvgl.page.show: dial_brightness_page
                                   else:
                                     - if:
                                         condition:
-                                          lambda: 'return id(nav_menu_roller).get_selected_text() == "Dial Sound";'
+                                          lambda: "return id(nav_menu_roller).get_selected_index() == 5;"  # Dial Sound
                                         then:
                                           - lvgl.page.show: sound_page
                                         else:
                                           - if:
                                               condition:
-                                                lambda: 'return id(nav_menu_roller).get_selected_text() == "Diagnostics";'
+                                                lambda: "return id(nav_menu_roller).get_selected_index() == 6;"  # Diagnostics
                                               then:
                                                 - lvgl.page.show: diagnostics_page
                                               else:
-                                                # Only "About" left among
-                                                # the current options --
-                                                # add another explicit
-                                                # branch here, not a new
-                                                # bare else, once a ninth
-                                                # option exists.
+                                                # Only index 7 ("About") left
+                                                # among the current options --
+                                                # add another explicit branch
+                                                # here, not a new bare else,
+                                                # once a ninth option exists.
                                                 - lvgl.page.show: about_page
 
 # Blinks the BLE status icon while CONNECTING (ble_connecting, set by
