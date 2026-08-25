@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Pre-commit hook: advisory nudge, not a block. If a commit touches
-components/volcano/ or docs/decisions/ without touching any of the docs that
-describe the component's current behaviour (root README.md,
+components/volcano/, docs/decisions/, or an example config, without touching
+any of the docs that describe current behaviour (root README.md,
 docs/DEVELOPMENT.md, examples/README.md), print a reminder to check them for
 staleness.
 
@@ -15,12 +15,18 @@ docs/DEVELOPMENT.md -- so touching a target file isn't proof its relevant
 sentences were re-read, only a precondition this hook can actually check.
 Not every trigger change makes one of these docs stale, so this never fails
 the commit -- it only prints.
+
+`examples/` was added to the trigger prefixes after a further review found
+the entire M5Stack Dial UI build -- 18 commits, all touching only
+examples/m5stack-dial-minimal.yaml -- landed without examples/README.md ever
+gaining a section for it: none of those commits touched a prefix this hook
+watched, so the nudge never once fired across the whole milestone.
 """
 
 import subprocess
 import sys
 
-TRIGGER_PREFIXES = ("components/volcano/", "docs/decisions/")
+TRIGGER_PREFIXES = ("components/volcano/", "docs/decisions/", "examples/")
 TARGET_DOCS = ("README.md", "docs/DEVELOPMENT.md", "examples/README.md")
 
 
