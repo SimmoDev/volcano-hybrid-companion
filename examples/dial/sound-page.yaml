@@ -1,0 +1,79 @@
+lvgl:
+  pages:
+    # Dial Sound (ADR-0011): a single on/off toggle for the audio feedback
+    # (rotary click, button/touch beep) wired throughout this file.
+    # Local Dial UI configuration, not a VolcanoDevice field, so a
+    # restore_value global (dial_sound_enabled) rather than a volcano:
+    # entity -- the same ADR-0002 carve-out as Dial Brightness. A
+    # This buzzer has no true amplitude control (see the on_boot/globals
+    # comments), so a numeric percentage would claim a precision this
+    # hardware can't actually deliver -- a plain switch is the honest
+    # fit. Same caption-then-flanked-switch pattern as
+    # Settings' toggles, standalone on its own page here rather than
+    # folded into Settings, since this isn't a VolcanoDevice boolean.
+    - id: sound_page
+      bg_color: ${black}
+      bg_opa: cover
+      scrollable: false
+      layout:
+        type: flex
+        flex_flow: column
+        flex_align_main: center
+        flex_align_cross: center
+        flex_align_track: center
+        pad_row: 8
+      widgets:
+        - label:
+            text_color: ${white}
+            text: "Dial Sound"
+        - obj:
+            width: size_content
+            height: size_content
+            bg_opa: 0%
+            border_width: 0
+            pad_top: 0
+            pad_left: 0
+            pad_right: 0
+            pad_bottom: 2
+            layout:
+              type: flex
+              flex_flow: row
+              flex_align_main: center
+              flex_align_cross: center
+              pad_column: 8
+            widgets:
+              - label:
+                  id: sound_off_label
+                  text_color: ${dim_grey}
+                  text: "Off"
+              - switch:
+                  id: sound_switch
+                  click_focusable: false
+                  indicator:
+                    checked:
+                      bg_color: ${cyan}
+                  # Sets dial_sound_enabled/gain first, so the beep
+                  # below actually reflects the state just switched to
+                  # -- silent if this just muted, audible if it just
+                  # unmuted, a small free confirmation of the result.
+                  on_value:
+                    - if:
+                        condition:
+                          lambda: "return x;"
+                        then:
+                          - globals.set:
+                              id: dial_sound_enabled
+                              value: "true"
+                          - lambda: "id(dial_rtttl).set_gain(0.5f);"
+                        else:
+                          - globals.set:
+                              id: dial_sound_enabled
+                              value: "false"
+                          - lambda: "id(dial_rtttl).set_gain(0.0f);"
+                    - script.execute: refresh_sound_labels
+                    - rtttl.play: "beep:d=16,o=5,b=160:c,e"
+              - label:
+                  id: sound_on_label
+                  text_color: ${cyan}
+                  text: "On"
+

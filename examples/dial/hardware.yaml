@@ -1,0 +1,239 @@
+esphome:
+  name: volcano-dial-scaffold
+  # ESPHOME_PROJECT_VERSION (used on dial/info-pages.yaml's About page)
+  # is compiled from this -- our own firmware's version, distinct from
+  # the Volcano's own firmware/BLE firmware versions the volcano
+  # component reports.
+  project:
+    name: "volcano-hybrid-companion.dial"
+    version: "0.1.0"
+  on_boot:
+    then:
+      # Publishes once -- ESPHOME_PROJECT_VERSION is a compile-time
+      # constant, so there's nothing to re-publish later. See
+      # dial/volcano-entities.yaml's text_sensor: block for why this
+      # isn't done via that entity's own lambda:/update_interval:
+      # instead.
+      - text_sensor.template.publish:
+          id: dial_firmware_version_text_sensor
+          state: !lambda |-
+            std::string v = ESPHOME_PROJECT_VERSION;
+            int major = 0, minor = 0, patch = 0;
+            sscanf(v.c_str(), "%d.%d.%d", &major, &minor, &patch);
+            char buf[16];
+            snprintf(buf, sizeof(buf), "V%02d.%02d.%02d.00", major, minor, patch);
+            return std::string(buf);
+      # Dial Brightness (ADR-0011) is deliberately not a VolcanoDevice
+      # field -- it's local Dial hardware, so it's a plain restore_value
+      # global (dial_brightness_pct) rather than a volcano: number entity,
+      # persisted via ESPHome's own preference/NVS facilities rather than
+      # anything the component or the Volcano itself is involved in. The
+      # backlight is set from it here (not a hardcoded 100%) so a reboot
+      # restores the last brightness the user picked; pending_dial_
+      # brightness (the page's own turn-in-progress value, same write-
+      # coalescing shape as every other rotary-adjusted page) is seeded
+      # from it too, since -- unlike a VolcanoDevice field -- nothing ever
+      # reports this value asynchronously to seed it the way an on_value
+      # trigger would.
+      - output.set_level:
+          id: dial_backlight_pwm
+          level: !lambda "return id(dial_brightness_pct) / 100.0f;"
+      - lambda: "id(pending_dial_brightness) = id(dial_brightness_pct);"
+      - script.execute: refresh_dial_brightness_label
+      # Dial Sound (ADR-0011): a plain restore_value global (dial_sound_
+      # enabled), same "not a VolcanoDevice field" carve-out as Dial
+      # Brightness. rtttl has no YAML-level action for changing gain at
+      # runtime, so this calls its public set_gain() directly via lambda
+      # -- the same "call the raw API when no automation action exists"
+      # pattern already used for LVGL's lv_group_remove_obj/
+      # lv_obj_add_state elsewhere in this file.
+      #
+      # This buzzer has no true amplitude control: rtttl's "gain" is
+      # literally the ledc output's PWM duty cycle, not a perceptual
+      # volume (confirmed by reading rtttl.cpp's set_level(this->gain_)
+      # call). A piezo buzzer is loudest around 50% duty and silent at
+      # both 0% and 100%, with pitch and loudness both shifting non-
+      # monotonically across the range -- no mapping formula turns this
+      # into a graduated volume control. Dial Sound is on/off only, fixed
+      # at 50% duty (loudest, least distorted) when on.
+      - lambda: "id(dial_rtttl).set_gain(id(dial_sound_enabled) ? 0.5f : 0.0f);"
+      - lambda: |-
+          if (id(dial_sound_enabled)) {
+            lv_obj_add_state(id(sound_switch), LV_STATE_CHECKED);
+          } else {
+            lv_obj_remove_state(id(sound_switch), LV_STATE_CHECKED);
+          }
+      - script.execute: refresh_sound_labels
+      # LVGL auto-adds every newly-created focusable widget to whatever
+      # group is current default once an encoder exists (click_focusable:
+      # false on Home's buttons/Settings' switches only stops a *touch*
+      # granting focus, it doesn't stop this membership). Confirmed on
+      # real hardware for Heat/Air already; the same bug hit Settings'
+      # switches too -- every widget here auto-joins the same one
+      # default group at creation regardless of which page it's on, and
+      # nothing had explicitly focused the Menu's roller yet on the very
+      # first button press from Home, so that press landed on whichever
+      # switch the group happened to default-focus and toggled it,
+      # silently writing to the Volcano before the Settings page was
+      # ever even shown. Evicting everything meant to be touch-only
+      # keeps the encoder/button reserved for temperature/menu use on
+      # Home and Settings, per ADR-0011. The LED Brightness, Auto-Shutoff
+      # Duration, and Dial Brightness pages' step-size buttons, and the
+      # Dial Sound page's switch, are the same story: click_focusable: false
+      # alone doesn't stop group membership, so they need evicting too.
+      - lambda: |-
+          lv_group_remove_obj(id(heat_button));
+          lv_group_remove_obj(id(air_button));
+          lv_group_remove_obj(id(settings_vibration_switch));
+          lv_group_remove_obj(id(settings_display_on_cooling_switch));
+          lv_group_remove_obj(id(settings_display_units_switch));
+          lv_group_remove_obj(id(led_brightness_step_1_button));
+          lv_group_remove_obj(id(led_brightness_step_10_button));
+          lv_group_remove_obj(id(auto_shutoff_duration_step_1_button));
+          lv_group_remove_obj(id(auto_shutoff_duration_step_10_button));
+          lv_group_remove_obj(id(auto_shutoff_duration_step_30_button));
+          lv_group_remove_obj(id(dial_brightness_step_1_button));
+          lv_group_remove_obj(id(dial_brightness_step_10_button));
+          lv_group_remove_obj(id(sound_switch));
+
+
+# ESPHome's default flash_write_interval (60s) batches restore_value
+# global writes (dial/state.yaml's dial_brightness_pct) in RAM and only
+# actually commits them to NVS periodically -- confirmed by reading
+# ESPHome's own source (components/preferences/syncer.h, components/esp32/
+# preferences.cpp): RestoringGlobalsComponent::update() (itself only
+# polled once a second) merely queues a pending save, and that pending
+# save only reaches nvs_set_blob()/nvs_commit() when this component's
+# own interval fires. A graceful reboot also flushes it via on_shutdown,
+# but an abrupt power loss (the USB cable being unplugged, say) doesn't
+# run that -- confirmed on real hardware: a brightness change followed
+# immediately by unplugging didn't survive. Shortening the interval
+# narrows that window without switching to a sync-every-loop-iteration
+# extreme (USE_PREFERENCES_SYNC_EVERY_LOOP) that isn't needed here.
+preferences:
+  flash_write_interval: 1s
+
+
+logger:
+
+
+esp32:
+  board: m5stack-stamps3
+  variant: esp32s3
+  flash_size: 8MB
+  framework:
+    type: esp-idf
+
+
+external_components:
+  - source:
+      type: local
+      path: ../components
+
+
+# The GC9A01A round panel over SPI. Pins confirmed against a known-working
+# community M5Dial configuration, not just the pinout reference --
+# MOSI/SCK/CS/DC/RST as below; backlight is a separate PWM-driven pin
+# (GPIO9) the panel stays dark without.
+spi:
+  mosi_pin: GPIO5
+  clk_pin: GPIO6
+
+
+output:
+  - platform: ledc
+    pin: GPIO9
+    id: dial_backlight_pwm
+  # The Dial's onboard buzzer (ADR-0010), confirmed against the same
+  # community M5Dial reference the display pins were checked against.
+  # GPIO3 is a strapping pin (sampled at reset to select the JTAG
+  # interface) but is safe to use as a plain PWM output here, same as
+  # M5Stack's own library and every known-working community config for
+  # this exact board use it for the buzzer.
+  - platform: ledc
+    pin: GPIO3
+    id: dial_buzzer_pwm
+
+
+# rtttl plays short melodies/tones through the buzzer output above --
+# used for click/beep feedback (ADR-0011) rather than a bespoke tone
+# generator, per ADR-0010. gain here is just an initial default; on_boot
+# overwrites it from the persisted dial_sound_enabled global before this
+# could ever audibly matter (0.5 = 50% duty, the loudest/least-distorted
+# point for this buzzer -- see on_boot's comment).
+rtttl:
+  id: dial_rtttl
+  output: dial_buzzer_pwm
+  gain: 50%
+
+
+display:
+  - platform: ili9xxx
+    id: dial_display
+    model: GC9A01A
+    cs_pin: GPIO7
+    dc_pin: GPIO4
+    reset_pin: GPIO8
+    invert_colors: true
+    dimensions:
+      width: 240
+      height: 240
+    auto_clear_enabled: false
+    update_interval: never
+
+
+# The FT3267 touch panel, which is FT5x06-register-compatible -- confirmed
+# against the same known-working community M5Dial configuration the display
+# pins were checked against.
+i2c:
+  sda: GPIO11
+  scl: GPIO12
+
+
+touchscreen:
+  platform: ft5x06
+  id: dial_touchscreen
+  address: 0x38
+  on_touch:
+    - lambda: |-
+        ESP_LOGD("main", "Touch at (%d, %d)", touch.x, touch.y);
+    # A single global on_touch beep here would fire on every touch
+    # anywhere on the page, not just an actual button/switch/menu row.
+    # Feedback is instead wired per-widget, in each page's own file
+    # (each button's on_click, each switch's on_value, the Menu roller's
+    # touch-guarded on_click), the same per-widget cost the group-eviction
+    # pattern above has.
+
+
+# DSEG7 Classic Bold (SIL OFL 1.1 -- see examples/fonts/DSEG-LICENSE.txt),
+# chosen per ADR-0010/ADR-0011 so the Home page's temperature readouts
+# echo the Volcano's own digital display. One size for both temperatures
+# -- the device's own panel shows current and target at the same size,
+# not a large/small hierarchy.
+font:
+  - file: "fonts/DSEG7Classic-Bold.ttf"
+    id: font_temp
+    size: 48
+
+
+# buffer_size cut to LVGL's own documented minimum (1/8th) -- left
+# unset (which defaults to a *full-screen* single buffer, confirmed by
+# reading lvgl_esphome.cpp's setup(): buffer_frac 0 becomes frac 1, not
+# some small default) it was allocating 240*240*2 = 115200 bytes of
+# permanent internal DRAM for the draw buffer alone, on a board with no
+# PSRAM (confirmed: the M5StampS3 module here is the plain ESP32-S3FN8
+# variant, no R2/R8 PSRAM suffix -- unlike the dev-board example, which
+# has real PSRAM and needs no such trimming). That single buffer was
+# most of what stood between working BLE and BLE's own malloc failing
+# once web_server was added back -- see dial/connectivity.yaml's own
+# comment above its web_server: block. At 1/8th (14400 bytes) LVGL needs more
+# flush passes per full-screen redraw (a page transition may show a
+# brief wipe rather than the whole page appearing at once), a real
+# trade-off against BLE actually working at all with web_server present.
+lvgl:
+  buffer_size: 12.5%
+  displays:
+    - dial_display
+  encoders:
+    - sensor: dial_rotary_encoder
+      enter_button: dial_button

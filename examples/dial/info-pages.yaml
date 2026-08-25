@@ -1,0 +1,97 @@
+lvgl:
+  pages:
+    # About and Diagnostics (ADR-0011's Information page, split in two --
+    # read-only, so no on_load/on_click of their own: dial_button's
+    # on_release already returns to the Menu from any page that isn't
+    # Home or the Menu itself. A flex column layout stacks the labels
+    # automatically, rather than hand-picking y offsets the way Home's
+    # widgets needed to.
+    # Each fact is a caption/value pair (cyan/white) rather than one
+    # combined label, per feedback that a single "Label: value" line
+    # read too plain.
+    - id: about_page
+      bg_color: ${black}
+      bg_opa: cover
+      layout:
+        type: flex
+        flex_flow: column
+        flex_align_main: center
+        flex_align_cross: center
+        flex_align_track: center
+      widgets:
+        - label:
+            text_color: ${cyan}
+            text: "Product:"
+        - label:
+            id: about_product_line_value
+            text_color: ${white}
+            text: "--"
+        - label:
+            text_color: ${cyan}
+            text: "Dial FW:"
+        - label:
+            id: about_dial_firmware_value
+            text_color: ${white}
+            # ESPHOME_PROJECT_VERSION comes from dial/hardware.yaml's
+            # esphome: project: block -- this firmware's own version,
+            # distinct from the Volcano's own firmware/BLE firmware
+            # versions below.
+            # Reformatted from plain semver ("0.1.0") to match the
+            # Volcano's own V-prefixed, zero-padded four-group style
+            # ("V01.03.00.00") per user feedback that the mismatch stood
+            # out visually. The fourth group is always "00" -- semver
+            # only carries three, and the Volcano's own version strings
+            # are opaque to this side anyway (ADR-0008), so there's
+            # nothing meaningful to put there.
+            text: !lambda |-
+              std::string v = ESPHOME_PROJECT_VERSION;
+              int major = 0, minor = 0, patch = 0;
+              sscanf(v.c_str(), "%d.%d.%d", &major, &minor, &patch);
+              char buf[16];
+              snprintf(buf, sizeof(buf), "V%02d.%02d.%02d.00", major, minor, patch);
+              return std::string(buf);
+        - label:
+            text_color: ${cyan}
+            text: "Volcano FW:"
+        - label:
+            id: about_volcano_firmware_value
+            text_color: ${white}
+            text: "--"
+        - label:
+            text_color: ${cyan}
+            text: "BLE FW:"
+        - label:
+            id: about_volcano_ble_firmware_value
+            text_color: ${white}
+            text: "--"
+    - id: diagnostics_page
+      bg_color: ${black}
+      bg_opa: cover
+      layout:
+        type: flex
+        flex_flow: column
+        flex_align_main: center
+        flex_align_cross: center
+        flex_align_track: center
+      widgets:
+        - label:
+            text_color: ${cyan}
+            text: "Serial:"
+        - label:
+            id: diagnostics_serial_value
+            text_color: ${white}
+            text: "--"
+        - label:
+            text_color: ${cyan}
+            text: "Power:"
+        - label:
+            id: diagnostics_power_supply_value
+            text_color: ${white}
+            text: "--"
+        - label:
+            text_color: ${cyan}
+            text: "Time of Operation:"
+        - label:
+            id: diagnostics_time_of_operation_value
+            text_color: ${white}
+            text: "--"

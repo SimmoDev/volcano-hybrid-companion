@@ -1,0 +1,90 @@
+lvgl:
+  pages:
+    # The Navigation Menu (ADR-0011): rotary turn moves the highlighted
+    # row, a press or a direct touch confirms it. A roller is LVGL's
+    # built-in fit for exactly this -- unlike Home's Heat/Air, this is
+    # the one place on the Dial where the encoder's default-group
+    # behaviour (the same auto-add that had to be defeated on Home) is
+    # what's wanted, so no click_focusable/group eviction here.
+    - id: menu_page
+      bg_color: ${black}
+      bg_opa: cover
+      # Forces the roller straight into edit mode on every page load, so
+      # the very first turn scrolls it immediately -- LVGL otherwise
+      # needs an initial press to enter edit mode before rotation does
+      # anything, which ADR-0011 doesn't call for (it wants turning to
+      # move the highlight directly, no extra step first).
+      #
+      # on_load fires on LV_EVENT_SCREEN_LOAD_START, at the *start* of
+      # the transition -- confirmed on real hardware that calling
+      # lvgl.widget.focus here doesn't stick (editing read back false
+      # immediately after, and rotation never moved the selection): the
+      # transition's own focus handling runs after this event and
+      # overwrites it. The delay pushes this past the animation
+      # (page.show's own default time), so it runs after that settles.
+      on_load:
+        - delay: 100ms
+        - lvgl.widget.focus:
+            id: nav_menu_roller
+            editing: true
+      widgets:
+        - roller:
+            id: nav_menu_roller
+            align: center
+            width: 90%
+            height: 110px
+            visible_row_count: 3
+            # bg_opa: cover -- bg_color alone doesn't paint anything.
+            # border_width: 0 -- a plain themed border, unrelated to the
+            # outline states below (border_width/outline_width are
+            # separate LVGL style properties).
+            bg_color: ${black}
+            bg_opa: cover
+            border_width: 0
+            text_color: ${white}
+            selected:
+              bg_color: ${dark_grey}
+              text_color: ${cyan}
+            # Kills the default theme's focus outline (focused/focus_key)
+            # and its edit-state outline (edited -- this roller is forced
+            # permanently into edit mode below), redundant given the
+            # selected row above already shows what's highlighted.
+            # Deliberately flat, not nested under a literal main: key --
+            # ESPHome's LVGL widget config (collect_parts in
+            # widgets/__init__.py) seeds the main part's default state
+            # from this widget's own top-level properties, then merges in
+            # any state named as a sibling top-level key (focused,
+            # focus_key, edited, ...); a literal `main:` key is itself
+            # treated as one of those states and replaces the seeded
+            # default outright rather than merging with it, silently
+            # discarding align/width/height/bg_color/text_color above.
+            focused:
+              outline_width: 0
+            focus_key:
+              outline_width: 0
+            edited:
+              outline_width: 0
+            options:
+              - "Home"
+              - "Settings"
+              - "LED Brightness"
+              - "Auto-Shutoff Duration"
+              - "Dial Brightness"
+              - "Dial Sound"
+              - "Diagnostics"
+              - "About"
+            # Touch only -- guarded on the triggering indev being the
+            # touchscreen, not the encoder/button. A physical-button
+            # confirm is handled separately by dial_button's own
+            # on_release, which reads the roller directly instead of
+            # going through this click event: LVGL's group/edit-mode
+            # click routing doesn't distinguish a button confirm from the
+            # button press that opened the menu in the first place.
+            on_click:
+              - if:
+                  condition:
+                    lambda: "return lv_indev_get_type(lv_indev_get_act()) == LV_INDEV_TYPE_POINTER;"
+                  then:
+                    - rtttl.play: "beep:d=16,o=5,b=160:c,e"
+                    - script.execute: confirm_menu_selection
+

@@ -1,0 +1,121 @@
+# The Home page (ADR-0011): current temperature (orange) and target
+# temperature (cyan) echoing the Volcano's own display palette, touch-only
+# Heat/Air actuator buttons, the auto-shutoff countdown, and BLE/WiFi
+# status icons (green = connected, red = disconnected; BLE also flashes
+# orange while CONNECTING, per dial/connectivity.yaml's interval --
+# WiFi doesn't get that third state, a deliberate scope call, not an
+# oversight). Exact colours/layout are implementation detail per
+# ADR-0011's Notes, not fixed by the ADR -- refined here against the
+# real round display.
+#
+# Rotary-adjusted target temperature, with ADR-0011's write-coalescing
+# debounce, is implemented -- see dial/input.yaml's rotary_encoder
+# sensor's on_value and dial/scripts.yaml's commit_target_temperature/
+# refresh_target_temp_label. dial/menu-page.yaml's Navigation Menu
+# lists Home, Settings, LED Brightness, Auto-Shutoff Duration, Dial
+# Brightness, Dial Sound, Diagnostics, and About, in that order -- the
+# latter two are ADR-0011's Information page, split in two rather than
+# cramming six lines of device facts onto one (see dial/info-pages.yaml's
+# own comment). Every page ADR-0011 names now exists.
+lvgl:
+  pages:
+    - id: home_page
+      bg_color: ${black}
+      bg_opa: cover
+      widgets:
+        - label:
+            id: current_temp_label
+            align: center
+            y: -40
+            text_font: font_temp
+            text_color: ${orange}
+            text_align: center
+            text: "--"
+        - label:
+            id: target_temp_label
+            align: center
+            y: 24
+            text_font: font_temp
+            text_color: ${cyan}
+            text_align: center
+            text: "--"
+        - label:
+            id: units_label
+            align: center
+            y: 64
+            text_font: montserrat_20
+            text_color: ${cyan}
+            text_align: center
+            text: "°C"
+        - label:
+            id: countdown_label
+            align: bottom_mid
+            y: -18
+            text_color: ${white}
+            text_align: center
+            text: "--:--"
+        # LV_SYMBOL_BLUETOOTH/LV_SYMBOL_WIFI (LVGL's own bundled icon
+        # glyphs, no separate font asset needed -- confirmed present in
+        # the vendored LVGL source under examples/.esphome/build/) written
+        # as \u escapes since both are Private Use Area codepoints. No
+        # strikethrough variant exists in LVGL's built-in set, so
+        # DISCONNECTED is colour-only (steady red) rather than a crossed-
+        # out icon -- a deliberate call within ADR-0011's "icon artwork is
+        # implementation detail" allowance, not an oversight.
+        - label:
+            id: ble_status_icon
+            align: top_mid
+            x: -16
+            y: 8
+            text_color: 0xCC0000
+            text: ""
+        - label:
+            id: wifi_status_icon
+            align: top_mid
+            x: 16
+            y: 8
+            text_color: 0xCC0000
+            text: ""
+        # click_focusable: false keeps these touch-only, per ADR-0011 --
+        # without it, LVGL auto-joins every clickable widget to the
+        # encoder's default group, so turning the knob was tab-cycling
+        # between them and pressing the button was clicking whichever
+        # one was highlighted. The Home page's encoder/button are
+        # reserved for temperature/menu, not button focus-cycling.
+        - button:
+            id: heat_button
+            align: left_mid
+            x: 8
+            width: 44
+            height: 48
+            radius: circle
+            shadow_width: 0
+            outline_width: 0
+            bg_color: ${dark_grey}
+            click_focusable: false
+            widgets:
+              - label:
+                  text: "Heat"
+                  align: center
+            on_click:
+              - rtttl.play: "beep:d=16,o=5,b=160:c,e"
+              - switch.toggle: volcano_heater
+        - button:
+            id: air_button
+            align: right_mid
+            x: -8
+            width: 44
+            height: 48
+            radius: circle
+            shadow_width: 0
+            outline_width: 0
+            bg_color: ${dark_grey}
+            click_focusable: false
+            widgets:
+              - label:
+                  text: "Air"
+                  align: center
+            on_click:
+              - rtttl.play: "beep:d=16,o=5,b=160:c,e"
+              - switch.toggle: volcano_pump
+

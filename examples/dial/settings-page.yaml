@@ -1,0 +1,168 @@
+lvgl:
+  pages:
+    # Settings (ADR-0011): touch toggles for vibration, display-on-
+    # cooling, and display units, matching VolcanoDevice's existing
+    # boolean fields. Read-only in the sense that there's no on_load/
+    # on_click of its own beyond the toggles themselves: dial_button's
+    # on_release already returns to the Menu from here, same as About/
+    # Diagnostics.
+    #
+    # Same caption-then-control pairing as About/Diagnostics (a page-
+    # level flex column, each pair its own two widgets) rather than
+    # full-width label-left/switch-right rows -- those needed
+    # flex_align_main: space_between to push the switch to the row's
+    # right edge, but that positions it based on each row's *own* total
+    # content width, so it landed at a different x on every row once the
+    # captions were different lengths (worse once Units also had a
+    # trailing "°F" label, which pushed its switch further left still).
+    # Compact, centred control clusters side-step that: every switch
+    # sits at the same place, page-centre, regardless of what flanks it.
+    # This also keeps rows narrower, which the round display needed --
+    # 90%-wide rows were clipping the leading "V" of "Vibration" against
+    # the bezel at this page's outer rows, confirmed on real hardware.
+    - id: settings_page
+      bg_color: ${black}
+      bg_opa: cover
+      # scrollable: false and a tight pad_row -- six stacked children
+      # (3 captions + 3 control clusters) at the theme's default row
+      # gap overflowed the page's own height, which both pushed
+      # Vibration's caption up into the bezel and made the page
+      # scrollable (LVGL's default for any obj/page whose content
+      # exceeds its bounds) when it should stay static like every
+      # other page. Confirmed on real hardware.
+      scrollable: false
+      layout:
+        type: flex
+        flex_flow: column
+        flex_align_main: center
+        flex_align_cross: center
+        flex_align_track: center
+        pad_row: 8
+      widgets:
+        - label:
+            text_color: ${white}
+            text: "Vibration"
+        - obj:
+            width: size_content
+            height: size_content
+            bg_opa: 0%
+            border_width: 0
+            pad_top: 0
+            pad_left: 0
+            pad_right: 0
+            pad_bottom: 2
+            layout:
+              type: flex
+              flex_flow: row
+              flex_align_main: center
+              flex_align_cross: center
+              pad_column: 8
+            widgets:
+              - label:
+                  id: settings_vibration_off_label
+                  text_color: ${cyan}
+                  text: "Off"
+              - switch:
+                  id: settings_vibration_switch
+                  click_focusable: false
+                  indicator:
+                    checked:
+                      bg_color: ${cyan}
+                  on_value:
+                    - rtttl.play: "beep:d=16,o=5,b=160:c,e"
+                    - if:
+                        condition:
+                          lambda: "return x;"
+                        then:
+                          - switch.turn_on: volcano_vibration
+                        else:
+                          - switch.turn_off: volcano_vibration
+              - label:
+                  id: settings_vibration_on_label
+                  text_color: ${dim_grey}
+                  text: "On"
+        - label:
+            text_color: ${white}
+            text: "Display on Cooling"
+        - obj:
+            width: size_content
+            height: size_content
+            bg_opa: 0%
+            border_width: 0
+            pad_top: 0
+            pad_left: 0
+            pad_right: 0
+            pad_bottom: 2
+            layout:
+              type: flex
+              flex_flow: row
+              flex_align_main: center
+              flex_align_cross: center
+              pad_column: 8
+            widgets:
+              - label:
+                  id: settings_cooling_off_label
+                  text_color: ${cyan}
+                  text: "Off"
+              - switch:
+                  id: settings_display_on_cooling_switch
+                  click_focusable: false
+                  indicator:
+                    checked:
+                      bg_color: ${cyan}
+                  on_value:
+                    - rtttl.play: "beep:d=16,o=5,b=160:c,e"
+                    - if:
+                        condition:
+                          lambda: "return x;"
+                        then:
+                          - switch.turn_on: volcano_display_on_cooling
+                        else:
+                          - switch.turn_off: volcano_display_on_cooling
+              - label:
+                  id: settings_cooling_on_label
+                  text_color: ${dim_grey}
+                  text: "On"
+        - label:
+            text_color: ${white}
+            text: "Units"
+        - obj:
+            width: size_content
+            height: size_content
+            bg_opa: 0%
+            border_width: 0
+            pad_top: 0
+            pad_left: 0
+            pad_right: 0
+            pad_bottom: 2
+            layout:
+              type: flex
+              flex_flow: row
+              flex_align_main: center
+              flex_align_cross: center
+              pad_column: 8
+            widgets:
+              - label:
+                  id: settings_units_c_label
+                  text_color: ${cyan}
+                  text: "°C"
+              - switch:
+                  id: settings_display_units_switch
+                  click_focusable: false
+                  indicator:
+                    checked:
+                      bg_color: ${cyan}
+                  on_value:
+                    - rtttl.play: "beep:d=16,o=5,b=160:c,e"
+                    - if:
+                        condition:
+                          lambda: "return x;"
+                        then:
+                          - switch.turn_on: volcano_display_units_fahrenheit
+                        else:
+                          - switch.turn_off: volcano_display_units_fahrenheit
+              - label:
+                  id: settings_units_f_label
+                  text_color: ${dim_grey}
+                  text: "°F"
+

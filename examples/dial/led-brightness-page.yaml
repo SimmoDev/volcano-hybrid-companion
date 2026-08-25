@@ -1,0 +1,118 @@
+lvgl:
+  pages:
+    # LED Brightness (ADR-0011's shared numeric-value page template, first
+    # instance): rotary turn adjusts the value directly, same write-
+    # coalescing debounce as Home's target temperature (see
+    # dial/input.yaml's rotary_encoder sensor's on_value and
+    # dial/scripts.yaml's commit_led_brightness/refresh_led_brightness_
+    # label). A button press returns to the Menu via dial/input.yaml's
+    # dial_button existing else-branch -- this page is neither home_page
+    # nor menu_page, so no change was needed there.
+    #
+    # Caption-then-value flex column, same as About/Diagnostics/Settings,
+    # rather than Home's hand-placed y-offsets -- simpler and side-steps
+    # the overlap bug Home's naive vertical stack hit originally. Caption
+    # white, value/unit cyan, matching Settings' white-caption/cyan-
+    # control convention. The heading gets extra pad_bottom on top of the
+    # page's own pad_row, so it sits further from the value than the
+    # value sits from the "%" below it.
+    #
+    # Step-size buttons (1/10, 48x48 fully round, same shape and orange
+    # active colour as Home's Heat/Air): a straight 0-100 sweep at 1 per
+    # detent is a lot of turning for a coarse change, so these pick how
+    # much one detent adjusts pending_led_brightness by (led_brightness_
+    # step, read in dial/input.yaml's rotary_encoder sensor's on_value).
+    # Selected step is orange, the other dim grey -- same active/inactive
+    # convention as Home's actuator buttons, not Settings' cyan (these
+    # are actions, not a state toggle). click_focusable: false plus
+    # dial/hardware.yaml's on_boot group eviction, same as Heat/Air --
+    # these are real button widgets, so they'd otherwise auto-join the
+    # encoder's default group and eat a physical-button press meant for
+    # something else.
+    - id: led_brightness_page
+      bg_color: ${black}
+      bg_opa: cover
+      scrollable: false
+      layout:
+        type: flex
+        flex_flow: column
+        flex_align_main: center
+        flex_align_cross: center
+        flex_align_track: center
+        pad_row: 8
+      widgets:
+        - label:
+            text_color: ${white}
+            text: "LED Brightness"
+            pad_bottom: 8
+        - label:
+            id: led_brightness_value_label
+            text_font: font_temp
+            text_color: ${cyan}
+            text: "--"
+        - label:
+            text_color: ${cyan}
+            text: "%"
+        - obj:
+            width: size_content
+            height: size_content
+            bg_opa: 0%
+            border_width: 0
+            pad_all: 0
+            pad_top: 8
+            layout:
+              type: flex
+              flex_flow: row
+              flex_align_main: center
+              flex_align_cross: center
+              pad_column: 12
+            widgets:
+              - button:
+                  id: led_brightness_step_1_button
+                  width: 48
+                  height: 48
+                  radius: circle
+                  shadow_width: 0
+                  outline_width: 0
+                  bg_color: ${orange}
+                  click_focusable: false
+                  widgets:
+                    - label:
+                        text: "1"
+                        align: center
+                  on_click:
+                    - rtttl.play: "beep:d=16,o=5,b=160:c,e"
+                    - globals.set:
+                        id: led_brightness_step
+                        value: "1.0"
+                    - lvgl.widget.update:
+                        id: led_brightness_step_1_button
+                        bg_color: ${orange}
+                    - lvgl.widget.update:
+                        id: led_brightness_step_10_button
+                        bg_color: ${dark_grey}
+              - button:
+                  id: led_brightness_step_10_button
+                  width: 48
+                  height: 48
+                  radius: circle
+                  shadow_width: 0
+                  outline_width: 0
+                  bg_color: ${dark_grey}
+                  click_focusable: false
+                  widgets:
+                    - label:
+                        text: "10"
+                        align: center
+                  on_click:
+                    - rtttl.play: "beep:d=16,o=5,b=160:c,e"
+                    - globals.set:
+                        id: led_brightness_step
+                        value: "10.0"
+                    - lvgl.widget.update:
+                        id: led_brightness_step_1_button
+                        bg_color: ${dark_grey}
+                    - lvgl.widget.update:
+                        id: led_brightness_step_10_button
+                        bg_color: ${orange}
+

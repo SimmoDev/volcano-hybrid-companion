@@ -1,0 +1,202 @@
+sensor:
+  - platform: rotary_encoder
+    name: "Dial Rotary Encoder"
+    id: dial_rotary_encoder
+    resolution: 1
+    pin_a:
+      number: GPIO40
+      mode:
+        input: true
+        pullup: true
+    pin_b:
+      number: GPIO41
+      mode:
+        input: true
+        pullup: true
+    on_value:
+      - lambda: |-
+          ESP_LOGD("main", "Encoder now at %d", (int) x);
+      # Audio feedback (ADR-0011): every rotary turn gets a short click,
+      # page-agnostic -- this fires here, before the per-page gating
+      # below, so it plays uniformly regardless of what (if anything) a
+      # given page does with the turn. Silent whenever dial_sound_
+      # enabled is off, via rtttl's own gain (set from that global on
+      # boot/whenever the Dial Sound switch is toggled), no separate mute
+      # check needed here. Short and high-pitched, deliberately distinct
+      # from the lower-pitched button beep below.
+      #
+      # d= only accepts {1,2,4,8,16,32} (confirmed by reading rtttl.cpp's
+      # own play() validation) -- Rtttl::play() silently rejects any other
+      # value and plays nothing, rather than erroring. The octave (o=6) is
+      # deliberately close to the beep's own (o=5) rather than higher
+      # still, since this buzzer's own frequency response makes a wider
+      # pitch gap between the two tones read as a loudness gap too, at
+      # the same gain.
+      - rtttl.play: "click:d=32,o=6,b=250:c"
+      # Home page rotary semantics (ADR-0011): turning adjusts target
+      # temperature directly -- but only on Home. This raw sensor-level
+      # listener fires regardless of which page is showing, so it must
+      # gate itself; without this it was also adjusting and writing
+      # target temperature in the background while navigating the Menu.
+      # x is the sensor's own running count, not a per-turn delta, hence
+      # last_encoder_raw -- tracked unconditionally on every page (even
+      # before the first connection), so a turn made elsewhere doesn't
+      # register as one huge delta once back on Home. 1 degree C per
+      # detent; clamped to CMD-001's confirmed-accepted range (40-230 C)
+      # so pending_target_temp_c never drifts somewhere VolcanoBleClient
+      # would refuse anyway.
+      #
+      # LED Brightness follows the same shape once its page is showing --
+      # 1% per detent, clamped 0-100. Mutually exclusive branches (if/else,
+      # not independent ifs) for the same reason as confirm_menu_selection's
+      # chain: only one rotary-adjusted page is ever showing at a time, and
+      # every branch must still update last_encoder_raw so a turn made
+      # elsewhere doesn't register as one huge delta once back on a
+      # rotary-adjusted page.
+      - if:
+          condition:
+            lvgl.page.is_showing: home_page
+          then:
+            - lambda: |-
+                float delta = x - id(last_encoder_raw);
+                id(last_encoder_raw) = x;
+                if (std::isnan(id(pending_target_temp_c)))
+                  return;
+                float next = id(pending_target_temp_c) + delta * 1.0f;
+                if (next < 40.0f)
+                  next = 40.0f;
+                if (next > 230.0f)
+                  next = 230.0f;
+                id(pending_target_temp_c) = next;
+            - script.execute: refresh_target_temp_label
+            - script.execute: commit_target_temperature
+          else:
+            - if:
+                condition:
+                  lvgl.page.is_showing: led_brightness_page
+                then:
+                  - lambda: |-
+                      float delta = x - id(last_encoder_raw);
+                      id(last_encoder_raw) = x;
+                      if (std::isnan(id(pending_led_brightness)))
+                        return;
+                      float next = id(pending_led_brightness) + delta * id(led_brightness_step);
+                      if (next < 0.0f)
+                        next = 0.0f;
+                      if (next > 100.0f)
+                        next = 100.0f;
+                      id(pending_led_brightness) = next;
+                  - script.execute: refresh_led_brightness_label
+                  - script.execute: commit_led_brightness
+                else:
+                  - if:
+                      condition:
+                        lvgl.page.is_showing: auto_shutoff_duration_page
+                      then:
+                        - lambda: |-
+                            float delta = x - id(last_encoder_raw);
+                            id(last_encoder_raw) = x;
+                            if (std::isnan(id(pending_auto_shutoff_duration_min)))
+                              return;
+                            float next = id(pending_auto_shutoff_duration_min) + delta * id(auto_shutoff_duration_step);
+                            if (next < 1.0f)
+                              next = 1.0f;
+                            if (next > 360.0f)
+                              next = 360.0f;
+                            id(pending_auto_shutoff_duration_min) = next;
+                        - script.execute: refresh_auto_shutoff_duration_label
+                        - script.execute: commit_auto_shutoff_duration
+                      else:
+                        - if:
+                            condition:
+                              lvgl.page.is_showing: dial_brightness_page
+                            then:
+                              # No NaN guard here, unlike the branches
+                              # above -- pending_dial_brightness is always
+                              # a real number by the time this page could
+                              # ever be showing (seeded from the persisted
+                              # dial_brightness_pct in on_boot), since
+                              # nothing async has to report it first the
+                              # way a VolcanoDevice field does.
+                              - lambda: |-
+                                  float delta = x - id(last_encoder_raw);
+                                  id(last_encoder_raw) = x;
+                                  float next = id(pending_dial_brightness) + delta * id(dial_brightness_step);
+                                  // 1%, not 0% -- 0% turns the backlight
+                                  // fully off, which would make the page
+                                  // itself unreadable to turn back up.
+                                  if (next < 1.0f)
+                                    next = 1.0f;
+                                  if (next > 100.0f)
+                                    next = 100.0f;
+                                  id(pending_dial_brightness) = next;
+                              - script.execute: refresh_dial_brightness_label
+                              - script.execute: commit_dial_brightness
+                            else:
+                              # The Dial Sound page is a plain switch, not a
+                              # rotary-adjusted value -- no branch needed
+                              # for it here, just the same fallback every
+                              # other non-rotary-adjusted page already
+                              # uses.
+                              - lambda: |-
+                                  id(last_encoder_raw) = x;
+
+
+binary_sensor:
+  - platform: gpio
+    name: "Dial Button"
+    id: dial_button
+    pin:
+      number: GPIO42
+      mode:
+        input: true
+        pullup: true
+      inverted: true
+    # Button semantics (ADR-0011): from Home, opens the Navigation Menu;
+    # from the Menu, confirms whatever the roller is currently scrolled to
+    # (via confirm_menu_selection, not the roller's own on_click, which
+    # is touch-only -- see its comment); from every other page, returns
+    # to the Menu. Read directly rather than via LVGL's own group/edit-
+    # mode click routing, which doesn't distinguish a physical-button
+    # confirm from the button press that just opened the menu.
+    #
+    # Fires on_release: on press, the button is still physically down at
+    # the moment the newly-shown page's focused widget appears, which
+    # LVGL can read as an immediate confirm against it.
+    #
+    # The branches below are mutually exclusive (if/else, not independent
+    # ifs) because lvgl.page.show is synchronous -- an independent
+    # is_showing check run afterwards would see the page the prior branch
+    # just switched to and match immediately. The final else needs no
+    # changes as more pages are added: everything that isn't Home or the
+    # Menu already falls into it.
+    on_press:
+      - logger.log: "Button pressed"
+      # Audio feedback (ADR-0011): a short beep, distinct from the
+      # rotary click above, page-agnostic like it -- fires on the press
+      # itself (not on_release, unlike the navigation logic below) so
+      # the beep confirms the physical press was registered immediately,
+      # matching what a real button normally feels like. A quick rising
+      # two-note phrase (c then e, a major third) rather than one flat
+      # tone -- per user feedback a single note read as a cold, error-
+      # chime-like sound; an ascending interval reads as a warmer,
+      # positive confirmation instead. Same string reused verbatim by
+      # every touch button/switch/menu-row's own beep, in each page's
+      # own file.
+      - rtttl.play: "beep:d=16,o=5,b=160:c,e"
+    on_release:
+      - logger.log: "Button released"
+      - if:
+          condition:
+            lvgl.page.is_showing: home_page
+          then:
+            - lvgl.page.show: menu_page
+          else:
+            - if:
+                condition:
+                  lvgl.page.is_showing: menu_page
+                then:
+                  - script.execute: confirm_menu_selection
+                else:
+                  - lvgl.page.show: menu_page
+

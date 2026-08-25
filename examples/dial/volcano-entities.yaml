@@ -1,0 +1,326 @@
+volcano:
+  id: volcano_component
+  ble_client_id: volcano_ble_client
+  # Every entity below is consumed directly by the Home/Settings/etc.
+  # LVGL widgets via its own automation triggers, exactly as before --
+  # but also named and given a sorting_weight (matching the dev-board
+  # example, esp32-s3-devkit-minimal.yaml, exactly) to expose it on
+  # dial/connectivity.yaml's web_server page, per ADR-0010's decision to
+  # retain web_server unchanged on the Dial. name:/web_server: and the
+  # automation triggers are independent: removing internal: true doesn't
+  # touch how these already drive the LVGL UI, it only makes the entity
+  # externally visible too.
+  connected:
+    id: volcano_connected
+    name: "Connected"
+    web_server:
+      sorting_weight: 5
+    on_press:
+      - globals.set:
+          id: ble_connecting
+          value: "false"
+      - lvgl.label.update:
+          id: ble_status_icon
+          text_color: 0x00CC44
+    # READY lost is CONNECTING again per ADR-0009 (reconnection isn't
+    # distinguished from a first connection) -- unless the link itself
+    # dropped too, in which case dial/connectivity.yaml's ble_client
+    # on_disconnect also fires and sets DISCONNECTED; whichever settles
+    # last visually wins, which is a minor, acceptable race, not a
+    # functional problem.
+    on_release:
+      - globals.set:
+          id: ble_connecting
+          value: "true"
+  # Values are always Celsius on this side of the component (ADR-0008);
+  # display_units_fahrenheit is the device's own display setting, and
+  # converting for presentation is this control interface's job, not
+  # the component's -- see dial/scripts.yaml's refresh_*_temp_label
+  # scripts.
+  current_temperature:
+    id: volcano_current_temperature
+    name: "Current temperature"
+    web_server:
+      sorting_weight: 30
+    on_value:
+      - script.execute: refresh_current_temp_label
+  target_temperature:
+    id: volcano_target_temperature
+    name: "Target temperature"
+    web_server:
+      sorting_weight: 40
+    mode: box
+    on_value:
+      - globals.set:
+          id: pending_target_temp_c
+          value: !lambda "return x;"
+      - script.execute: refresh_target_temp_label
+  display_units_fahrenheit:
+    id: volcano_display_units_fahrenheit
+    name: "Display in Fahrenheit"
+    web_server:
+      sorting_weight: 90
+    on_turn_on:
+      - lvgl.label.update:
+          id: units_label
+          text: "°F"
+      - script.execute: refresh_current_temp_label
+      - script.execute: refresh_target_temp_label
+      - lambda: "lv_obj_add_state(id(settings_display_units_switch), LV_STATE_CHECKED);"
+      - lvgl.label.update:
+          id: settings_units_c_label
+          text_color: ${dim_grey}
+      - lvgl.label.update:
+          id: settings_units_f_label
+          text_color: ${cyan}
+    on_turn_off:
+      - lvgl.label.update:
+          id: units_label
+          text: "°C"
+      - script.execute: refresh_current_temp_label
+      - script.execute: refresh_target_temp_label
+      - lambda: "lv_obj_remove_state(id(settings_display_units_switch), LV_STATE_CHECKED);"
+      - lvgl.label.update:
+          id: settings_units_c_label
+          text_color: ${cyan}
+      - lvgl.label.update:
+          id: settings_units_f_label
+          text_color: ${dim_grey}
+  # Settings page toggles (ADR-0011). Each entity's own on_turn_on/off
+  # keeps its switch and the flanking Off/On (or C/F) labels in sync
+  # with the confirmed device state, including changes made elsewhere
+  # (the Volcano's own panel, say) -- whichever option is currently
+  # active is coloured cyan, the other dim grey.
+  #
+  # Sets LV_STATE_CHECKED via the raw LVGL call, not lvgl.switch.update
+  # (state: {checked: ...}): that action goes through ESPHome's own
+  # LvglComponent::lv_obj_set_state_value helper, which deliberately
+  # fires the same update event a real user toggle does (its own
+  # comment: "fire an event if changed (only needed for CHECKED)"),
+  # risking exactly the kind of write-on-sync feedback loop that turned
+  # out to be caused by something else entirely on this page (see
+  # dial/hardware.yaml's on_boot group-eviction lambda) -- kept anyway
+  # as the more robust choice now that the actual cause is understood.
+  vibration:
+    id: volcano_vibration
+    name: "Vibration"
+    web_server:
+      sorting_weight: 80
+    on_turn_on:
+      - lambda: "lv_obj_add_state(id(settings_vibration_switch), LV_STATE_CHECKED);"
+      - lvgl.label.update:
+          id: settings_vibration_off_label
+          text_color: ${dim_grey}
+      - lvgl.label.update:
+          id: settings_vibration_on_label
+          text_color: ${cyan}
+    on_turn_off:
+      - lambda: "lv_obj_remove_state(id(settings_vibration_switch), LV_STATE_CHECKED);"
+      - lvgl.label.update:
+          id: settings_vibration_off_label
+          text_color: ${cyan}
+      - lvgl.label.update:
+          id: settings_vibration_on_label
+          text_color: ${dim_grey}
+  display_on_cooling:
+    id: volcano_display_on_cooling
+    name: "Display on cooling"
+    on_turn_on:
+      - lambda: "lv_obj_add_state(id(settings_display_on_cooling_switch), LV_STATE_CHECKED);"
+      - lvgl.label.update:
+          id: settings_cooling_off_label
+          text_color: ${dim_grey}
+      - lvgl.label.update:
+          id: settings_cooling_on_label
+          text_color: ${cyan}
+    on_turn_off:
+      - lambda: "lv_obj_remove_state(id(settings_display_on_cooling_switch), LV_STATE_CHECKED);"
+      - lvgl.label.update:
+          id: settings_cooling_off_label
+          text_color: ${cyan}
+      - lvgl.label.update:
+          id: settings_cooling_on_label
+          text_color: ${dim_grey}
+  auto_shutoff_countdown:
+    id: volcano_auto_shutoff_countdown
+    name: "Auto-shutoff countdown"
+    web_server:
+      sorting_weight: 50
+    on_value:
+      - lvgl.label.update:
+          id: countdown_label
+          text: !lambda |-
+            if (std::isnan(x))
+              return std::string("--:--");
+            int total = (int) x;
+            char buf[8];
+            snprintf(buf, sizeof(buf), "%02d:%02d", total / 60, total % 60);
+            return std::string(buf);
+  # Rotary-adjusted per ADR-0011's shared numeric-page template, same
+  # write-coalescing shape as target_temperature above -- pending_led_
+  # brightness/commit_led_brightness/refresh_led_brightness_label mirror
+  # pending_target_temp_c/commit_target_temperature/refresh_target_temp_label.
+  led_brightness:
+    id: volcano_led_brightness
+    name: "LED brightness"
+    web_server:
+      sorting_weight: 70
+    mode: box
+    on_value:
+      - globals.set:
+          id: pending_led_brightness
+          value: !lambda "return x;"
+      - script.execute: refresh_led_brightness_label
+  # Same shape again -- unit_of_measurement is minutes already (see the
+  # component's own number_schema), so no conversion is needed here; the
+  # minutes-to-seconds conversion for the underlying write happens inside
+  # VolcanoAutoShutoffDurationNumber::control() itself, not this UI.
+  auto_shutoff_duration:
+    id: volcano_auto_shutoff_duration
+    name: "Auto-shutoff duration"
+    web_server:
+      sorting_weight: 60
+    mode: box
+    on_value:
+      - globals.set:
+          id: pending_auto_shutoff_duration_min
+          value: !lambda "return x;"
+      - script.execute: refresh_auto_shutoff_duration_label
+  heater:
+    id: volcano_heater
+    name: "Heat"
+    web_server:
+      sorting_weight: 10
+    on_turn_on:
+      - lvgl.widget.update:
+          id: heat_button
+          bg_color: ${orange}
+    on_turn_off:
+      - lvgl.widget.update:
+          id: heat_button
+          bg_color: ${dark_grey}
+  pump:
+    id: volcano_pump
+    name: "Air"
+    web_server:
+      sorting_weight: 20
+    on_turn_on:
+      - lvgl.widget.update:
+          id: air_button
+          bg_color: ${orange}
+    on_turn_off:
+      - lvgl.widget.update:
+          id: air_button
+          bg_color: ${dark_grey}
+  # Device-information strings, per ADR-0009 exempt from the disconnect-
+  # clears-unknown rule other fields follow -- known once read, they stay
+  # known across a dropout, so no NaN/"unknown" handling is needed the
+  # way the temperature/countdown labels above need it.
+  firmware_version:
+    id: volcano_firmware_version
+    name: "Firmware version"
+    web_server:
+      sorting_weight: 170
+    on_value:
+      - lvgl.label.update:
+          id: about_volcano_firmware_value
+          text: !lambda "return x;"
+  ble_firmware_version:
+    id: volcano_ble_firmware_version
+    name: "BLE firmware version"
+    web_server:
+      sorting_weight: 180
+    on_value:
+      - lvgl.label.update:
+          id: about_volcano_ble_firmware_value
+          text: !lambda "return x;"
+  product_line:
+    id: volcano_product_line
+    name: "Product line"
+    web_server:
+      sorting_weight: 150
+    on_value:
+      - lvgl.label.update:
+          id: about_product_line_value
+          text: !lambda "return x;"
+  serial_number:
+    id: volcano_serial_number
+    name: "Serial number"
+    web_server:
+      sorting_weight: 110
+    on_value:
+      - lvgl.label.update:
+          id: diagnostics_serial_value
+          text: !lambda "return x;"
+  power_supply:
+    id: volcano_power_supply
+    name: "Power supply"
+    web_server:
+      sorting_weight: 120
+    on_value:
+      - lvgl.label.update:
+          id: diagnostics_power_supply_value
+          text: !lambda "return x;"
+  # Time of operation stays combined onto one value (ADR-0011) rather
+  # than splitting hours/minutes into their own rows -- both notify
+  # independently, so either one changing refreshes the shared label
+  # via the same script.
+  hours_of_operation:
+    id: volcano_hours_of_operation
+    name: "Hours of operation"
+    web_server:
+      sorting_weight: 130
+    on_value:
+      - script.execute: refresh_time_of_operation_label
+  minutes_of_operation:
+    id: volcano_minutes_of_operation
+    name: "Minutes of operation"
+    web_server:
+      sorting_weight: 140
+    on_value:
+      - script.execute: refresh_time_of_operation_label
+
+
+# The Dial's own firmware version, exposed on web_server -- same
+# V-prefixed, zero-padded four-group reformatting as the About page's
+# own label (see that page's comment for why), duplicated here rather
+# than shared since a template text_sensor and an LVGL label update are
+# two different mechanisms with no clean way to share one lambda
+# between them. entity_category: diagnostic groups it alongside the
+# Volcano's own device-info entities on the web page, which all set the
+# same category in the component's own schema -- icon matches
+# firmware_version's own (mdi:chip) for the same reason, both being "the
+# microcontroller's own firmware version" in the same sense.
+#
+# web_server only sorts entities that declare an explicit sorting_weight
+# at all -- confirmed by reading WebServer::add_sorting_info_(), which
+# skips the field entirely for any entity absent from sorting_entitys_
+# -- so an unweighted entity in the Volcano's diagnostic category would
+# land ahead of its weighted siblings, confirmed on real hardware.
+# All of them (all in the volcano: block above) now have explicit
+# weights, ordered to match the About/Diagnostics LVGL pages' own
+# layout per user request, not grouped by "version numbers together"
+# as an earlier revision had it: serial_number: 110, power_supply: 120,
+# hours_of_operation: 130, minutes_of_operation: 140, product_line: 150,
+# this entity: 160, firmware_version: 170, ble_firmware_version: 180.
+# Offset by 100 from the (none)/config groups' own 5-90 range so the
+# numbers don't collide across entity_category groups on the page, even
+# though web_server groups by category before sorting within one, so a
+# collision was cosmetic rather than a functional ordering bug.
+#
+# No lambda:/update_interval: here -- template text_sensor's update()
+# (the only thing that would ever call a lambda: here) simply never
+# runs when update_interval is "never" (confirmed by reading
+# PollingComponent's own handling of that value), so the entity stayed
+# permanently unpublished/empty on real hardware. Fixed by publishing it
+# explicitly, once, from dial/hardware.yaml's on_boot instead --
+# text_sensor.template.publish exists for exactly this.
+text_sensor:
+  - platform: template
+    id: dial_firmware_version_text_sensor
+    name: "Dial firmware version"
+    icon: "mdi:chip"
+    entity_category: diagnostic
+    web_server:
+      sorting_weight: 60
+

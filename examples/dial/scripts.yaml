@@ -1,0 +1,220 @@
+# Shared by both temperature entities' on_value and by
+# display_units_fahrenheit's on_turn_on/on_turn_off (ADR-0008: the component
+# always reports Celsius, so a unit change re-renders the last known value
+# rather than waiting for the device's next report). Kept as two scripts,
+# not one parameterised by which label/sensor to use, since ESPHome's YAML
+# automations have no clean way to pass that in -- duplicating this much
+# is simpler than the indirection needed to avoid it.
+script:
+  - id: refresh_current_temp_label
+    then:
+      - lvgl.label.update:
+          id: current_temp_label
+          text: !lambda |-
+            float c = id(volcano_current_temperature).state;
+            if (std::isnan(c))
+              return std::string("--");
+            float v = id(volcano_display_units_fahrenheit).state ? (c * 9.0f / 5.0f + 32.0f) : c;
+            char buf[8];
+            snprintf(buf, sizeof(buf), "%.0f", v);
+            return std::string(buf);
+  # ADR-0011's write-coalescing: fires 300ms after the encoder last
+  # moved (mode: restart cancels and restarts the delay on every new
+  # turn), not once per detent. VolcanoDevice refuses a second write to
+  # a field while one is already outstanding (ADR-0009) and a confirmed
+  # round trip is ~150-250ms on real hardware -- writing on every detent
+  # would silently drop most of them. Guarded against a stale NaN
+  # baseline; VolcanoBleClient's own range check would refuse it anyway,
+  # but this avoids attempting a meaningless write in the first place.
+  - id: commit_target_temperature
+    mode: restart
+    then:
+      - delay: 300ms
+      - if:
+          condition:
+            lambda: "return !std::isnan(id(pending_target_temp_c));"
+          then:
+            - number.set:
+                id: volcano_target_temperature
+                value: !lambda "return id(pending_target_temp_c);"
+  # Reads pending_target_temp_c, not volcano_target_temperature.state --
+  # this is the label a rotary turn updates immediately, before
+  # commit_target_temperature's debounced write even fires, let alone
+  # confirms.
+  - id: refresh_target_temp_label
+    then:
+      - lvgl.label.update:
+          id: target_temp_label
+          text: !lambda |-
+            float c = id(pending_target_temp_c);
+            if (std::isnan(c))
+              return std::string("--");
+            float v = id(volcano_display_units_fahrenheit).state ? (c * 9.0f / 5.0f + 32.0f) : c;
+            char buf[8];
+            snprintf(buf, sizeof(buf), "%.0f", v);
+            return std::string(buf);
+  # LED Brightness's own commit/refresh pair, same shape as
+  # commit_target_temperature/refresh_target_temp_label above -- see those
+  # comments for why the debounce and the NaN guard exist.
+  - id: commit_led_brightness
+    mode: restart
+    then:
+      - delay: 300ms
+      - if:
+          condition:
+            lambda: "return !std::isnan(id(pending_led_brightness));"
+          then:
+            - number.set:
+                id: volcano_led_brightness
+                value: !lambda "return id(pending_led_brightness);"
+  - id: refresh_led_brightness_label
+    then:
+      - lvgl.label.update:
+          id: led_brightness_value_label
+          text: !lambda |-
+            float v = id(pending_led_brightness);
+            if (std::isnan(v))
+              return std::string("--");
+            char buf[8];
+            snprintf(buf, sizeof(buf), "%.0f", v);
+            return std::string(buf);
+  # Auto-Shutoff Duration's own commit/refresh pair, same shape again.
+  - id: commit_auto_shutoff_duration
+    mode: restart
+    then:
+      - delay: 300ms
+      - if:
+          condition:
+            lambda: "return !std::isnan(id(pending_auto_shutoff_duration_min));"
+          then:
+            - number.set:
+                id: volcano_auto_shutoff_duration
+                value: !lambda "return id(pending_auto_shutoff_duration_min);"
+  - id: refresh_auto_shutoff_duration_label
+    then:
+      - lvgl.label.update:
+          id: auto_shutoff_duration_value_label
+          text: !lambda |-
+            float v = id(pending_auto_shutoff_duration_min);
+            if (std::isnan(v))
+              return std::string("--");
+            char buf[8];
+            snprintf(buf, sizeof(buf), "%.0f", v);
+            return std::string(buf);
+  # Dial Brightness's own commit/refresh pair -- same debounce shape as
+  # every other rotary-adjusted page, per ADR-0011, even though there's
+  # no BLE round trip to wait out here: the delay just gives the same
+  # feel as every other numeric page rather than writing the PWM level
+  # on every single detent. Persists dial_brightness_pct (the confirmed
+  # value on_boot restores from and the PWM output otherwise reflects)
+  # here, not on every raw turn, for the same reason.
+  - id: commit_dial_brightness
+    mode: restart
+    then:
+      - delay: 300ms
+      - globals.set:
+          id: dial_brightness_pct
+          value: !lambda "return id(pending_dial_brightness);"
+      - output.set_level:
+          id: dial_backlight_pwm
+          level: !lambda "return id(pending_dial_brightness) / 100.0f;"
+  - id: refresh_dial_brightness_label
+    then:
+      - lvgl.label.update:
+          id: dial_brightness_value_label
+          text: !lambda |-
+            char buf[8];
+            snprintf(buf, sizeof(buf), "%.0f", id(pending_dial_brightness));
+            return std::string(buf);
+  # Dial Sound's flank-label colours (Off/On, same active-cyan/inactive-grey
+  # convention as Settings' toggles) -- shared between dial/hardware.yaml's
+  # on_boot (so the restored dial_sound_enabled value is reflected
+  # immediately) and dial/sound-page.yaml's own switch on_value, rather
+  # than duplicating the two lvgl.label.update calls in both places.
+  - id: refresh_sound_labels
+    then:
+      - lvgl.label.update:
+          id: sound_off_label
+          text_color: !lambda "return id(dial_sound_enabled) ? lv_color_hex(0x888888) : lv_color_hex(0x00D9FF);"
+      - lvgl.label.update:
+          id: sound_on_label
+          text_color: !lambda "return id(dial_sound_enabled) ? lv_color_hex(0x00D9FF) : lv_color_hex(0x888888);"
+  - id: refresh_time_of_operation_label
+    then:
+      - lvgl.label.update:
+          id: diagnostics_time_of_operation_value
+          text: !lambda |-
+            float h = id(volcano_hours_of_operation).state;
+            float m = id(volcano_minutes_of_operation).state;
+            if (std::isnan(h) || std::isnan(m))
+              return std::string("--");
+            char buf[16];
+            snprintf(buf, sizeof(buf), "%.0fh %.0fm", h, m);
+            return std::string(buf);
+  # Shared by both the roller's on_click (touch, guarded to POINTER
+  # there) and dial_button's on_release (button, on the Menu page) --
+  # one place to add a branch when a new page/option is added, rather
+  # than keeping the touch and button paths in sync by hand.
+  #
+  # Dispatches on get_selected_index()'s numeric index rather than
+  # get_selected_text(): dial/menu-page.yaml's roller options: list is
+  # the single source of truth for both the displayed label and its
+  # index, so
+  # renaming/rewording an option can't silently desync it from this
+  # dispatch the way a duplicated exact-string comparison could -- a
+  # typo or rewrite would simply select a different, wrong index rather
+  # than falling through unnoticed to the final else. The index below
+  # must still match the options: list order.
+  - id: confirm_menu_selection
+    then:
+      - lambda: |-
+          ESP_LOGD("main", "Menu confirmed: %s", id(nav_menu_roller).get_selected_text().c_str());
+      - if:
+          condition:
+            lambda: "return id(nav_menu_roller).get_selected_index() == 0;"  # Home
+          then:
+            - lvgl.page.show: home_page
+          else:
+            - if:
+                condition:
+                  lambda: "return id(nav_menu_roller).get_selected_index() == 1;"  # Settings
+                then:
+                  - lvgl.page.show: settings_page
+                else:
+                  - if:
+                      condition:
+                        lambda: "return id(nav_menu_roller).get_selected_index() == 2;"  # LED Brightness
+                      then:
+                        - lvgl.page.show: led_brightness_page
+                      else:
+                        - if:
+                            condition:
+                              lambda: "return id(nav_menu_roller).get_selected_index() == 3;"  # Auto-Shutoff Duration
+                            then:
+                              - lvgl.page.show: auto_shutoff_duration_page
+                            else:
+                              - if:
+                                  condition:
+                                    lambda: "return id(nav_menu_roller).get_selected_index() == 4;"  # Dial Brightness
+                                  then:
+                                    - lvgl.page.show: dial_brightness_page
+                                  else:
+                                    - if:
+                                        condition:
+                                          lambda: "return id(nav_menu_roller).get_selected_index() == 5;"  # Dial Sound
+                                        then:
+                                          - lvgl.page.show: sound_page
+                                        else:
+                                          - if:
+                                              condition:
+                                                lambda: "return id(nav_menu_roller).get_selected_index() == 6;"  # Diagnostics
+                                              then:
+                                                - lvgl.page.show: diagnostics_page
+                                              else:
+                                                # Only index 7 ("About") left
+                                                # among the current options --
+                                                # add another explicit branch
+                                                # here, not a new bare else,
+                                                # once a ninth option exists.
+                                                - lvgl.page.show: about_page
+

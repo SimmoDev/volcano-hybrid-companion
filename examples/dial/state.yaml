@@ -1,0 +1,92 @@
+# Tracks whether the BLE link is up but volcano is not yet READY, so
+# dial/connectivity.yaml's 500ms interval can blink the BLE icon while
+# CONNECTING. ble_blink_on is that interval's own toggle state, not read
+# anywhere else.
+#
+# pending_target_temp_c is the Home page's own local notion of the target
+# temperature (ADR-0011's write-coalescing): the encoder adjusts it and the
+# label always renders it immediately, but VolcanoDevice only hears about
+# it once commit_target_temperature's debounce settles. Every confirmed
+# report from the device re-seeds it too, so an external change (the
+# Volcano's own panel, say) is reflected the same way a local turn is.
+# NaN until the first real report -- the encoder is a no-op until then,
+# rather than adjusting from a meaningless baseline. last_encoder_raw is
+# the rotary_encoder sensor's own running count, needed only to compute
+# each turn's delta.
+#
+# pending_led_brightness is the LED Brightness page's own equivalent of
+# pending_target_temp_c -- same write-coalescing shape (ADR-0011), same
+# NaN-until-first-report guard, sharing last_encoder_raw since only one
+# rotary-adjusted page is ever showing at a time.
+globals:
+  - id: ble_connecting
+    type: bool
+    restore_value: false
+    initial_value: "false"
+  - id: ble_blink_on
+    type: bool
+    restore_value: false
+    initial_value: "false"
+  - id: pending_target_temp_c
+    type: float
+    restore_value: false
+    initial_value: "NAN"
+  - id: last_encoder_raw
+    type: float
+    restore_value: false
+    initial_value: "0"
+  - id: pending_led_brightness
+    type: float
+    restore_value: false
+    initial_value: "NAN"
+  # How much one detent adjusts pending_led_brightness by -- the LED
+  # Brightness page's own step-size buttons (1/10) set this, so a full
+  # sweep of the 0-100 range doesn't need 100 detents of fine adjustment.
+  # Not persisted across reboot; always starts at the fine (1) step.
+  - id: led_brightness_step
+    type: float
+    restore_value: false
+    initial_value: "1.0"
+  # Auto-Shutoff Duration's own equivalents of the LED Brightness pair
+  # above -- same write-coalescing shape, same step-size-buttons idea,
+  # just three steps (1/10/30) instead of two since 1-360 minutes is a
+  # wider range than 0-100%.
+  - id: pending_auto_shutoff_duration_min
+    type: float
+    restore_value: false
+    initial_value: "NAN"
+  - id: auto_shutoff_duration_step
+    type: float
+    restore_value: false
+    initial_value: "1.0"
+  # Dial Brightness (ADR-0011): local Dial hardware, not a VolcanoDevice
+  # field, so this is a plain restore_value global rather than a
+  # volcano: number entity -- ESPHome's own preference/NVS facilities
+  # persist it across reboots. dial_brightness_pct is the confirmed,
+  # persisted value the PWM output and a fresh boot both read from;
+  # pending_dial_brightness is the page's own turn-in-progress value,
+  # same write-coalescing shape as every other rotary-adjusted page,
+  # seeded from dial_brightness_pct in dial/hardware.yaml's on_boot
+  # (see that comment).
+  - id: dial_brightness_pct
+    type: float
+    restore_value: true
+    initial_value: "100"
+  - id: pending_dial_brightness
+    type: float
+    restore_value: false
+    initial_value: "100"
+  - id: dial_brightness_step
+    type: float
+    restore_value: false
+    initial_value: "1.0"
+  # Dial Sound (ADR-0011): local Dial hardware, not a VolcanoDevice
+  # field, same carve-out as Dial Brightness above -- but a plain bool,
+  # not a percentage, since this buzzer has no true amplitude control
+  # (see dial/hardware.yaml's on_boot comment) and mute/unmute is the
+  # most this hardware can honestly offer.
+  - id: dial_sound_enabled
+    type: bool
+    restore_value: true
+    initial_value: "true"
+
