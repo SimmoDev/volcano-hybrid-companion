@@ -84,20 +84,14 @@ esphome:
       # pattern already used for LVGL's lv_group_remove_obj/
       # lv_obj_add_state elsewhere in this file.
       #
-      # This started as a graduated 0-100% Dial Volume page, mapping
-      # onto the ledc output's PWM duty cycle (rtttl's "gain" is
-      # literally that duty cycle, not a perceptual volume -- confirmed
-      # by reading rtttl.cpp's set_level(this->gain_) call). Abandoned
-      # after real-hardware testing found it wasn't usable as a volume
-      # control at all: a piezo buzzer is loudest around 50% duty and
-      # silent at both 0% and 100%, and its harmonic content (so which
-      # overtone the buzzer resonates most strongly at, and therefore
-      # both its pitch *and* loudness) shifts with duty cycle too --
-      # confirmed by ear as non-monotonic loudness across the range and
-      # a real, noticeable pitch drift, neither fixable by adjusting the
-      # mapping formula alone. Simplified to what this hardware can
-      # actually do: on or off, fixed at 50% duty (the loudest, least
-      # distorted point) when on.
+      # This buzzer has no true amplitude control: rtttl's "gain" is
+      # literally the ledc output's PWM duty cycle, not a perceptual
+      # volume (confirmed by reading rtttl.cpp's set_level(this->gain_)
+      # call). A piezo buzzer is loudest around 50% duty and silent at
+      # both 0% and 100%, with pitch and loudness both shifting non-
+      # monotonically across the range -- no mapping formula turns this
+      # into a graduated volume control. Dial Sound is on/off only, fixed
+      # at 50% duty (loudest, least distorted) when on.
       - lambda: "id(dial_rtttl).set_gain(id(dial_sound_enabled) ? 0.5f : 0.0f);"
       - lambda: |-
           if (id(dial_sound_enabled)) {
@@ -303,10 +297,9 @@ globals:
     initial_value: "1.0"
   # Dial Sound (ADR-0011): local Dial hardware, not a VolcanoDevice
   # field, same carve-out as Dial Brightness above -- but a plain bool,
-  # not a percentage. A graduated 0-100% Dial Volume was tried first
-  # (see the on_boot comment for the full story) and abandoned: this
-  # buzzer has no true amplitude control, so mute/unmute is the most
-  # this hardware can honestly offer.
+  # not a percentage, since this buzzer has no true amplitude control
+  # (see the on_boot comment above) and mute/unmute is the most this
+  # hardware can honestly offer.
   - id: dial_sound_enabled
     type: bool
     restore_value: true
@@ -653,13 +646,12 @@ touchscreen:
   on_touch:
     - lambda: |-
         ESP_LOGD("main", "Touch at (%d, %d)", touch.x, touch.y);
-    # A single global on_touch beep was tried here first but beeped on
-    # every touch anywhere on the page, not just an actual button/
-    # switch/menu row -- per user feedback on real hardware. Feedback is
-    # instead wired per-widget below (each button's on_click, each
-    # switch's on_value, the Menu roller's touch-guarded on_click), the
-    # same per-widget cost the group-eviction pattern already has
-    # elsewhere in this file.
+    # A single global on_touch beep here would fire on every touch
+    # anywhere on the page, not just an actual button/switch/menu row.
+    # Feedback is instead wired per-widget below (each button's
+    # on_click, each switch's on_value, the Menu roller's touch-guarded
+    # on_click), the same per-widget cost the group-eviction pattern
+    # already has elsewhere in this file.
 
 sensor:
   - platform: rotary_encoder
@@ -683,27 +675,18 @@ sensor:
       # page-agnostic -- this fires here, before the per-page gating
       # below, so it plays uniformly regardless of what (if anything) a
       # given page does with the turn. Silent whenever dial_sound_
-      # enabled is off, via rtttl's own gain (set from that global
-      # on_boot/whenever the Dial Sound switch is toggled), no separate mute
+      # enabled is off, via rtttl's own gain (set from that global on
+      # boot/whenever the Dial Sound switch is toggled), no separate mute
       # check needed here. Short and high-pitched, deliberately distinct
-      # from the button beep below -- per user feedback the first
-      # attempt (d=32,o=6,b=100, ~75ms) read as a beep rather than a
-      # click.
+      # from the lower-pitched button beep below.
       #
       # d= only accepts {1,2,4,8,16,32} (confirmed by reading rtttl.cpp's
-      # own play() validation) -- an earlier attempt at d=64 to shorten
-      # this further was silently rejected (Rtttl::play() logs an error
-      # and returns without playing anything), which is why the click
-      # disappeared entirely rather than just sounding different. Kept
-      # within the valid set; shortened/raised via bpm/octave instead.
-      #
-      # Octave brought down from o=7 to o=6 after real-hardware feedback
-      # that the click (o=7, ~2.8kHz) sounded noticeably louder than the
-      # beep (o=5, ~550-660Hz) at the same gain -- this buzzer's own
-      # frequency response, not the gain setting, most likely explains
-      # the gap (small piezo buzzers commonly resonate strongest well
-      # above 1kHz), so narrowing the pitch gap between the two tones
-      # narrows the perceived loudness gap too, without touching gain.
+      # own play() validation) -- Rtttl::play() silently rejects any other
+      # value and plays nothing, rather than erroring. The octave (o=6) is
+      # deliberately close to the beep's own (o=5) rather than higher
+      # still, since this buzzer's own frequency response makes a wider
+      # pitch gap between the two tones read as a loudness gap too, at
+      # the same gain.
       - rtttl.play: "click:d=32,o=6,b=250:c"
       # Home page rotary semantics (ADR-0011): turning adjusts target
       # temperature directly -- but only on Home. This raw sensor-level
@@ -1123,11 +1106,8 @@ font:
 # web_server only sorts entities that declare an explicit sorting_weight
 # at all -- confirmed by reading WebServer::add_sorting_info_(), which
 # skips the field entirely for any entity absent from sorting_entitys_
-# -- so leaving any of the Volcano's diagnostic-category entities
-# unweighted let them jump ahead of the weighted ones (unweighted lands
-# *ahead* of weighted, confirmed on real hardware, twice: once for
-# firmware_version/ble_firmware_version/serial_number/power_supply/
-# product_line, again for hours_of_operation/minutes_of_operation).
+# -- so an unweighted entity in the Volcano's diagnostic category would
+# land ahead of its weighted siblings, confirmed on real hardware.
 # All of them (all in the volcano: block above) now have explicit
 # weights, ordered to match the About/Diagnostics LVGL pages' own
 # layout per user request, not grouped by "version numbers together"
@@ -1897,12 +1877,10 @@ lvgl:
     # Local Dial UI configuration, not a VolcanoDevice field, so a
     # restore_value global (dial_sound_enabled) rather than a volcano:
     # entity -- the same ADR-0002 carve-out as Dial Brightness. A
-    # graduated 0-100% Dial Volume page, following Dial Brightness's own
-    # numeric-page shape, was built first and abandoned: this buzzer has
-    # no true amplitude control (see the on_boot/globals comments for
-    # the full story), so a numeric percentage would have claimed a
-    # precision this hardware can't actually deliver -- a plain switch
-    # is the honest fit. Same caption-then-flanked-switch pattern as
+    # This buzzer has no true amplitude control (see the on_boot/globals
+    # comments), so a numeric percentage would claim a precision this
+    # hardware can't actually deliver -- a plain switch is the honest
+    # fit. Same caption-then-flanked-switch pattern as
     # Settings' toggles, standalone on its own page here rather than
     # folded into Settings, since this isn't a VolcanoDevice boolean.
     - id: sound_page
