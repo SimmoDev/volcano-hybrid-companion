@@ -1,0 +1,86 @@
+# ADR-0011's shared rotary-adjusted numeric-value page template,
+# instantiated three times (LED Brightness, Auto-Shutoff Duration,
+# Dial Brightness) via !include vars in m5stack-dial-minimal.yaml.
+# Covers what's genuinely identical across all three: the write-
+# coalescing pending/step globals, the commit/refresh script skeleton,
+# and the page layout (caption, value, unit, step-size button row).
+# What differs per instance -- the commit script's actual write
+# (number.set: on a VolcanoDevice field for two of three, globals.set:/
+# output.set_level: for Dial Brightness's local backlight; see
+# m5stack-dial-minimal.yaml's own dial_brightness_page !include vars),
+# the refresh label's exact format, pending_id's initial_value (NaN for
+# the two VolcanoDevice fields, which start unknown until the device's
+# first report; a real default for Dial Brightness, which on_boot seeds
+# synchronously from dial_brightness_pct), the step buttons themselves
+# (2 vs 3, and which sibling buttons each one greys out), and their
+# row's pad_column (tighter for three buttons than two) -- is passed in
+# as vars rather than forced into one shape, since those parts are not
+# actually the same code, just the same shape of code.
+#
+# The rotary_encoder sensor's own page-dispatch branch (dial/input.yaml)
+# is NOT templated here and can't be: it's one automation on one
+# physical sensor, so ESPHome/YAML's list-concatenation package merging
+# has no way to assemble it from three separate included files the way
+# this page's own widgets/globals/scripts can be. Each of the three
+# pages still gets its own explicit branch there.
+globals:
+  - id: ${pending_id}
+    type: float
+    restore_value: false
+    initial_value: ${pending_initial_value}
+  - id: ${step_id}
+    type: float
+    restore_value: false
+    initial_value: "1.0"
+
+script:
+  - id: ${commit_script_id}
+    mode: restart
+    then: ${commit_actions}
+  - id: ${refresh_script_id}
+    then:
+      - lvgl.label.update:
+          id: ${value_label_id}
+          text: !lambda |-
+            ${refresh_text_lambda}
+
+lvgl:
+  pages:
+    - id: ${page_id}
+      bg_color: ${black}
+      bg_opa: cover
+      scrollable: false
+      layout:
+        type: flex
+        flex_flow: column
+        flex_align_main: center
+        flex_align_cross: center
+        flex_align_track: center
+        pad_row: 8
+      widgets:
+        - label:
+            text_color: ${white}
+            text: "${caption}"
+            pad_bottom: 8
+        - label:
+            id: ${value_label_id}
+            text_font: font_temp
+            text_color: ${cyan}
+            text: "--"
+        - label:
+            text_color: ${cyan}
+            text: "${unit_text}"
+        - obj:
+            width: size_content
+            height: size_content
+            bg_opa: 0%
+            border_width: 0
+            pad_all: 0
+            pad_top: 8
+            layout:
+              type: flex
+              flex_flow: row
+              flex_align_main: center
+              flex_align_cross: center
+              pad_column: ${step_buttons_pad_column}
+            widgets: ${step_buttons}

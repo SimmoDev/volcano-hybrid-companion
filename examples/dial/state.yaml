@@ -14,10 +14,10 @@
 # the rotary_encoder sensor's own running count, needed only to compute
 # each turn's delta.
 #
-# pending_led_brightness is the LED Brightness page's own equivalent of
-# pending_target_temp_c -- same write-coalescing shape (ADR-0011), same
-# NaN-until-first-report guard, sharing last_encoder_raw since only one
-# rotary-adjusted page is ever showing at a time.
+# The LED Brightness/Auto-Shutoff Duration/Dial Brightness pages' own
+# pending_*/​*_step pairs come from dial/numeric-value-page.yaml's
+# template instead of being declared here -- see that file and each
+# page's own !include vars in m5stack-dial-minimal.yaml.
 globals:
   - id: ble_connecting
     type: bool
@@ -35,51 +35,20 @@ globals:
     type: float
     restore_value: false
     initial_value: "0"
-  - id: pending_led_brightness
-    type: float
-    restore_value: false
-    initial_value: "NAN"
-  # How much one detent adjusts pending_led_brightness by -- the LED
-  # Brightness page's own step-size buttons (1/10) set this, so a full
-  # sweep of the 0-100 range doesn't need 100 detents of fine adjustment.
-  # Not persisted across reboot; always starts at the fine (1) step.
-  - id: led_brightness_step
-    type: float
-    restore_value: false
-    initial_value: "1.0"
-  # Auto-Shutoff Duration's own equivalents of the LED Brightness pair
-  # above -- same write-coalescing shape, same step-size-buttons idea,
-  # just three steps (1/10/30) instead of two since 1-360 minutes is a
-  # wider range than 0-100%.
-  - id: pending_auto_shutoff_duration_min
-    type: float
-    restore_value: false
-    initial_value: "NAN"
-  - id: auto_shutoff_duration_step
-    type: float
-    restore_value: false
-    initial_value: "1.0"
   # Dial Brightness (ADR-0011): local Dial hardware, not a VolcanoDevice
   # field, so this is a plain restore_value global rather than a
   # volcano: number entity -- ESPHome's own preference/NVS facilities
   # persist it across reboots. dial_brightness_pct is the confirmed,
-  # persisted value the PWM output and a fresh boot both read from;
-  # pending_dial_brightness is the page's own turn-in-progress value,
-  # same write-coalescing shape as every other rotary-adjusted page,
-  # seeded from dial_brightness_pct in dial/hardware.yaml's on_boot
-  # (see that comment).
+  # persisted value the PWM output and a fresh boot both read from; the
+  # page's own pending_dial_brightness (same write-coalescing shape as
+  # every other rotary-adjusted page) comes from the numeric-value-page
+  # template above, seeded from this in dial/hardware.yaml's on_boot
+  # (see that comment) since nothing else here is unique to Dial
+  # Brightness the way this persisted value is.
   - id: dial_brightness_pct
     type: float
     restore_value: true
     initial_value: "100"
-  - id: pending_dial_brightness
-    type: float
-    restore_value: false
-    initial_value: "100"
-  - id: dial_brightness_step
-    type: float
-    restore_value: false
-    initial_value: "1.0"
   # Dial Sound (ADR-0011): local Dial hardware, not a VolcanoDevice
   # field, same carve-out as Dial Brightness above -- but a plain bool,
   # not a percentage, since this buzzer has no true amplitude control
@@ -89,4 +58,3 @@ globals:
     type: bool
     restore_value: true
     initial_value: "true"
-

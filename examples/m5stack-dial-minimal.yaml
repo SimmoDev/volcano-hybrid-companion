@@ -56,8 +56,285 @@ packages:
   home_page: !include dial/home-page.yaml
   menu_page: !include dial/menu-page.yaml
   settings_page: !include dial/settings-page.yaml
-  led_brightness_page: !include dial/led-brightness-page.yaml
-  auto_shutoff_duration_page: !include dial/auto-shutoff-duration-page.yaml
-  dial_brightness_page: !include dial/dial-brightness-page.yaml
+  # The three numeric-value pages are one shared template
+  # (dial/numeric-value-page.yaml), instantiated here with each page's
+  # own ids/text/behaviour -- see that file's own comment for what's
+  # templated and what's deliberately still spelled out per instance.
+  led_brightness_page: !include
+    file: dial/numeric-value-page.yaml
+    vars:
+      page_id: led_brightness_page
+      caption: LED Brightness
+      unit_text: "%"
+      value_label_id: led_brightness_value_label
+      pending_id: pending_led_brightness
+      pending_initial_value: "NAN"
+      step_id: led_brightness_step
+      step_buttons_pad_column: 12
+      commit_script_id: commit_led_brightness
+      refresh_script_id: refresh_led_brightness_label
+      commit_actions:
+        - delay: 300ms
+        - if:
+            condition:
+              lambda: "return !std::isnan(id(pending_led_brightness));"
+            then:
+              - number.set:
+                  id: volcano_led_brightness
+                  value: !lambda "return id(pending_led_brightness);"
+      refresh_text_lambda: |-
+        float v = id(pending_led_brightness);
+        if (std::isnan(v))
+          return std::string("--");
+        char buf[8];
+        snprintf(buf, sizeof(buf), "%.0f", v);
+        return std::string(buf);
+      step_buttons:
+        - button:
+            id: led_brightness_step_1_button
+            width: 48
+            height: 48
+            radius: circle
+            shadow_width: 0
+            outline_width: 0
+            bg_color: ${orange}
+            click_focusable: false
+            widgets:
+              - label:
+                  text: "1"
+                  align: center
+            on_click:
+              - rtttl.play: "beep:d=16,o=5,b=160:c,e"
+              - globals.set:
+                  id: led_brightness_step
+                  value: "1.0"
+              - lvgl.widget.update:
+                  id: led_brightness_step_1_button
+                  bg_color: ${orange}
+              - lvgl.widget.update:
+                  id: led_brightness_step_10_button
+                  bg_color: ${dark_grey}
+        - button:
+            id: led_brightness_step_10_button
+            width: 48
+            height: 48
+            radius: circle
+            shadow_width: 0
+            outline_width: 0
+            bg_color: ${dark_grey}
+            click_focusable: false
+            widgets:
+              - label:
+                  text: "10"
+                  align: center
+            on_click:
+              - rtttl.play: "beep:d=16,o=5,b=160:c,e"
+              - globals.set:
+                  id: led_brightness_step
+                  value: "10.0"
+              - lvgl.widget.update:
+                  id: led_brightness_step_1_button
+                  bg_color: ${dark_grey}
+              - lvgl.widget.update:
+                  id: led_brightness_step_10_button
+                  bg_color: ${orange}
+  auto_shutoff_duration_page: !include
+    file: dial/numeric-value-page.yaml
+    vars:
+      page_id: auto_shutoff_duration_page
+      caption: Auto-Shutoff Duration
+      unit_text: min
+      value_label_id: auto_shutoff_duration_value_label
+      pending_id: pending_auto_shutoff_duration_min
+      pending_initial_value: "NAN"
+      step_id: auto_shutoff_duration_step
+      step_buttons_pad_column: 10
+      commit_script_id: commit_auto_shutoff_duration
+      refresh_script_id: refresh_auto_shutoff_duration_label
+      commit_actions:
+        - delay: 300ms
+        - if:
+            condition:
+              lambda: "return !std::isnan(id(pending_auto_shutoff_duration_min));"
+            then:
+              - number.set:
+                  id: volcano_auto_shutoff_duration
+                  value: !lambda "return id(pending_auto_shutoff_duration_min);"
+      refresh_text_lambda: |-
+        float v = id(pending_auto_shutoff_duration_min);
+        if (std::isnan(v))
+          return std::string("--");
+        char buf[8];
+        snprintf(buf, sizeof(buf), "%.0f", v);
+        return std::string(buf);
+      step_buttons:
+        - button:
+            id: auto_shutoff_duration_step_1_button
+            width: 48
+            height: 48
+            radius: circle
+            shadow_width: 0
+            outline_width: 0
+            bg_color: ${orange}
+            click_focusable: false
+            widgets:
+              - label:
+                  text: "1"
+                  align: center
+            on_click:
+              - rtttl.play: "beep:d=16,o=5,b=160:c,e"
+              - globals.set:
+                  id: auto_shutoff_duration_step
+                  value: "1.0"
+              - lvgl.widget.update:
+                  id: auto_shutoff_duration_step_1_button
+                  bg_color: ${orange}
+              - lvgl.widget.update:
+                  id: auto_shutoff_duration_step_10_button
+                  bg_color: ${dark_grey}
+              - lvgl.widget.update:
+                  id: auto_shutoff_duration_step_30_button
+                  bg_color: ${dark_grey}
+        - button:
+            id: auto_shutoff_duration_step_10_button
+            width: 48
+            height: 48
+            radius: circle
+            shadow_width: 0
+            outline_width: 0
+            bg_color: ${dark_grey}
+            click_focusable: false
+            widgets:
+              - label:
+                  text: "10"
+                  align: center
+            on_click:
+              - rtttl.play: "beep:d=16,o=5,b=160:c,e"
+              - globals.set:
+                  id: auto_shutoff_duration_step
+                  value: "10.0"
+              - lvgl.widget.update:
+                  id: auto_shutoff_duration_step_1_button
+                  bg_color: ${dark_grey}
+              - lvgl.widget.update:
+                  id: auto_shutoff_duration_step_10_button
+                  bg_color: ${orange}
+              - lvgl.widget.update:
+                  id: auto_shutoff_duration_step_30_button
+                  bg_color: ${dark_grey}
+        - button:
+            id: auto_shutoff_duration_step_30_button
+            width: 48
+            height: 48
+            radius: circle
+            shadow_width: 0
+            outline_width: 0
+            bg_color: ${dark_grey}
+            click_focusable: false
+            widgets:
+              - label:
+                  text: "30"
+                  align: center
+            on_click:
+              - rtttl.play: "beep:d=16,o=5,b=160:c,e"
+              - globals.set:
+                  id: auto_shutoff_duration_step
+                  value: "30.0"
+              - lvgl.widget.update:
+                  id: auto_shutoff_duration_step_1_button
+                  bg_color: ${dark_grey}
+              - lvgl.widget.update:
+                  id: auto_shutoff_duration_step_10_button
+                  bg_color: ${dark_grey}
+              - lvgl.widget.update:
+                  id: auto_shutoff_duration_step_30_button
+                  bg_color: ${orange}
+  # Dial Brightness is *not* a VolcanoDevice field -- it's the Dial's
+  # own backlight, read/written directly against ESPHome's output
+  # component and persisted via a restore_value global
+  # (dial_brightness_pct, dial/state.yaml) rather than anything flowing
+  # through the Volcano abstraction layer (ADR-0002's boundary is why
+  # this isn't a volcano: number entity even though it reuses the same
+  # page template). commit_actions has no NaN guard, unlike the two
+  # above -- pending_dial_brightness is always a real number by the
+  # time this page could ever be showing (seeded from the persisted
+  # dial_brightness_pct in dial/hardware.yaml's on_boot), since nothing
+  # async has to report it first the way a VolcanoDevice field does.
+  # 1-100%, clamped at 1 rather than 0 (dial/input.yaml's rotary
+  # dispatch) so the backlight can never be turned fully off from here.
+  dial_brightness_page: !include
+    file: dial/numeric-value-page.yaml
+    vars:
+      page_id: dial_brightness_page
+      caption: Dial Brightness
+      unit_text: "%"
+      value_label_id: dial_brightness_value_label
+      pending_id: pending_dial_brightness
+      pending_initial_value: "100"
+      step_id: dial_brightness_step
+      step_buttons_pad_column: 12
+      commit_script_id: commit_dial_brightness
+      refresh_script_id: refresh_dial_brightness_label
+      commit_actions:
+        - delay: 300ms
+        - globals.set:
+            id: dial_brightness_pct
+            value: !lambda "return id(pending_dial_brightness);"
+        - output.set_level:
+            id: dial_backlight_pwm
+            level: !lambda "return id(pending_dial_brightness) / 100.0f;"
+      refresh_text_lambda: |-
+        char buf[8];
+        snprintf(buf, sizeof(buf), "%.0f", id(pending_dial_brightness));
+        return std::string(buf);
+      step_buttons:
+        - button:
+            id: dial_brightness_step_1_button
+            width: 48
+            height: 48
+            radius: circle
+            shadow_width: 0
+            outline_width: 0
+            bg_color: ${orange}
+            click_focusable: false
+            widgets:
+              - label:
+                  text: "1"
+                  align: center
+            on_click:
+              - rtttl.play: "beep:d=16,o=5,b=160:c,e"
+              - globals.set:
+                  id: dial_brightness_step
+                  value: "1.0"
+              - lvgl.widget.update:
+                  id: dial_brightness_step_1_button
+                  bg_color: ${orange}
+              - lvgl.widget.update:
+                  id: dial_brightness_step_10_button
+                  bg_color: ${dark_grey}
+        - button:
+            id: dial_brightness_step_10_button
+            width: 48
+            height: 48
+            radius: circle
+            shadow_width: 0
+            outline_width: 0
+            bg_color: ${dark_grey}
+            click_focusable: false
+            widgets:
+              - label:
+                  text: "10"
+                  align: center
+            on_click:
+              - rtttl.play: "beep:d=16,o=5,b=160:c,e"
+              - globals.set:
+                  id: dial_brightness_step
+                  value: "10.0"
+              - lvgl.widget.update:
+                  id: dial_brightness_step_1_button
+                  bg_color: ${dark_grey}
+              - lvgl.widget.update:
+                  id: dial_brightness_step_10_button
+                  bg_color: ${orange}
   sound_page: !include dial/sound-page.yaml
   info_pages: !include dial/info-pages.yaml

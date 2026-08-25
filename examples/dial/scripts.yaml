@@ -53,79 +53,13 @@ script:
             char buf[8];
             snprintf(buf, sizeof(buf), "%.0f", v);
             return std::string(buf);
-  # LED Brightness's own commit/refresh pair, same shape as
-  # commit_target_temperature/refresh_target_temp_label above -- see those
-  # comments for why the debounce and the NaN guard exist.
-  - id: commit_led_brightness
-    mode: restart
-    then:
-      - delay: 300ms
-      - if:
-          condition:
-            lambda: "return !std::isnan(id(pending_led_brightness));"
-          then:
-            - number.set:
-                id: volcano_led_brightness
-                value: !lambda "return id(pending_led_brightness);"
-  - id: refresh_led_brightness_label
-    then:
-      - lvgl.label.update:
-          id: led_brightness_value_label
-          text: !lambda |-
-            float v = id(pending_led_brightness);
-            if (std::isnan(v))
-              return std::string("--");
-            char buf[8];
-            snprintf(buf, sizeof(buf), "%.0f", v);
-            return std::string(buf);
-  # Auto-Shutoff Duration's own commit/refresh pair, same shape again.
-  - id: commit_auto_shutoff_duration
-    mode: restart
-    then:
-      - delay: 300ms
-      - if:
-          condition:
-            lambda: "return !std::isnan(id(pending_auto_shutoff_duration_min));"
-          then:
-            - number.set:
-                id: volcano_auto_shutoff_duration
-                value: !lambda "return id(pending_auto_shutoff_duration_min);"
-  - id: refresh_auto_shutoff_duration_label
-    then:
-      - lvgl.label.update:
-          id: auto_shutoff_duration_value_label
-          text: !lambda |-
-            float v = id(pending_auto_shutoff_duration_min);
-            if (std::isnan(v))
-              return std::string("--");
-            char buf[8];
-            snprintf(buf, sizeof(buf), "%.0f", v);
-            return std::string(buf);
-  # Dial Brightness's own commit/refresh pair -- same debounce shape as
-  # every other rotary-adjusted page, per ADR-0011, even though there's
-  # no BLE round trip to wait out here: the delay just gives the same
-  # feel as every other numeric page rather than writing the PWM level
-  # on every single detent. Persists dial_brightness_pct (the confirmed
-  # value on_boot restores from and the PWM output otherwise reflects)
-  # here, not on every raw turn, for the same reason.
-  - id: commit_dial_brightness
-    mode: restart
-    then:
-      - delay: 300ms
-      - globals.set:
-          id: dial_brightness_pct
-          value: !lambda "return id(pending_dial_brightness);"
-      - output.set_level:
-          id: dial_backlight_pwm
-          level: !lambda "return id(pending_dial_brightness) / 100.0f;"
-  - id: refresh_dial_brightness_label
-    then:
-      - lvgl.label.update:
-          id: dial_brightness_value_label
-          text: !lambda |-
-            char buf[8];
-            snprintf(buf, sizeof(buf), "%.0f", id(pending_dial_brightness));
-            return std::string(buf);
+  # LED Brightness's, Auto-Shutoff Duration's and Dial Brightness's own
+  # commit/refresh pairs -- same shape as commit_target_temperature/
+  # refresh_target_temp_label above, but generated from
+  # dial/numeric-value-page.yaml's shared template (see that file and
+  # each page's own !include vars in m5stack-dial-minimal.yaml) rather
+  # than declared here, since they're one part of that page template,
+  # not a standalone script.
   # Dial Sound's flank-label colours (Off/On, same active-cyan/inactive-grey
   # convention as Settings' toggles) -- shared between dial/hardware.yaml's
   # on_boot (so the restored dial_sound_enabled value is reflected
@@ -159,12 +93,11 @@ script:
   # Dispatches on get_selected_index()'s numeric index rather than
   # get_selected_text(): dial/menu-page.yaml's roller options: list is
   # the single source of truth for both the displayed label and its
-  # index, so
-  # renaming/rewording an option can't silently desync it from this
-  # dispatch the way a duplicated exact-string comparison could -- a
-  # typo or rewrite would simply select a different, wrong index rather
-  # than falling through unnoticed to the final else. The index below
-  # must still match the options: list order.
+  # index, so renaming/rewording an option can't silently desync it
+  # from this dispatch the way a duplicated exact-string comparison
+  # could -- a typo or rewrite would simply select a different, wrong
+  # index rather than falling through unnoticed to the final else. The
+  # index below must still match the options: list order.
   - id: confirm_menu_selection
     then:
       - lambda: |-
