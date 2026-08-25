@@ -10,12 +10,25 @@ It needs a real Volcano's BLE MAC address to connect to anything. Copy [`secrets
 
 It also joins your WiFi network — set `wifi_ssid`/`wifi_password` in the same `secrets.yaml` — so a browser on that network can reach the command controls described in "Sending commands" below. The `volcano` component itself is BLE-only and has no WiFi dependency; WiFi exists in this example purely to serve that page.
 
+## `m5stack-dial-minimal.yaml`
+
+Targets the Phase 2 M5Stack Dial ([ADR-0010](../docs/decisions/ADR-0010-dial-hardware-and-ui-framework.md), [ADR-0011](../docs/decisions/ADR-0011-dial-ui-navigation-architecture.md)) and is the local, standalone control surface Phase 2 builds: an LVGL touchscreen UI driven by the Dial's rotary encoder, physical button and touch panel, on top of the same `volcano` component the dev-board example exercises. Every value the component tracks — current/target temperature, heater/pump, auto-shutoff duration and countdown, LED brightness, vibration, display-on-cooling, display units, and the device-information/diagnostic strings — has a Dial page, so the Dial controls the Volcano fully on its own with no phone, browser or Home Assistant involved.
+
+It needs the same two `secrets.yaml` values as the dev-board example — `volcano_mac_address` and `wifi_ssid`/`wifi_password` — copied from [`secrets.yaml.example`](secrets.yaml.example) the same way. WiFi here serves both the Home page's WiFi status icon and the `web_server` page described below; the on-screen UI itself needs neither WiFi nor an active Volcano connection to navigate.
+
+**Pages** (see ADR-0011 for the full navigation model): **Home** shows current temperature (orange) and target temperature (cyan) in a seven-segment style font, with Heat/Air touch buttons, the auto-shutoff countdown, and small BLE/WiFi status icons (steady = connected, flashing = connecting, red = disconnected). Turning the rotary encoder on Home adjusts target temperature; a press opens the **Navigation Menu**, which lists every other page — turn to highlight, press or touch to open. **Settings** has touch toggles for vibration, display-on-cooling and display units. **LED Brightness**, **Auto-Shutoff Duration** and **Dial Brightness** share one page layout: turn to adjust, with 1×/10×(/30×) step-size buttons for coarser changes; Dial Brightness is the Dial's own backlight, not a Volcano setting, so it works even with no Volcano connected. **Dial Sound** is an on/off toggle for the click/beep feedback described below. **About** and **Diagnostics** show the device-information strings and the heater-runtime meter. A button press returns to the Menu from every page except Home and the Menu itself.
+
+Every value that changes while a page adjusts it locally (target temperature, LED brightness, auto-shutoff duration) updates the display immediately but only writes to the Volcano once turning pauses — the same write-coalescing ADR-0011 requires, so a fast turn doesn't fire a write per detent. Every rotary turn plays a short click and every button press or control touch plays a short beep, muted together via the Dial Sound page; the buzzer has no real volume control, so this is on/off rather than graduated (see that page's own note in the config for why).
+
+`web_server` is present here too, unchanged from the dev-board example's page (same port, no authentication, no TLS — see "Sending commands" above for that trust model): every entity above one control per value, plus a "Dial firmware version" diagnostic entity for this firmware's own version (distinct from the Volcano's own firmware/BLE firmware version strings). Reaching it is optional — the Dial's own screen is the primary control surface for this config, unlike the dev-board example, where the web page is the only one.
+
 ## Flashing and watching logs
 
-Requires the [ESPHome CLI](https://esphome.io/) and an ESP32-S3 board connected over USB. From the repository root:
+Requires the [ESPHome CLI](https://esphome.io/) and an ESP32-S3 board connected over USB. From the repository root, substituting whichever example config you're using:
 
 ```sh
 esphome run examples/esp32-s3-devkit-minimal.yaml
+esphome run examples/m5stack-dial-minimal.yaml
 ```
 
 This compiles, flashes over USB, and opens the log monitor in one step — it'll prompt you to pick a serial port on first run. To flash and watch logs as separate steps instead:
@@ -29,9 +42,9 @@ esphome logs examples/esp32-s3-devkit-minimal.yaml
 
 Watch for the `[volcano]` log tag: it logs heater/pump state, the auto-shutoff countdown, and current/target temperature on connect and whenever they change, including changes made at the device's own panel.
 
-## Sending commands and watching state
+## Sending commands and watching state (`web_server`)
 
-Once connected to WiFi, the device serves a local page at `http://<device-ip-or-hostname>/` (`volcano-dev-scaffold.local` by default, or check `esphome logs` for the IP it picked up on connect). The page has no authentication and no TLS; fine on a trusted home network for this development example, not something to expose beyond it.
+Both example configs serve the same kind of local `web_server` page, described here for `esp32-s3-devkit-minimal.yaml`; the Dial's page is identical in shape (see above for its one extra entity). Once connected to WiFi, the device serves a local page at `http://<device-ip-or-hostname>/` (`volcano-dev-scaffold.local` by default, or check `esphome logs` for the IP it picked up on connect). The page has no authentication and no TLS; fine on a trusted home network for this development example, not something to expose beyond it.
 
 It exposes one control per value: a "Connected" sensor first, then "Heat" and "Air" switches for the heater and pump; number controls for the target temperature (°C) and the auto-shutoff duration (minutes); an LED brightness control (0–100), and vibration, display-on-cooling and Fahrenheit toggles; and read-only sensors for the current temperature and the auto-shutoff countdown. Below those sit a diagnostic group: the heater-runtime meter (hours and minutes of operation) and five fixed device-information strings — firmware version, BLE firmware version, serial number, power supply and product line — read once when the connection is established. The two switches are named after the labels on the Volcano's own panel rather than this project's own terminology, so the two read the same side by side — see [`docs/CONVENTIONS.md`](../docs/CONVENTIONS.md#device-actuators-heater-and-pump-except-on-a-label).
 
