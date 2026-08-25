@@ -532,7 +532,7 @@ volcano:
     id: volcano_firmware_version
     name: "Firmware version"
     web_server:
-      sorting_weight: 70
+      sorting_weight: 170
     on_value:
       - lvgl.label.update:
           id: about_volcano_firmware_value
@@ -541,7 +541,7 @@ volcano:
     id: volcano_ble_firmware_version
     name: "BLE firmware version"
     web_server:
-      sorting_weight: 80
+      sorting_weight: 180
     on_value:
       - lvgl.label.update:
           id: about_volcano_ble_firmware_value
@@ -550,7 +550,7 @@ volcano:
     id: volcano_product_line
     name: "Product line"
     web_server:
-      sorting_weight: 50
+      sorting_weight: 150
     on_value:
       - lvgl.label.update:
           id: about_product_line_value
@@ -559,7 +559,7 @@ volcano:
     id: volcano_serial_number
     name: "Serial number"
     web_server:
-      sorting_weight: 10
+      sorting_weight: 110
     on_value:
       - lvgl.label.update:
           id: diagnostics_serial_value
@@ -568,7 +568,7 @@ volcano:
     id: volcano_power_supply
     name: "Power supply"
     web_server:
-      sorting_weight: 20
+      sorting_weight: 120
     on_value:
       - lvgl.label.update:
           id: diagnostics_power_supply_value
@@ -581,14 +581,14 @@ volcano:
     id: volcano_hours_of_operation
     name: "Hours of operation"
     web_server:
-      sorting_weight: 30
+      sorting_weight: 130
     on_value:
       - script.execute: refresh_time_of_operation_label
   minutes_of_operation:
     id: volcano_minutes_of_operation
     name: "Minutes of operation"
     web_server:
-      sorting_weight: 40
+      sorting_weight: 140
     on_value:
       - script.execute: refresh_time_of_operation_label
 
@@ -1131,9 +1131,13 @@ font:
 # All of them (all in the volcano: block above) now have explicit
 # weights, ordered to match the About/Diagnostics LVGL pages' own
 # layout per user request, not grouped by "version numbers together"
-# as an earlier revision had it: serial_number: 10, power_supply: 20,
-# hours_of_operation: 30, minutes_of_operation: 40, product_line: 50,
-# this entity: 60, firmware_version: 70, ble_firmware_version: 80.
+# as an earlier revision had it: serial_number: 110, power_supply: 120,
+# hours_of_operation: 130, minutes_of_operation: 140, product_line: 150,
+# this entity: 160, firmware_version: 170, ble_firmware_version: 180.
+# Offset by 100 from the (none)/config groups' own 5-90 range so the
+# numbers don't collide across entity_category groups on the page, even
+# though web_server groups by category before sorting within one, so a
+# collision was cosmetic rather than a functional ordering bug.
 #
 # No lambda:/update_interval: here -- template text_sensor's update()
 # (the only thing that would ever call a lambda: here) simply never
