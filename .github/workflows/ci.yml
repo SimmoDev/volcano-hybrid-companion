@@ -51,9 +51,10 @@ jobs:
       - name: esphome compile (dev board)
         run: esphome compile examples/esp32-s3-devkit-minimal.yaml
       # Shares the same placeholder secrets.yaml created above -- this
-      # config's ble_client needs volcano_mac_address, and it now also
-      # has wifi (for the Home page's WiFi status icon), needing
-      # wifi_ssid/wifi_password too. Still no api/web_server (ADR-0010).
+      # config's ble_client needs volcano_mac_address, and its wifi (for
+      # the Home page's WiFi status icon and its own web_server page)
+      # needs wifi_ssid/wifi_password too. web_server is retained per
+      # ADR-0010; no api: yet, since that's Phase 3's concern.
       - name: esphome config (M5Stack Dial)
         run: esphome config examples/m5stack-dial-minimal.yaml
       - name: esphome compile (M5Stack Dial)
