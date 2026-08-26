@@ -167,6 +167,12 @@ rtttl:
   gain: 50%
 
 
+# ili9xxx is deprecated upstream in favour of ESPHome's newer mipi_spi
+# component family -- confirmed by esphome compile's own build-time warning
+# as of ESPHome 2026.6.5, not yet by anything failing. It still builds and
+# works today; migrate this platform to mipi_spi once its GC9A01A support
+# covers this exact hardware, rather than waiting for ili9xxx's removal to
+# force it.
 display:
   - platform: ili9xxx
     id: dial_display
