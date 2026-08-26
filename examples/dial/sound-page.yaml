@@ -4,7 +4,7 @@ lvgl:
     # (rotary click, button/touch beep) wired throughout this file.
     # Local Dial UI configuration, not a VolcanoDevice field, so a
     # restore_value global (dial_sound_enabled) rather than a volcano:
-    # entity -- the same ADR-0002 carve-out as Dial Brightness. A
+    # entity -- the same ADR-0002 carve-out as Dial Brightness.
     # This buzzer has no true amplitude control (see the on_boot/globals
     # comments), so a numeric percentage would claim a precision this
     # hardware can't actually deliver -- a plain switch is the honest
