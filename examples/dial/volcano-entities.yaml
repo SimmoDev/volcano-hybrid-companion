@@ -125,6 +125,8 @@ volcano:
   display_on_cooling:
     id: volcano_display_on_cooling
     name: "Display on cooling"
+    web_server:
+      sorting_weight: 85
     on_turn_on:
       - lambda: "lv_obj_add_state(id(settings_display_on_cooling_switch), LV_STATE_CHECKED);"
       - lvgl.label.update:
