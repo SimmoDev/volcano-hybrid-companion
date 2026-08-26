@@ -116,6 +116,8 @@ volcano:
   # regardless, so nothing this component reads is affected.
   display_on_cooling:
     name: "Display on cooling"
+    web_server:
+      sorting_weight: 85
   # ON means Fahrenheit. The device's own +/- panel gesture changes the same
   # setting, and this switch follows it either way (CMD-010, STATE-010).
   display_units_fahrenheit:
@@ -133,23 +135,43 @@ volcano:
   # wall-clock time. Notify-capable, so they update live.
   hours_of_operation:
     name: "Hours of operation"
+    web_server:
+      sorting_weight: 130
   minutes_of_operation:
     name: "Minutes of operation"
+    web_server:
+      sorting_weight: 140
   # Device information: fixed per unit, read once on connect, never written.
   # Marked diagnostic, so they group separately from the controls.
   #
   # The serial number is unique to your device -- worth remembering before
   # sharing a screenshot or a log, in the same way as the BLE address.
-  firmware_version:
-    name: "Firmware version"
-  ble_firmware_version:
-    name: "BLE firmware version"
+  #
+  # Weights offset by 100 from the (none)/config groups' own 5-90 range,
+  # matching the M5Stack Dial example's identical scheme (examples/dial/
+  # volcano-entities.yaml) exactly -- see that file's own comment for why
+  # the offset exists, and for the ordering these weights follow (matching
+  # the Dial's About/Diagnostics pages' own layout).
   serial_number:
     name: "Serial number"
+    web_server:
+      sorting_weight: 110
   power_supply:
     name: "Power supply"
+    web_server:
+      sorting_weight: 120
   product_line:
     name: "Product line"
+    web_server:
+      sorting_weight: 150
+  firmware_version:
+    name: "Firmware version"
+    web_server:
+      sorting_weight: 170
+  ble_firmware_version:
+    name: "BLE firmware version"
+    web_server:
+      sorting_weight: 180
 
 # WiFi is needed only for web_server below, to reach the controls
 # from a browser -- the volcano component itself is BLE-only and has no
