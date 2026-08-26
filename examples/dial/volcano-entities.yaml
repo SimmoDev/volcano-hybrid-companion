@@ -322,5 +322,5 @@ text_sensor:
     icon: "mdi:chip"
     entity_category: diagnostic
     web_server:
-      sorting_weight: 60
+      sorting_weight: 160
 
