@@ -45,9 +45,13 @@ def main() -> int:
     touches_trigger = any(f.startswith(TRIGGER_PREFIXES) for f in files)
     touches_target = any(doc in files for doc in TARGET_DOCS)
     if touches_trigger and not touches_target:
+        # Built from TRIGGER_PREFIXES/TARGET_DOCS rather than spelled out
+        # here a second time -- a prior widening of TRIGGER_PREFIXES (to add
+        # examples/) updated this message's wording nowhere it was hardcoded,
+        # leaving it stating a narrower trigger than the code actually used.
         print(
-            "NOTE: this commit touches components/volcano/ or docs/decisions/ "
-            "but none of README.md, docs/DEVELOPMENT.md or examples/README.md. "
+            "NOTE: this commit touches " + " or ".join(TRIGGER_PREFIXES) + " "
+            "but none of " + ", ".join(TARGET_DOCS) + ". "
             "If this changes what's true about the project's current state "
             "(implementation status, phase, capability, or what an example's "
             "entities are/do), check those docs before committing.",

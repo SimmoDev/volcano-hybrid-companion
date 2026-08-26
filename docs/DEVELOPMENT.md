@@ -63,7 +63,7 @@ Three local pre-commit hooks, defined in [`.pre-commit-config.yaml`](../.pre-com
 
 - **`clang-format`** — reformats `components/volcano/`'s C++ in place, matching the CI check exactly (same pinned version). See [`docs/CONVENTIONS.md`](CONVENTIONS.md#code-formatting-expectations).
 - **`check-markdown-links`** (implemented in [`scripts/`](../scripts/)) — blocks the commit if a relative Markdown link in a tracked `.md` file doesn't resolve to a real file. Link-like text inside backticks (a syntax example, as in `CONVENTIONS.md`'s Markdown conventions section) is not checked.
-- **`readme-staleness-nudge`** (implemented in [`scripts/`](../scripts/)) — advisory only, never blocks. Prints a reminder if a commit touches `components/volcano/` or `docs/decisions/` without also touching at least one of the root `README.md`, this document, or [`examples/README.md`](../examples/README.md), since a change to either can make a claim in one of those go stale — implementation status, phase, capability, or what an example's entities are/do.
+- **`readme-staleness-nudge`** (implemented in [`scripts/`](../scripts/)) — advisory only, never blocks. Prints a reminder if a commit touches `components/volcano/`, `docs/decisions/` or `examples/` without also touching at least one of the root `README.md`, this document, or [`examples/README.md`](../examples/README.md), since a change to any of those can make a claim in one of those go stale — implementation status, phase, capability, or what an example's entities are/do.
 
 Install with:
 
