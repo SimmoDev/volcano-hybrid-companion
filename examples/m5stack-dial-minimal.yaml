@@ -95,6 +95,14 @@ packages:
         char buf[8];
         snprintf(buf, sizeof(buf), "%.0f", v);
         return std::string(buf);
+      # Resync from the confirmed value on every entry (CHAR-015 has no
+      # notify, so a dropped write is otherwise only corrected by a fresh
+      # user turn). Stays NaN -- "--" -- until the first device report.
+      on_show_actions:
+        - lambda: |-
+            if (!std::isnan(id(volcano_led_brightness).state))
+              id(pending_led_brightness) = id(volcano_led_brightness).state;
+        - script.execute: refresh_led_brightness_label
       step_buttons:
         - button:
             id: led_brightness_step_1_button
@@ -173,6 +181,14 @@ packages:
         char buf[8];
         snprintf(buf, sizeof(buf), "%.0f", v);
         return std::string(buf);
+      # Resync from the confirmed value on every entry (CHAR-017 has no
+      # notify, so a dropped write is otherwise only corrected by a fresh
+      # user turn). Stays NaN -- "--" -- until the first device report.
+      on_show_actions:
+        - lambda: |-
+            if (!std::isnan(id(volcano_auto_shutoff_duration).state))
+              id(pending_auto_shutoff_duration_min) = id(volcano_auto_shutoff_duration).state;
+        - script.execute: refresh_auto_shutoff_duration_label
       step_buttons:
         - button:
             id: auto_shutoff_duration_step_1_button
@@ -293,6 +309,12 @@ packages:
         char buf[8];
         snprintf(buf, sizeof(buf), "%.0f", id(pending_dial_brightness));
         return std::string(buf);
+      # Resync from the persisted backlight level on every entry, for
+      # symmetry with the two VolcanoDevice pages -- pending_dial_brightness
+      # is always a real number here (on_boot seeds it), so no NaN guard.
+      on_show_actions:
+        - lambda: "id(pending_dial_brightness) = id(dial_brightness_pct);"
+        - script.execute: refresh_dial_brightness_label
       step_buttons:
         - button:
             id: dial_brightness_step_1_button
