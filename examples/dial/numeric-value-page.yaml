@@ -13,10 +13,10 @@
 # first report; a real default for Dial Brightness, which on_boot seeds
 # synchronously from dial_brightness_pct), the step buttons themselves
 # (2 vs 3, and which sibling buttons each one greys out), their row's
-# pad_column (tighter for three buttons than two), and the on_load actions
-# that re-seed the pending value from the confirmed one -- is passed in as
-# vars rather than forced into one shape, since those parts are not
-# actually the same code, just the same shape of code.
+# pad_column (tighter for three buttons than two), and the on_load resync
+# actions (empty for Dial Brightness) -- is passed in as vars rather than
+# forced into one shape, since those parts are not actually the same code,
+# just the same shape of code.
 #
 # The rotary_encoder sensor's own page-dispatch branch (dial/input.yaml)
 # is NOT templated here and can't be: it's one automation on one
@@ -51,13 +51,13 @@ lvgl:
       bg_color: ${black}
       bg_opa: cover
       scrollable: false
-      # Re-seed the page's pending value from the confirmed one every time
-      # the page is shown, so a write that never confirmed (a dropped or
-      # timed-out BLE write, for a field with no notify to correct it) can't
-      # leave the page showing a value the device never took -- navigating
-      # away and back always resyncs. What "the confirmed value" is differs
-      # per instance (a VolcanoDevice entity's state, or the persisted Dial
-      # Brightness global), so the actions are passed in.
+      # Passed in per instance. For the two VolcanoDevice pages: re-seed the
+      # pending value from the entity's confirmed state on entry (unless a
+      # commit is mid-debounce), so a write that never confirmed -- a
+      # dropped BLE write on a field with no notify to correct it -- can't
+      # leave the page showing a value the device never took. Dial
+      # Brightness passes an empty list: its commit is local and cannot be
+      # dropped.
       on_load: ${on_show_actions}
       layout:
         type: flex
