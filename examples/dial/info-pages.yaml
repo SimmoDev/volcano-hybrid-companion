@@ -36,10 +36,9 @@ lvgl:
             # esphome: project: block -- this firmware's own version,
             # distinct from the Volcano's own firmware/BLE firmware
             # versions below.
-            # Reformatted from plain semver ("0.1.0") to match the
-            # Volcano's own V-prefixed, zero-padded four-group style
-            # ("V01.03.00.00") per user feedback that the mismatch stood
-            # out visually. The fourth group is always "00" -- semver
+            # Rendered in the Volcano's own V-prefixed, zero-padded
+            # four-group style ("V01.03.00.00") so the two version lines
+            # read consistently. The fourth group is always "00" -- semver
             # only carries three, and the Volcano's own version strings
             # are opaque to this side anyway (ADR-0008), so there's
             # nothing meaningful to put there.

@@ -64,24 +64,17 @@ esphome:
             lv_obj_remove_state(id(sound_switch), LV_STATE_CHECKED);
           }
       - script.execute: refresh_sound_labels
-      # LVGL auto-adds every newly-created focusable widget to whatever
-      # group is current default once an encoder exists (click_focusable:
-      # false on Home's buttons/Settings' switches only stops a *touch*
-      # granting focus, it doesn't stop this membership). Confirmed on
-      # real hardware for Heat/Air already; the same bug hit Settings'
-      # switches too -- every widget here auto-joins the same one
-      # default group at creation regardless of which page it's on, and
-      # nothing had explicitly focused the Menu's roller yet on the very
-      # first button press from Home, so that press landed on whichever
-      # switch the group happened to default-focus and toggled it,
-      # silently writing to the Volcano before the Settings page was
-      # ever even shown. Evicting everything meant to be touch-only
-      # keeps the encoder/button reserved for temperature/menu use on
-      # Home and Settings, per ADR-0011. The LED Brightness, Auto-Shutoff
-      # Duration, and Dial Brightness pages' step-size buttons, the
-      # Dial Sound page's switch, and the Connections page's two
-      # switches, are the same story: click_focusable: false alone
-      # doesn't stop group membership, so they need evicting too.
+      # LVGL auto-adds every newly-created focusable widget to the default
+      # encoder group, regardless of which page it sits on. click_focusable:
+      # false stops a *touch* from granting focus but not this membership,
+      # so without the evictions below the encoder and button can land on
+      # and toggle a touch-only widget -- e.g. a Settings switch, before
+      # that page has even been shown, silently writing to the Volcano.
+      # Every touch-only focusable widget must be listed here: Home's
+      # Heat/Air buttons, Settings' three switches, the three numeric
+      # pages' step-size buttons, the Dial Sound switch, and the
+      # Connections page's two switches. The encoder and button stay
+      # reserved for temperature adjustment and menu navigation (ADR-0011).
       - lambda: |-
           lv_group_remove_obj(id(heat_button));
           lv_group_remove_obj(id(air_button));

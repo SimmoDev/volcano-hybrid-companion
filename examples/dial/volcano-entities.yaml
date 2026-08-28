@@ -301,28 +301,24 @@ volcano:
 # microcontroller's own firmware version" in the same sense.
 #
 # web_server only sorts entities that declare an explicit sorting_weight
-# at all -- confirmed by reading WebServer::add_sorting_info_(), which
-# skips the field entirely for any entity absent from sorting_entitys_
-# -- so an unweighted entity in the Volcano's diagnostic category would
-# land ahead of its weighted siblings, confirmed on real hardware.
-# All of them (all in the volcano: block above) now have explicit
-# weights, ordered to match the About/Diagnostics LVGL pages' own
-# layout per user request, not grouped by "version numbers together"
-# as an earlier revision had it: serial_number: 110, power_supply: 120,
-# hours_of_operation: 130, minutes_of_operation: 140, product_line: 150,
-# this entity: 160, firmware_version: 170, ble_firmware_version: 180.
+# (per WebServer::add_sorting_info_(), which skips the field for any
+# entity absent from sorting_entitys_), so an unweighted entity in the
+# Volcano's diagnostic category lands ahead of its weighted siblings.
+# Every entity in the volcano: block above therefore has an explicit
+# weight, ordered to match the About/Diagnostics LVGL pages' own layout:
+# serial_number: 110, power_supply: 120, hours_of_operation: 130,
+# minutes_of_operation: 140, product_line: 150, this entity: 160,
+# firmware_version: 170, ble_firmware_version: 180.
 # Offset by 100 from the (none)/config groups' own 5-90 range so the
-# numbers don't collide across entity_category groups on the page, even
-# though web_server groups by category before sorting within one, so a
-# collision was cosmetic rather than a functional ordering bug.
+# numbers don't collide across entity_category groups on the page --
+# cosmetic even if they did, since web_server groups by category before
+# sorting within one.
 #
-# No lambda:/update_interval: here -- template text_sensor's update()
-# (the only thing that would ever call a lambda: here) simply never
-# runs when update_interval is "never" (confirmed by reading
-# PollingComponent's own handling of that value), so the entity stayed
-# permanently unpublished/empty on real hardware. Fixed by publishing it
-# explicitly, once, from dial/hardware.yaml's on_boot instead --
-# text_sensor.template.publish exists for exactly this.
+# No lambda:/update_interval: here -- a template text_sensor's update()
+# is never called while update_interval is "never" (per PollingComponent's
+# handling of that value), so a lambda: would never run. The value is
+# published once from dial/hardware.yaml's on_boot instead, via
+# text_sensor.template.publish.
 text_sensor:
   - platform: template
     id: dial_firmware_version_text_sensor

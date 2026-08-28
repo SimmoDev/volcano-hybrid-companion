@@ -177,12 +177,10 @@ binary_sensor:
       # itself (not on_release, unlike the navigation logic below) so
       # the beep confirms the physical press was registered immediately,
       # matching what a real button normally feels like. A quick rising
-      # two-note phrase (c then e, a major third) rather than one flat
-      # tone -- per user feedback a single note read as a cold, error-
-      # chime-like sound; an ascending interval reads as a warmer,
-      # positive confirmation instead. Same string reused verbatim by
-      # every touch button/switch/menu-row's own beep, in each page's
-      # own file.
+      # two-note phrase (c then e, a major third): an ascending interval
+      # reads as a warmer, positive confirmation than a single flat tone.
+      # Same string reused verbatim by every touch button/switch/menu-row's
+      # own beep, in each page's own file.
       - rtttl.play: "beep:d=16,o=5,b=160:c,e"
     on_release:
       - logger.log: "Button released"
