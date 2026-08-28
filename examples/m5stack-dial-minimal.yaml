@@ -2,22 +2,18 @@
 # built and hardware-verified: Home (current/target temperature with
 # rotary adjustment and write-coalescing debounce, a unit indicator that
 # converts per ADR-0008, Heat/Air buttons, the auto-shutoff countdown,
-# BLE/WiFi status icons), the Navigation Menu, Settings (vibration/
+# BLE/WiFi status icons), the Navigation Menu, Connections (dial/
+# connections-page.yaml -- BLE and WiFi status, each with a switch to
+# release/reconnect it, letting a user hand the Volcano's BLE connection
+# back to the official app without power-cycling the whole device, per
+# ADR-0007's requirement that a control interface holding a persistent
+# connection make releasing it discoverable), Settings (vibration/
 # display-on-cooling/display-units toggles), the shared rotary-adjusted
 # numeric-value page (LED Brightness, Auto-Shutoff Duration, Dial
 # Brightness -- Dial Brightness is the odd one out, local Dial hardware
 # rather than a VolcanoDevice field, per that ADR's deliberate carve-out),
 # Dial Sound (mutes the click/beep audio feedback below), and the split
 # Information page -- About and Diagnostics, each its own menu entry.
-#
-# A Connections page (dial/connections-page.yaml) is what lets a user
-# hand the Volcano's BLE connection back to the official app without
-# power-cycling the whole device, per ADR-0007's requirement that a
-# control interface holding a persistent connection make releasing it
-# discoverable -- BLE and WiFi status, each with a switch to release/
-# reconnect it. Implemented and esphome-compile-clean; not yet confirmed
-# against real hardware the way every other page above is -- see that
-# page's own comment for the detail.
 #
 # web_server is present too, matching the dev-board example exactly
 # (same port/entity names/sorting weights), per ADR-0010's decision to
