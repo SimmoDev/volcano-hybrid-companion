@@ -69,14 +69,14 @@ lvgl:
             x: -16
             y: 8
             text_color: 0xCC0000
-            text: ""
+            text: "\uF293"
         - label:
             id: wifi_status_icon
             align: top_mid
             x: 16
             y: 8
             text_color: 0xCC0000
-            text: ""
+            text: "\uF1EB"
         # click_focusable: false keeps these touch-only, per ADR-0011 --
         # without it, LVGL auto-joins every clickable widget to the
         # encoder's default group, so turning the knob was tab-cycling
