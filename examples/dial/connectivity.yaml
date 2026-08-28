@@ -68,12 +68,10 @@ wifi:
 # example: no authentication, no TLS, fine on a trusted home network.
 #
 # Needs lvgl's buffer_size cut down (see dial/hardware.yaml's comment
-# above its lvgl: block) to actually fit in RAM alongside BLE on this
-# board -- confirmed via a temporary api:
-# swap-test that the lean ESPHome api: protocol (no HTTP server/bundled
-# web assets/JSON entity-list the way web_server has) fit fine on its
-# own, isolating web_server's own footprint as the specific problem
-# rather than "no network component fits here at all."
+# above its lvgl: block) to fit in RAM alongside BLE on this board: it is
+# web_server's own footprint -- its HTTP server, bundled web assets and
+# JSON entity list, none of which the lean api: protocol carries -- that
+# forces the trim, not networking in general.
 web_server:
   port: 80
   local: true

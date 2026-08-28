@@ -5,22 +5,12 @@ any of the docs that describe current behaviour (root README.md,
 docs/DEVELOPMENT.md, examples/README.md), print a reminder to check them for
 staleness.
 
-This is exactly the pattern that let README.md go stale for three commits
-after the ADR-0009 abstraction-layer split landed: every other doc that
-referenced the architecture was updated in that commit except README.md,
-which was corrected only later by a milestone review. A later review then
-found docs/DEVELOPMENT.md and the example config's own header comment still
-describing pre-ADR-0009 trigger-style entities, in a commit that *did* touch
-docs/DEVELOPMENT.md -- so touching a target file isn't proof its relevant
-sentences were re-read, only a precondition this hook can actually check.
-Not every trigger change makes one of these docs stale, so this never fails
-the commit -- it only prints.
-
-`examples/` was added to the trigger prefixes after a further review found
-the entire M5Stack Dial UI build -- 18 commits, all touching only
-examples/m5stack-dial-minimal.yaml -- landed without examples/README.md ever
-gaining a section for it: none of those commits touched a prefix this hook
-watched, so the nudge never once fired across the whole milestone.
+A change to component code, an ADR, or an example config can silently
+outdate a claim in one of those docs -- implementation status, phase,
+capability, or what an example's entities are and do. Touching a target doc
+is only a precondition the hook can check, not proof its relevant sentences
+were re-read, and not every trigger change makes a doc stale -- so this only
+ever prints, never fails the commit.
 """
 
 import subprocess
@@ -45,10 +35,8 @@ def main() -> int:
     touches_trigger = any(f.startswith(TRIGGER_PREFIXES) for f in files)
     touches_target = any(doc in files for doc in TARGET_DOCS)
     if touches_trigger and not touches_target:
-        # Built from TRIGGER_PREFIXES/TARGET_DOCS rather than spelled out
-        # here a second time -- a prior widening of TRIGGER_PREFIXES (to add
-        # examples/) updated this message's wording nowhere it was hardcoded,
-        # leaving it stating a narrower trigger than the code actually used.
+        # Built from TRIGGER_PREFIXES/TARGET_DOCS so the message can't state a
+        # narrower trigger than the code actually uses.
         print(
             "NOTE: this commit touches " + " or ".join(TRIGGER_PREFIXES) + " "
             "but none of " + ", ".join(TARGET_DOCS) + ". "
