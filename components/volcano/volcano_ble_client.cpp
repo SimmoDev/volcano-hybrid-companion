@@ -561,20 +561,19 @@ void VolcanoBleClient::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
         // Notifies, so no read-back: decode_display_register_() reports
         // via the observer on its own. write_display_on_cooling() and
         // write_display_units_fahrenheit() can each be called independently
-        // of the other, so which field this completion belongs to is the
-        // front of display_register_pending_writes_, not whichever call
-        // happened to run most recently -- see the member's declaration.
-        if (this->display_register_pending_writes_.empty()) {
+        // of the other, so which field this completion belongs to comes
+        // from the FIFO, not whichever call happened to run most recently
+        // -- see display_register_write_queue.h.
+        auto field = this->display_register_pending_writes_.pop();
+        if (!field.has_value()) {
           ESP_LOGW(TAG, "Display/units register write completed with no pending write tracked");
         } else {
-          VolcanoField field = this->display_register_pending_writes_.front();
-          this->display_register_pending_writes_.pop_front();
           if (param->write.status != ESP_GATT_OK) {
             ESP_LOGW(TAG, "Display/units register write failed, status=%d", param->write.status);
             if (this->observer_ != nullptr)
-              this->observer_->on_write_failed(field);
+              this->observer_->on_write_failed(*field);
           } else if (this->observer_ != nullptr) {
-            this->observer_->on_write_acked(field);
+            this->observer_->on_write_acked(*field);
           }
         }
       } else if (param->write.handle == this->vibration_handle_) {
@@ -962,7 +961,7 @@ bool VolcanoBleClient::write_display_units_fahrenheit(bool fahrenheit) {
   // Queued only once the write is actually in flight, so a synchronous
   // esp_ble_gattc_write_char() failure above never leaves a stale entry for
   // an ESP_GATTC_WRITE_CHAR_EVT that will now never arrive.
-  this->display_register_pending_writes_.push_back(VolcanoField::DISPLAY_UNITS_FAHRENHEIT);
+  this->display_register_pending_writes_.push(VolcanoField::DISPLAY_UNITS_FAHRENHEIT);
   return true;
 }
 
@@ -988,7 +987,7 @@ bool VolcanoBleClient::write_display_on_cooling(bool enabled) {
     ESP_LOGW(TAG, "esp_ble_gattc_write_char failed, status=%d", status);
     return false;
   }
-  this->display_register_pending_writes_.push_back(VolcanoField::DISPLAY_ON_COOLING);
+  this->display_register_pending_writes_.push(VolcanoField::DISPLAY_ON_COOLING);
   return true;
 }
 

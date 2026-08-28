@@ -1,12 +1,12 @@
 #pragma once
 
+#include "display_register_write_queue.h"
 #include "volcano_ble_client_observer.h"
 
 #include "esphome/components/ble_client/ble_client.h"
 #include "esphome/components/esp32_ble_tracker/esp32_ble_tracker.h"
 
 #include <cstdint>
-#include <deque>
 #include <string>
 
 #include <esp_gattc_api.h>
@@ -121,21 +121,9 @@ class VolcanoBleClient {
   uint16_t vibration_handle_{0};         // CHAR-010: vibration setting.
   uint16_t display_register_handle_{0};  // CHAR-009: display/units register.
 
-  // CHAR-009 carries two independent settings (display-on-cooling, CMD-005;
-  // display units, CMD-010) behind one handle, written with two distinct
-  // mask-and-action payloads. write_display_on_cooling() and
-  // write_display_units_fahrenheit() can each be called independently --
-  // e.g. two entities toggled in quick succession -- so a write to one can
-  // be issued before the other's ESP_GATTC_WRITE_CHAR_EVT arrives. Tracking
-  // "the most recent write" in one field would attribute that event to
-  // whichever call happened to run last, not the write it actually
-  // completes, so this is a FIFO of every write issued but not yet
-  // completed on this handle instead: each write_*() pushes its field only
-  // once esp_ble_gattc_write_char() itself reports success, and each
-  // ESP_GATTC_WRITE_CHAR_EVT pops the front to find out which field it
-  // belongs to. Order is preserved because ATT write requests on one
-  // handle complete in the order they were sent.
-  std::deque<VolcanoField> display_register_pending_writes_;
+  // See display_register_write_queue.h for why this handle needs a FIFO
+  // rather than tracking a single "most recent write" field.
+  DisplayRegisterWriteQueue display_register_pending_writes_;
 
   static const uint8_t MAX_STATIC_READS = 7;
   uint16_t static_reads_[MAX_STATIC_READS];

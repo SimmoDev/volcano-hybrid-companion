@@ -61,7 +61,7 @@ jobs:
         run: esphome compile examples/m5stack-dial-minimal.yaml
 
   volcano-device-tests:
-    name: VolcanoDevice host-side tests
+    name: Volcano component host-side tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

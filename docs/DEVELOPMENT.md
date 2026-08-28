@@ -53,7 +53,9 @@ cd components/volcano/test
 make test
 ```
 
-This is the only place in the repository the split from ADR-0009 is exercised without hardware; `VolcanoBleClient` and `VolcanoComponent` still require a real connection to verify, per [`components/volcano/README.md`](../components/volcano/README.md#building--validating).
+The same command also builds and runs a second, unrelated host-side test: `DisplayRegisterWriteQueue` (`components/volcano/display_register_write_queue.h`), the FIFO `VolcanoBleClient` uses to attribute a completed write on CHAR-009 to whichever of its two independent settings actually issued it. It has no BLE/ESP-IDF dependency of its own, unlike the rest of `VolcanoBleClient`, so its ordering guarantee is host-tested directly rather than only exercised through real hardware.
+
+This is the only place in the repository the split from ADR-0009 is exercised without hardware; `VolcanoBleClient`'s GATT event handling and `VolcanoComponent` still require a real connection to verify, per [`components/volcano/README.md`](../components/volcano/README.md#building--validating).
 
 ## Continuous integration and pre-commit hooks
 

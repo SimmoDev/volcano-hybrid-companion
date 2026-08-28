@@ -16,14 +16,24 @@ CXXFLAGS = -std=c++17 -Wall -Wextra -I fakes -I ..
 BUILD := build
 
 .PHONY: test clean
-test: $(BUILD)/volcano_device_test
+test: $(BUILD)/volcano_device_test $(BUILD)/display_register_write_queue_test
 	$(BUILD)/volcano_device_test
+	$(BUILD)/display_register_write_queue_test
 
 $(BUILD)/volcano_device_test: volcano_device_test.cpp fakes/volcano_ble_client.h \
                               fakes/esphome/core/optional.h fakes/esphome/core/hal.h fakes/esphome/core/log.h \
                               ../volcano_device.h ../volcano_device.cpp ../volcano_ble_client_observer.h | $(BUILD)
 	cp ../volcano_device.cpp $(BUILD)/volcano_device.cpp
 	$(CXX) $(CXXFLAGS) volcano_device_test.cpp $(BUILD)/volcano_device.cpp -o $@
+
+# display_register_write_queue.h has no BLE/ESP-IDF dependency of its own
+# (unlike volcano_ble_client.h, which it's part of), so it builds directly
+# against the real header with no staging trick needed -- see that header's
+# own comment.
+$(BUILD)/display_register_write_queue_test: display_register_write_queue_test.cpp \
+                                            fakes/esphome/core/optional.h \
+                                            ../display_register_write_queue.h ../volcano_ble_client_observer.h | $(BUILD)
+	$(CXX) $(CXXFLAGS) display_register_write_queue_test.cpp -o $@
 
 $(BUILD):
 	mkdir -p $(BUILD)
