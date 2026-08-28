@@ -12,11 +12,12 @@
 # debounce, is implemented -- see dial/input.yaml's rotary_encoder
 # sensor's on_value and dial/scripts.yaml's commit_target_temperature/
 # refresh_target_temp_label. dial/menu-page.yaml's Navigation Menu
-# lists Home, Settings, LED Brightness, Auto-Shutoff Duration, Dial
-# Brightness, Dial Sound, Diagnostics, and About, in that order -- the
-# latter two are ADR-0011's Information page, split in two rather than
-# cramming six lines of device facts onto one (see dial/info-pages.yaml's
-# own comment). Every page ADR-0011 names now exists.
+# lists Home, Connections, Settings, LED Brightness, Auto-Shutoff
+# Duration, Dial Brightness, Dial Sound, Diagnostics, and About, in
+# that order -- the latter two are ADR-0011's Information page, split
+# in two rather than cramming six lines of device facts onto one (see
+# dial/info-pages.yaml's own comment). Every page ADR-0011 names now
+# exists.
 lvgl:
   pages:
     - id: home_page
