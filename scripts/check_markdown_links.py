@@ -18,6 +18,8 @@ anchor-checked; a fragment on any other target (an HTML page, say) is left
 alone.
 """
 
+from __future__ import annotations
+
 import os
 import re
 import sys
@@ -34,7 +36,7 @@ ATX_HEADING_RE = re.compile(r"^\s{0,3}(#{1,6})\s+(.*?)\s*$")
 # digits, underscore" set, so `[^\w\- ]` is what GitHub removes.
 SLUG_DROP_RE = re.compile(r"[^\w\- ]")
 
-_anchor_cache: dict[str, "set[str] | None"] = {}
+_anchor_cache: dict[str, set[str] | None] = {}
 
 
 def strip_code(text: str) -> str:
@@ -50,7 +52,7 @@ def github_slug(heading: str) -> str:
     return SLUG_DROP_RE.sub("", text).replace(" ", "-")
 
 
-def anchors_for(path: str) -> "set[str] | None":
+def anchors_for(path: str) -> set[str] | None:
     """The set of heading slugs a rendered Markdown file would expose, or
     None if the file can't be read."""
     if path not in _anchor_cache:
