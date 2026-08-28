@@ -147,11 +147,12 @@ lvgl:
                   # is set directly rather than through a computed script;
                   # WiFi has only these three states to represent, not BLE's
                   # four, so a shared script would just be indirection here.
-                  # Leaves wifi_status_icon (the Home page's own icon) alone,
-                  # the same "Off" reads as "disconnected" there call the BLE
-                  # icon already makes -- dial/connectivity.yaml's existing
-                  # on_connect/on_disconnect triggers are what own its
-                  # colour, and disabling WiFi still reaches on_disconnect.
+                  # Leaves wifi_status_icon (the Home page's own icon)
+                  # alone: "Off" reading there as just another disconnected
+                  # state is the same scope call the BLE icon already makes.
+                  # dial/connectivity.yaml's on_connect/on_disconnect
+                  # triggers own that icon's colour anyway, and disabling
+                  # WiFi still reaches on_disconnect.
                   on_value:
                     - rtttl.play: "beep:d=16,o=5,b=160:c,e"
                     - if:
