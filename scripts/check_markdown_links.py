@@ -11,10 +11,11 @@ checked: CONVENTIONS.md itself uses `[ADR-0002](ADR-0002-....md)` as a
 must not be flagged as a broken one.
 
 Anchors are resolved by regenerating the target file's heading slugs with
-GitHub's algorithm (lower-case, strip a fixed set of punctuation, spaces to
-hyphens, numeric suffix on repeats). A `#fragment` that names no such slug
-is reported. Only `.md` targets are anchor-checked; a fragment on any other
-target (an HTML page, say) is left alone.
+GitHub's algorithm (lower-case, drop every character that is not a letter,
+digit, hyphen or underscore, spaces to hyphens, numeric suffix on repeats).
+A `#fragment` that names no such slug is reported. Only `.md` targets are
+anchor-checked; a fragment on any other target (an HTML page, say) is left
+alone.
 """
 
 import os
