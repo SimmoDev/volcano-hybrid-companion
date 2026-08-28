@@ -83,6 +83,39 @@ void test_queue_is_empty_again_once_drained() {
   CHECK(*field == VolcanoField::DISPLAY_UNITS_FAHRENHEIT);
 }
 
+// A third write can be pushed while two earlier ones are still outstanding,
+// not only after the queue has fully drained -- the case
+// test_two_independent_writes_resolve_in_fifo_order and
+// test_queue_is_empty_again_once_drained don't cover between them, since
+// both only ever push while the queue is empty. Order must still follow
+// send order throughout: the push in the middle must not jump ahead of the
+// write that was already queued when it was issued.
+void test_interleaved_push_and_pop_preserves_fifo_order() {
+  DisplayRegisterWriteQueue queue;
+  // 1st display-on-cooling write, then the 1st units write.
+  queue.push(VolcanoField::DISPLAY_ON_COOLING);
+  queue.push(VolcanoField::DISPLAY_UNITS_FAHRENHEIT);
+
+  auto first = queue.pop();
+  CHECK(first.has_value());
+  CHECK(*first == VolcanoField::DISPLAY_ON_COOLING);
+
+  // 2nd display-on-cooling write, issued while the units write above is
+  // still outstanding.
+  queue.push(VolcanoField::DISPLAY_ON_COOLING);
+
+  // Must be the 1st units write, not the display-on-cooling write just
+  // pushed.
+  auto second = queue.pop();
+  CHECK(second.has_value());
+  CHECK(*second == VolcanoField::DISPLAY_UNITS_FAHRENHEIT);
+
+  // The 2nd display-on-cooling write.
+  auto third = queue.pop();
+  CHECK(third.has_value());
+  CHECK(*third == VolcanoField::DISPLAY_ON_COOLING);
+}
+
 // clear() (called on disconnect) discards anything still outstanding, so a
 // future connection's first completion on this handle can never pop a
 // stale entry left over from before the link dropped.
@@ -98,6 +131,7 @@ int main() {
   test_pop_on_empty_queue_returns_nullopt();
   test_single_push_pops_the_same_field();
   test_two_independent_writes_resolve_in_fifo_order();
+  test_interleaved_push_and_pop_preserves_fifo_order();
   test_queue_is_empty_again_once_drained();
   test_clear_discards_pending_entries();
 
