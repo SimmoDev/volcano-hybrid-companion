@@ -135,4 +135,4 @@ Setting `CONFIG_BT_GATTC_NOTIF_REG_MAX` through `sdkconfig_options` instead does
 
 See [`docs/DEVELOPMENT.md`](../../docs/DEVELOPMENT.md#validating-the-component-locally) for how to validate this component against the example configuration.
 
-`VolcanoDevice` additionally has its own host-side tests, needing neither ESPHome nor hardware, and so does `DisplayRegisterWriteQueue` — the FIFO behind CHAR-009's two independent settings, the one piece of `VolcanoBleClient` with no BLE/ESP-IDF dependency of its own — see [`test/`](test/) and [`docs/DEVELOPMENT.md`](../../docs/DEVELOPMENT.md#testing-volcanodevice).
+`VolcanoDevice` additionally has its own host-side tests, needing neither ESPHome nor hardware, and so do the two pieces of `VolcanoBleClient` with no BLE/ESP-IDF dependency of their own: `DisplayRegisterWriteQueue` (the FIFO behind CHAR-009's two independent settings) and `StaticReadQueue` (the ordering of the once-per-connection reads). See [`test/`](test/) and [`docs/DEVELOPMENT.md`](../../docs/DEVELOPMENT.md#testing-volcanodevice).

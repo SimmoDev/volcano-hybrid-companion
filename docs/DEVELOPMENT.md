@@ -53,9 +53,12 @@ cd components/volcano/test
 make test
 ```
 
-The same command also builds and runs a second, unrelated host-side test: `DisplayRegisterWriteQueue` (`components/volcano/display_register_write_queue.h`), the FIFO `VolcanoBleClient` uses to attribute a completed write on CHAR-009 to whichever of its two independent settings actually issued it. It has no BLE/ESP-IDF dependency of its own, unlike the rest of `VolcanoBleClient`, so its ordering guarantee is host-tested directly rather than only exercised through real hardware.
+The same command also builds and runs two further host-side tests, each covering a piece of `VolcanoBleClient` that has no BLE/ESP-IDF dependency of its own, unlike the rest of that class, so its ordering guarantee is host-tested directly rather than only exercised through real hardware:
 
-This is the only place in the repository the split from ADR-0009 is exercised without hardware; `VolcanoBleClient`'s GATT event handling and `VolcanoComponent` still require a real connection to verify, per [`components/volcano/README.md`](../components/volcano/README.md#building--validating).
+- `DisplayRegisterWriteQueue` (`components/volcano/display_register_write_queue.h`), the FIFO `VolcanoBleClient` uses to attribute a completed write on CHAR-009 to whichever of its two independent settings actually issued it.
+- `StaticReadQueue` (`components/volcano/static_read_queue.h`), the bookkeeping for the characteristics read once per connection rather than subscribed — which handle is due next, and whether an incoming read completion is the initial sweep's own rather than a write's read-back.
+
+The `esp_ble_gattc_*` calls those two structures sit between stay in `VolcanoBleClient` itself; its GATT event handling as a whole, and `VolcanoComponent`, still require a real connection to verify, per [`components/volcano/README.md`](../components/volcano/README.md#building--validating).
 
 ## Continuous integration and pre-commit hooks
 

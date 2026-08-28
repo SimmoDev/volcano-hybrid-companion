@@ -1,6 +1,7 @@
 #pragma once
 
 #include "display_register_write_queue.h"
+#include "static_read_queue.h"
 #include "volcano_ble_client_observer.h"
 
 #include "esphome/components/ble_client/ble_client.h"
@@ -125,10 +126,10 @@ class VolcanoBleClient {
   // rather than tracking a single "most recent write" field.
   DisplayRegisterWriteQueue display_register_pending_writes_;
 
-  static const uint8_t MAX_STATIC_READS = 7;
-  uint16_t static_reads_[MAX_STATIC_READS];
-  uint8_t static_read_count_{0};
-  uint8_t static_read_index_{0};
+  // See static_read_queue.h for the ordering bookkeeping behind the
+  // once-per-connection reads; the esp_ble_gattc_read_char() calls
+  // themselves stay in issue_next_static_read_().
+  StaticReadQueue static_reads_;
 
   // Last decoded display-on-cooling state, or -1 before the first read.
   // Its register notifies on every 1 degC change of current temperature
@@ -157,14 +158,13 @@ class VolcanoBleClient {
   // (read_auto_shutoff_duration_(), and the equivalent inline read for LED
   // brightness) issues a second, independent esp_ble_gattc_read_char() on
   // the same handle. ESP_GATTC_READ_CHAR_EVT carries no request identity, so
-  // issue_next_static_read_()'s handle-and-position match in
-  // ESP_GATTC_READ_CHAR_EVT cannot tell that second read's response apart
-  // from the static queue's own -- whichever response lands first gets
-  // credited to the static queue's current slot regardless of which call
-  // actually produced it, which can silently skip a real static read and
-  // fire on_ready() one read early. Refusing the write until the sweep is
-  // done removes the second read entirely rather than trying to make the
-  // matching logic tell the two apart.
+  // StaticReadQueue::advance_if_current()'s handle-and-position match cannot
+  // tell that second read's response apart from the sweep's own -- whichever
+  // response lands first gets credited to the sweep's current slot
+  // regardless of which call actually produced it, which can silently skip a
+  // real static read and fire on_ready() one read early. Refusing the write
+  // until the sweep is done removes the second read entirely rather than
+  // trying to make the matching logic tell the two apart.
   bool static_sweep_done_{false};
 };
 

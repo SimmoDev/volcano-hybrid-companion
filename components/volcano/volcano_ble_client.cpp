@@ -179,8 +179,7 @@ void VolcanoBleClient::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
       // own.
       this->display_register_pending_writes_.clear();
       this->pending_subscriptions_ = 0;
-      this->static_read_count_ = 0;
-      this->static_read_index_ = 0;
+      this->static_reads_.reset();
       this->static_sweep_done_ = false;
       ESP_LOGI(TAG, "Disconnected; heater/pump/countdown/temperature state unknown");
       if (this->observer_ != nullptr)
@@ -430,14 +429,12 @@ void VolcanoBleClient::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
       break;
     }
     case ESP_GATTC_READ_CHAR_EVT: {
-      // Whether this completes the static read currently in flight. Noted
-      // before anything else so a failed read still advances the queue
-      // rather than stalling every read behind it. A duration read-back
-      // after a write does not match, since the queue has finished by then.
-      bool completes_static_read = this->static_read_index_ < this->static_read_count_ &&
-                                   param->read.handle == this->static_reads_[this->static_read_index_];
-      if (completes_static_read)
-        this->static_read_index_++;
+      // Whether this completes the static read currently in flight, advancing
+      // the queue past it if so. Noted before anything else so a failed read
+      // still advances the queue rather than stalling every read behind it. A
+      // duration read-back after a write does not match, since the queue has
+      // finished by then.
+      bool completes_static_read = this->static_reads_.advance_if_current(param->read.handle);
 
       if (param->read.status != ESP_GATT_OK) {
         ESP_LOGW(TAG, "Reading handle 0x%04x failed, status=%d", param->read.handle, param->read.status);
@@ -777,18 +774,15 @@ void VolcanoBleClient::queue_static_reads_() {
       this->serial_number_handle_,    this->power_supply_handle_,
       this->product_line_handle_,
   };
-  // Compile-time link between this list and static_reads_'s capacity: a
-  // future addition here that isn't matched by a MAX_STATIC_READS bump would
-  // otherwise fail silently (the loop below just stops enqueueing) rather
+  // Compile-time link between this list and the queue's capacity: a future
+  // addition here that isn't matched by a StaticReadQueue::CAPACITY bump
+  // would otherwise fail silently (enqueue() just drops the overflow) rather
   // than at build time.
-  static_assert(sizeof(handles) / sizeof(handles[0]) <= MAX_STATIC_READS,
-                "static_reads_ is too small for the handles listed above");
-  this->static_read_count_ = 0;
-  this->static_read_index_ = 0;
-  for (uint16_t handle : handles) {
-    if (handle != 0 && this->static_read_count_ < MAX_STATIC_READS)
-      this->static_reads_[this->static_read_count_++] = handle;
-  }
+  static_assert(sizeof(handles) / sizeof(handles[0]) <= StaticReadQueue::CAPACITY,
+                "StaticReadQueue::CAPACITY is too small for the handles listed above");
+  this->static_reads_.reset();
+  for (uint16_t handle : handles)
+    this->static_reads_.enqueue(handle);
   this->issue_next_static_read_();
 }
 
@@ -796,14 +790,14 @@ void VolcanoBleClient::issue_next_static_read_() {
   // Each read is issued from the previous one's completion, so only one is
   // ever outstanding. A read that cannot even be issued is skipped rather
   // than retried, so one unreadable characteristic cannot strand the rest.
-  while (this->static_read_index_ < this->static_read_count_) {
-    uint16_t handle = this->static_reads_[this->static_read_index_];
+  while (!this->static_reads_.done()) {
+    uint16_t handle = this->static_reads_.current();
     auto status = esp_ble_gattc_read_char(this->client_->get_gattc_if(), this->client_->get_conn_id(), handle,
                                           ESP_GATT_AUTH_REQ_NONE);
     if (status == ESP_OK)
       return;
     ESP_LOGW(TAG, "esp_ble_gattc_read_char(0x%04x) failed, status=%d", handle, status);
-    this->static_read_index_++;
+    this->static_reads_.skip();
   }
   // The static read sweep has completed -- ADR-0009: this, not merely the
   // link being up, is what "ready" means, since the state model is not
