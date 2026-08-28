@@ -95,12 +95,12 @@ VolcanoPumpSwitch = volcano_ns.class_(
     "VolcanoPumpSwitch", switch.Switch, cg.Parented.template(VolcanoComponent)
 )
 
-# Defaults for the two writable entities are the ranges the protocol
-# documentation records as confirmed accepted -- 40.0-230.0 degC for CMD-001
-# and 1-360 minutes for CMD-003. They are configurable so an example can
-# deliberately span wider to exercise the component's own refusal of an
-# out-of-range value; the component enforces the confirmed range regardless
-# of what the entity advertises.
+# Defaults for the three writable number entities are the ranges the
+# protocol documentation records as confirmed accepted -- 40.0-230.0 degC
+# for CMD-001, 1-360 minutes for CMD-003, and 0-100% for CMD-002. They are
+# configurable so an example can deliberately span wider to exercise the
+# component's own refusal of an out-of-range value; the component enforces
+# the confirmed range regardless of what the entity advertises.
 DEFAULT_TARGET_TEMPERATURE_MIN = 40.0
 DEFAULT_TARGET_TEMPERATURE_MAX = 230.0
 DEFAULT_AUTO_SHUTOFF_DURATION_MIN = 1.0
