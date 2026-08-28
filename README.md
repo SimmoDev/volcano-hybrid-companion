@@ -88,7 +88,7 @@ These constraints apply for the life of the project, not just Phase 1:
 
 ## Planned Repository Structure
 
-The remainder of this structure will be created incrementally, as each part is actually needed; `firmware/` does not exist yet.
+`firmware/` does not exist yet, and won't until Phase 3 (Home Assistant integration) is complete: it's created once the full basic implementation is in place, at which point the project also bumps to its first versioned release, v1.0.0. Until then, the Dial's working configuration continues to live under `examples/`, alongside the dev-board scaffold — see the Status section above.
 
 ```
 volcano-hybrid-companion/
