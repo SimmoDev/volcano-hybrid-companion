@@ -12,7 +12,7 @@ repos:
     hooks:
       - id: check-markdown-links
         name: Check relative Markdown links resolve
-        description: Blocks the commit on a broken relative link in a tracked .md file.
+        description: Blocks the commit on a broken relative link or #anchor in a tracked .md file.
         entry: python3 scripts/check_markdown_links.py
         language: system
         files: \.md$
