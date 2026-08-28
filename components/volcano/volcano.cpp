@@ -81,21 +81,24 @@ void VolcanoComponent::setup() {
 void VolcanoComponent::loop() {}
 
 void VolcanoComponent::dump_config() {
+  // Grouped by how each characteristic is reached, not by direction: the
+  // settings characteristics (target temperature, vibration, the
+  // display/units register) are two-way, so they appear under both a read
+  // group and the write list below.
   ESP_LOGCONFIG(TAG, "Volcano:");
-  ESP_LOGCONFIG(TAG, "  Read-only: status/flags register (CHAR-008), auto-shutoff countdown (CHAR-016),");
-  ESP_LOGCONFIG(TAG, "    current temperature (CHAR-013), hours/minutes of operation (CHAR-022/023).");
-  ESP_LOGCONFIG(TAG, "  Read once per connection: LED brightness (CHAR-015), firmware version (CHAR-005),");
-  ESP_LOGCONFIG(TAG, "    firmware BLE version");
-  ESP_LOGCONFIG(TAG, "    (CHAR-006), serial number (CHAR-007), power supply (CHAR-024),");
-  ESP_LOGCONFIG(TAG, "    product line (CHAR-025).");
-  ESP_LOGCONFIG(TAG, "  Write: auto-shutoff duration (CHAR-017), %u-%u s;", VolcanoDevice::MIN_AUTO_SHUTOFF_DURATION_S,
-                VolcanoDevice::MAX_AUTO_SHUTOFF_DURATION_S);
-  ESP_LOGCONFIG(TAG, "    heater on/off (CHAR-018/019), pump on/off (CHAR-020/021);");
-  ESP_LOGCONFIG(TAG, "    target temperature (CHAR-014), %.1f-%.1f C;", VolcanoDevice::MIN_TARGET_TEMPERATURE_C,
-                VolcanoDevice::MAX_TARGET_TEMPERATURE_C);
-  ESP_LOGCONFIG(TAG, "    LED brightness (CHAR-015), 0-%u%%; vibration (CHAR-010);",
+  ESP_LOGCONFIG(TAG, "  Subscribed (notify): status/flags register (CHAR-008), current temperature (CHAR-013),");
+  ESP_LOGCONFIG(TAG, "    target temperature (CHAR-014), auto-shutoff countdown (CHAR-016),");
+  ESP_LOGCONFIG(TAG, "    hours/minutes of operation (CHAR-022/023), vibration (CHAR-010),");
+  ESP_LOGCONFIG(TAG, "    display/units register (CHAR-009).");
+  ESP_LOGCONFIG(TAG, "  Read once per connection: auto-shutoff duration (CHAR-017), LED brightness (CHAR-015),");
+  ESP_LOGCONFIG(TAG, "    firmware/BLE-firmware version (CHAR-005/006), serial number (CHAR-007),");
+  ESP_LOGCONFIG(TAG, "    power supply (CHAR-024), product line (CHAR-025).");
+  ESP_LOGCONFIG(TAG, "  Write: auto-shutoff duration (CHAR-017), %u-%u s; heater/pump on/off (CHAR-018-021);",
+                VolcanoDevice::MIN_AUTO_SHUTOFF_DURATION_S, VolcanoDevice::MAX_AUTO_SHUTOFF_DURATION_S);
+  ESP_LOGCONFIG(TAG, "    target temperature (CHAR-014), %.1f-%.1f C; LED brightness (CHAR-015), 0-%u%%;",
+                VolcanoDevice::MIN_TARGET_TEMPERATURE_C, VolcanoDevice::MAX_TARGET_TEMPERATURE_C,
                 VolcanoDevice::MAX_LED_BRIGHTNESS_PERCENT);
-  ESP_LOGCONFIG(TAG, "    display on cooling (CHAR-009).");
+  ESP_LOGCONFIG(TAG, "    vibration (CHAR-010), display on cooling and display units (CHAR-009).");
 }
 
 void VolcanoComponent::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if,
