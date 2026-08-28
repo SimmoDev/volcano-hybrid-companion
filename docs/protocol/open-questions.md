@@ -122,18 +122,11 @@ See [CHAR-010](characteristics.md#char-010--vibration-setting) and [CHAR-009](ch
 
 See [STATE-013](state-model.md#state-013--target-temperature-notifications). A write is occasionally answered within a fraction of a second by a notification carrying the previously-set target rather than the one just written, and that write then has no effect until the client sends it again. These are the only occasions on which a client-written value has come back as a notification, and they are consistent with the write being rejected or dropped while the device was still applying the previous one. Each occurrence followed a run of writes a few seconds apart, with the value notified back being a target the current temperature had just reached. If writes can be dropped this way, a controller cannot treat a successful ATT write response as confirmation that the target changed. Would be resolved by issuing closely spaced target writes and reading the characteristic back after each, which also overlaps with the write-pacing question below.
 
-## What bit 16 of the settings registers signifies (resolved)
+## Whether bit 16 of the settings registers is stored or only mirrors the last write
 
-See the setting-bit note in [`commands.md`](commands.md#note-setting-bit-writes). Bit 16 of both `0x0031` and `0x002e` appears alongside that register's named setting bit — clear when the feature is enabled, set when disabled — reproduced in both directions on both registers, which made it look like a duplicate of the setting itself.
+See the setting-bit note in [`commands.md`](commands.md#note-setting-bit-writes) for the resolved part: bit 16 of `0x0031` and `0x002e` follows the write's action byte rather than the setting it changes. Byte 2 of the write payload — the clear/set selector — sits at exactly bit 16 when the payload is read as a 32-bit little-endian value, and the register reproduces that byte with the same polarity, which is why a setting changed by a non-write route (the `+`/`-` panel gesture for units) moves the setting bit with bit 16 left alone.
 
-**It follows the write, not the setting.** Two setting changes on the same register `0x002e` separate the two cleanly:
-
-- Changing the display units at the device's own `+`/`-` panel gesture moves bit 9 and nothing else: the register goes `0x2000` → `0x2200` → `0x2000`, with **bit 16 clear throughout**. No write is involved anywhere.
-- Writing the display-on-cooling setting takes the same register to `0x013000`, with **bit 16 set** alongside the setting bit, and back to `0x2000` when written the other way.
-
-A setting therefore changes without bit 16 moving, so bit 16 does not track settings. The status register `0x002b`, which has the same shape and is never written, has likewise never shown bit 16 set.
-
-**It follows the action byte specifically, not merely the presence of a write.** Writing the units bit ([CMD-010](commands.md#cmd-010--set-display-units)) names a different mask on the same register and carries an uninverted action byte, so the two can be told apart: the `01` action selecting Fahrenheit leaves bit 16 set, and the `00` action selecting Celsius leaves it clear. Byte 2 of the write payload sits at exactly bit 16 when that payload is read as a 32-bit little-endian value, and the register reproduces it. What remains unestablished is whether the register stores that byte or merely reflects the most recent write until something else changes it.
+What is still open is whether the register *stores* that byte or merely mirrors the most recent write to it until something else moves it. Would be resolved by writing display units to Fahrenheit (which leaves bit 16 set), then switching back to Celsius with the panel `+`/`-` gesture and reading `0x002e` back: bit 16 still set means the register stored the byte, bit 16 cleared means it only mirrored the write and the panel change reset it.
 
 ## Target temperature — valid/safe range not established
 
