@@ -58,3 +58,23 @@ globals:
     type: bool
     restore_value: true
     initial_value: "true"
+  # Connections page (dial/connections-page.yaml): the Dial's own record
+  # of whether the user has switched BLE/WiFi off from that page. Neither
+  # ble_client nor wifi expose a queryable "am I enabled" value of their
+  # own (confirmed by reading both components' source -- ble_client::
+  # BLEClient::enabled is a plain public field, not an entity; wifi has
+  # no equivalent at all), so this is the Dial's own mirror, not a
+  # read-back -- kept in sync because the Connections page's own switches
+  # are the only thing that ever sets it. Neither survives a reboot: both
+  # ble_client and wifi always start enabled (confirmed by reading their
+  # setup()/enable_on_boot handling), so restoring a
+  # previous "off" here would desync this global from what the underlying
+  # component actually does at boot.
+  - id: ble_enabled
+    type: bool
+    restore_value: false
+    initial_value: "true"
+  - id: wifi_enabled
+    type: bool
+    restore_value: false
+    initial_value: "true"

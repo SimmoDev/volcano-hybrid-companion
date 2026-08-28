@@ -10,6 +10,15 @@
 # Dial Sound (mutes the click/beep audio feedback below), and the split
 # Information page -- About and Diagnostics, each its own menu entry.
 #
+# A Connections page (dial/connections-page.yaml) is what lets a user
+# hand the Volcano's BLE connection back to the official app without
+# power-cycling the whole device, per ADR-0007's requirement that a
+# control interface holding a persistent connection make releasing it
+# discoverable -- BLE and WiFi status, each with a switch to release/
+# reconnect it. Implemented and esphome-compile-clean; not yet confirmed
+# against real hardware the way every other page above is -- see that
+# page's own comment for the detail.
+#
 # web_server is present too, matching the dev-board example exactly
 # (same port/entity names/sorting weights), per ADR-0010's decision to
 # retain it unchanged on the Dial firmware -- Phase 2 scope, not
@@ -54,6 +63,7 @@ packages:
   input: !include dial/input.yaml
   scripts: !include dial/scripts.yaml
   home_page: !include dial/home-page.yaml
+  connections_page: !include dial/connections-page.yaml
   menu_page: !include dial/menu-page.yaml
   settings_page: !include dial/settings-page.yaml
   # The three numeric-value pages are one shared template

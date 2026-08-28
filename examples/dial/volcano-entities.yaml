@@ -19,19 +19,25 @@ volcano:
       - globals.set:
           id: ble_connecting
           value: "false"
-      - lvgl.label.update:
-          id: ble_status_icon
-          text_color: 0x00CC44
+      - script.execute: refresh_ble_connection_status
     # READY lost is CONNECTING again per ADR-0009 (reconnection isn't
     # distinguished from a first connection) -- unless the link itself
     # dropped too, in which case dial/connectivity.yaml's ble_client
     # on_disconnect also fires and sets DISCONNECTED; whichever settles
     # last visually wins, which is a minor, acceptable race, not a
-    # functional problem.
+    # functional problem. Only true while ble_enabled, though: READY can
+    # also be lost because the Connections page's own switch just
+    # released the connection, in which case nothing is reconnecting --
+    # reconnection is exactly what that switch suspends.
     on_release:
-      - globals.set:
-          id: ble_connecting
-          value: "true"
+      - if:
+          condition:
+            lambda: "return id(ble_enabled);"
+          then:
+            - globals.set:
+                id: ble_connecting
+                value: "true"
+      - script.execute: refresh_ble_connection_status
   # Values are always Celsius on this side of the component (ADR-0008);
   # display_units_fahrenheit is the device's own display setting, and
   # converting for presentation is this control interface's job, not

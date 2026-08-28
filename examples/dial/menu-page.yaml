@@ -66,6 +66,7 @@ lvgl:
               outline_width: 0
             options:
               - "Home"
+              - "Connections"
               - "Settings"
               - "LED Brightness"
               - "Auto-Shutoff Duration"

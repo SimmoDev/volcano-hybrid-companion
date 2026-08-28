@@ -1,9 +1,23 @@
 # on_connect/on_disconnect fire on the raw BLE link, before volcano's own
 # service-discovery/read-sweep completes -- combined with volcano's
 # `connected` (READY-only, dial/volcano-entities.yaml), this is what lets
-# the Home page's BLE icon distinguish CONNECTING from DISCONNECTED,
-# which `connected` alone cannot (ADR-0009: it only ever reports true
-# once READY).
+# the Home/Connections pages' BLE status distinguish CONNECTING from
+# DISCONNECTED, which `connected` alone cannot (ADR-0009: it only ever
+# reports true once READY). Both handlers only set ble_connecting and
+# hand off to refresh_ble_connection_status (dial/scripts.yaml), which
+# also knows about ble_enabled -- the Connections page's own release
+# switch -- so this handler doesn't need to duplicate that logic.
+#
+# Releasing/reconnecting the connection itself (the Connections page's own
+# switch, examples/dial/connections-page.yaml) calls
+# id(volcano_ble_client).set_enabled() directly via lambda -- not exposed
+# as a YAML action by ble_client itself, the same "call the raw API when
+# no automation action exists" pattern dial/hardware.yaml's on_boot
+# already uses for LVGL/rtttl calls. set_enabled(false) both disconnects
+# and stops parse_device() matching this device on future scans
+# (confirmed by reading ble_client's own source), which is what actually
+# suspends reconnection per ADR-0007 -- the plain ble_client.disconnect
+# automation action alone would not.
 ble_client:
   - mac_address: !secret volcano_mac_address
     id: volcano_ble_client
@@ -11,18 +25,20 @@ ble_client:
       - globals.set:
           id: ble_connecting
           value: "true"
+      - script.execute: refresh_ble_connection_status
     on_disconnect:
       - globals.set:
           id: ble_connecting
           value: "false"
-      - lvgl.label.update:
-          id: ble_status_icon
-          text_color: 0xCC0000
+      - script.execute: refresh_ble_connection_status
 
 
-# WiFi serves two things: the Home page's WiFi status icon, and reaching
-# web_server below from a browser -- the volcano component itself is
-# BLE-only and has no dependency on it.
+# WiFi serves three things: the Home page's WiFi status icon, the
+# Connections page's own status/switch, and reaching web_server below
+# from a browser -- the volcano component itself is BLE-only and has no
+# dependency on it. Toggling WiFi off from the Connections page (via the
+# wifi.enable/wifi.disable actions) doesn't route through these triggers
+# for its own status text -- see that page's own comment for why.
 wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
@@ -30,10 +46,18 @@ wifi:
     - lvgl.label.update:
         id: wifi_status_icon
         text_color: 0x00CC44
+    - lvgl.label.update:
+        id: connections_wifi_status_label
+        text_color: 0x00CC44
+        text: "Connected"
   on_disconnect:
     - lvgl.label.update:
         id: wifi_status_icon
         text_color: 0xCC0000
+    - lvgl.label.update:
+        id: connections_wifi_status_label
+        text_color: 0xCC0000
+        text: "Disconnected"
 
 
 # Brought back per ADR-0010's decision to retain web_server unchanged on
@@ -59,14 +83,18 @@ web_server:
 # Blinks the BLE status icon while CONNECTING (ble_connecting, set by
 # ble_client's on_connect/on_disconnect above and volcano's connected
 # entity in dial/volcano-entities.yaml). A no-op the rest of the time,
-# so it doesn't fight the steady colours on_press/on_disconnect already
-# set.
+# so it doesn't fight the steady colours refresh_ble_connection_status
+# (dial/scripts.yaml) already set. Also requires ble_enabled: nothing is
+# actively trying to reconnect while the Connections page's own switch
+# has released the connection, whatever ble_connecting happens to hold --
+# checked here too, defensively, rather than trusting every ble_connecting
+# producer to already enforce that on its own.
 interval:
   - interval: 500ms
     then:
       - if:
           condition:
-            lambda: "return id(ble_connecting);"
+            lambda: "return id(ble_enabled) && id(ble_connecting);"
           then:
             - globals.set:
                 id: ble_blink_on

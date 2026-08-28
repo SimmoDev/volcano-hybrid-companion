@@ -73,6 +73,73 @@ script:
       - lvgl.label.update:
           id: sound_on_label
           text_color: !lambda "return id(dial_sound_enabled) ? lv_color_hex(0x00D9FF) : lv_color_hex(0x888888);"
+  # Computes BLE's status for two different surfaces from the same three
+  # inputs -- ble_enabled (the Connections page's own switch),
+  # volcano_connected (READY, per ADR-0009) and ble_connecting (the
+  # link-up-but-not-READY window dial/connectivity.yaml's blink interval
+  # also watches). The Home page's small icon deliberately keeps ADR-0011's
+  # original three-state palette (steady green/flashing orange/red) rather
+  # than gaining a fourth "off" colour of its own -- there's no room next
+  # to it to explain what a new colour would mean, and "released" reads to
+  # a glance at Home as just another way of being disconnected. The
+  # Connections page's own status label is where that distinction actually
+  # belongs, since it has room to say "Off" in words. Called from every
+  # site that can change one of the three inputs: dial/connectivity.yaml's
+  # ble_client on_connect/on_disconnect, dial/volcano-entities.yaml's
+  # connected on_press/on_release, and this page's own switch. The blink
+  # interval still owns alternating the Home icon's colour once this
+  # script has set it to a steady orange for the Connecting case -- it
+  # only acts while ble_connecting is true, so it doesn't fight the steady
+  # colours this script sets for the other states.
+  - id: refresh_ble_connection_status
+    then:
+      - lvgl.label.update:
+          id: ble_status_icon
+          text_color: !lambda |-
+            if (id(volcano_connected).state)
+              return lv_color_hex(0x00CC44);
+            if (id(ble_connecting))
+              return lv_color_hex(0xFFA500);
+            return lv_color_hex(0xCC0000);
+      - lvgl.label.update:
+          id: connections_ble_status_label
+          text_color: !lambda |-
+            if (!id(ble_enabled))
+              return lv_color_hex(0x888888);
+            if (id(volcano_connected).state)
+              return lv_color_hex(0x00CC44);
+            if (id(ble_connecting))
+              return lv_color_hex(0xFFA500);
+            return lv_color_hex(0xCC0000);
+          text: !lambda |-
+            if (!id(ble_enabled))
+              return std::string("Off");
+            if (id(volcano_connected).state)
+              return std::string("Connected");
+            if (id(ble_connecting))
+              return std::string("Connecting...");
+            return std::string("Disconnected -- may be in use elsewhere");
+  # The Connections page's own Off/On flanking-label colours for each
+  # switch, same active-cyan/inactive-grey convention as Settings/Dial
+  # Sound -- kept separate from refresh_ble_connection_status above since
+  # that one also drives the Home page icon, which has no flanking labels
+  # of its own.
+  - id: refresh_ble_switch_labels
+    then:
+      - lvgl.label.update:
+          id: connections_ble_off_label
+          text_color: !lambda "return id(ble_enabled) ? lv_color_hex(0x888888) : lv_color_hex(0x00D9FF);"
+      - lvgl.label.update:
+          id: connections_ble_on_label
+          text_color: !lambda "return id(ble_enabled) ? lv_color_hex(0x00D9FF) : lv_color_hex(0x888888);"
+  - id: refresh_wifi_switch_labels
+    then:
+      - lvgl.label.update:
+          id: connections_wifi_off_label
+          text_color: !lambda "return id(wifi_enabled) ? lv_color_hex(0x888888) : lv_color_hex(0x00D9FF);"
+      - lvgl.label.update:
+          id: connections_wifi_on_label
+          text_color: !lambda "return id(wifi_enabled) ? lv_color_hex(0x00D9FF) : lv_color_hex(0x888888);"
   - id: refresh_time_of_operation_label
     then:
       - lvgl.label.update:
@@ -110,44 +177,50 @@ script:
           else:
             - if:
                 condition:
-                  lambda: "return id(nav_menu_roller).get_selected_index() == 1;"  # Settings
+                  lambda: "return id(nav_menu_roller).get_selected_index() == 1;"  # Connections
                 then:
-                  - lvgl.page.show: settings_page
+                  - lvgl.page.show: connections_page
                 else:
                   - if:
                       condition:
-                        lambda: "return id(nav_menu_roller).get_selected_index() == 2;"  # LED Brightness
+                        lambda: "return id(nav_menu_roller).get_selected_index() == 2;"  # Settings
                       then:
-                        - lvgl.page.show: led_brightness_page
+                        - lvgl.page.show: settings_page
                       else:
                         - if:
                             condition:
-                              lambda: "return id(nav_menu_roller).get_selected_index() == 3;"  # Auto-Shutoff Duration
+                              lambda: "return id(nav_menu_roller).get_selected_index() == 3;"  # LED Brightness
                             then:
-                              - lvgl.page.show: auto_shutoff_duration_page
+                              - lvgl.page.show: led_brightness_page
                             else:
                               - if:
                                   condition:
-                                    lambda: "return id(nav_menu_roller).get_selected_index() == 4;"  # Dial Brightness
+                                    lambda: "return id(nav_menu_roller).get_selected_index() == 4;"  # Auto-Shutoff Duration
                                   then:
-                                    - lvgl.page.show: dial_brightness_page
+                                    - lvgl.page.show: auto_shutoff_duration_page
                                   else:
                                     - if:
                                         condition:
-                                          lambda: "return id(nav_menu_roller).get_selected_index() == 5;"  # Dial Sound
+                                          lambda: "return id(nav_menu_roller).get_selected_index() == 5;"  # Dial Brightness
                                         then:
-                                          - lvgl.page.show: sound_page
+                                          - lvgl.page.show: dial_brightness_page
                                         else:
                                           - if:
                                               condition:
-                                                lambda: "return id(nav_menu_roller).get_selected_index() == 6;"  # Diagnostics
+                                                lambda: "return id(nav_menu_roller).get_selected_index() == 6;"  # Dial Sound
                                               then:
-                                                - lvgl.page.show: diagnostics_page
+                                                - lvgl.page.show: sound_page
                                               else:
-                                                # Only index 7 ("About") left
-                                                # among the current options --
-                                                # add another explicit branch
-                                                # here, not a new bare else,
-                                                # once a ninth option exists.
-                                                - lvgl.page.show: about_page
+                                                - if:
+                                                    condition:
+                                                      lambda: "return id(nav_menu_roller).get_selected_index() == 7;"  # Diagnostics
+                                                    then:
+                                                      - lvgl.page.show: diagnostics_page
+                                                    else:
+                                                      # Only index 8 ("About") left
+                                                      # among the current options --
+                                                      # add another explicit branch
+                                                      # here, not a new bare else,
+                                                      # once a tenth option exists.
+                                                      - lvgl.page.show: about_page
 

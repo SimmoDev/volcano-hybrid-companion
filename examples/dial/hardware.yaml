@@ -78,9 +78,10 @@ esphome:
       # ever even shown. Evicting everything meant to be touch-only
       # keeps the encoder/button reserved for temperature/menu use on
       # Home and Settings, per ADR-0011. The LED Brightness, Auto-Shutoff
-      # Duration, and Dial Brightness pages' step-size buttons, and the
-      # Dial Sound page's switch, are the same story: click_focusable: false
-      # alone doesn't stop group membership, so they need evicting too.
+      # Duration, and Dial Brightness pages' step-size buttons, the
+      # Dial Sound page's switch, and the Connections page's two
+      # switches, are the same story: click_focusable: false alone
+      # doesn't stop group membership, so they need evicting too.
       - lambda: |-
           lv_group_remove_obj(id(heat_button));
           lv_group_remove_obj(id(air_button));
@@ -95,6 +96,8 @@ esphome:
           lv_group_remove_obj(id(dial_brightness_step_1_button));
           lv_group_remove_obj(id(dial_brightness_step_10_button));
           lv_group_remove_obj(id(sound_switch));
+          lv_group_remove_obj(id(connections_ble_switch));
+          lv_group_remove_obj(id(connections_wifi_switch));
 
 
 # ESPHome's default flash_write_interval (60s) batches restore_value
