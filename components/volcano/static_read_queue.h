@@ -76,7 +76,10 @@ class StaticReadQueue {
   }
 
  private:
-  uint16_t handles_[CAPACITY];
+  // Value-initialised even though every read is already gated by
+  // index_ < count_ and a slot is always written by enqueue() before
+  // count_ admits it -- so the zeroing is belt-and-braces, not relied on.
+  uint16_t handles_[CAPACITY]{};
   uint8_t count_{0};
   uint8_t index_{0};
 };
