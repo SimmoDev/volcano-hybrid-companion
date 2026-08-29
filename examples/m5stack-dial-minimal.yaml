@@ -100,7 +100,7 @@ packages:
       # turn). Skipped while commit_led_brightness is mid-debounce, so a
       # turn made just before leaving the page isn't discarded on return.
       # Stays NaN -- "--" -- until the first device report.
-      on_show_actions:
+      on_load_actions:
         - if:
             condition:
               not:
@@ -193,7 +193,7 @@ packages:
       # turn). Skipped while commit_auto_shutoff_duration is mid-debounce,
       # so a turn made just before leaving the page isn't discarded on
       # return. Stays NaN -- "--" -- until the first device report.
-      on_show_actions:
+      on_load_actions:
         - if:
             condition:
               not:
@@ -327,7 +327,7 @@ packages:
       # commit is a local globals.set/output.set_level that cannot be
       # dropped, so pending_dial_brightness and dial_brightness_pct never
       # diverge in a way an entry would need to correct.
-      on_show_actions: []
+      on_load_actions: []
       step_buttons:
         - button:
             id: dial_brightness_step_1_button

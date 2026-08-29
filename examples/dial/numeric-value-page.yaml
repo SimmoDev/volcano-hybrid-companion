@@ -58,7 +58,7 @@ lvgl:
       # leave the page showing a value the device never took. Dial
       # Brightness passes an empty list: its commit is local and cannot be
       # dropped.
-      on_load: ${on_show_actions}
+      on_load: ${on_load_actions}
       layout:
         type: flex
         flex_flow: column
