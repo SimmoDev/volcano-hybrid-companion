@@ -111,6 +111,32 @@ void test_display_register_polarities() {
   CHECK(display_on_cooling_enabled_from_register(0x00000200));
 }
 
+// STATE-005/006, CMD-002/003: 2-byte little-endian scalars. A short payload
+// is rejected without touching the out-param; a longer one decodes from the
+// first two bytes only.
+void test_decode_u16_le() {
+  uint16_t out = 0xBEEF;
+  const uint8_t one_byte[] = {0x2A};
+  CHECK(!decode_u16_le(one_byte, sizeof(one_byte), &out));
+  CHECK(out == 0xBEEF);  // untouched
+
+  const uint8_t v_1800[] = {0x08, 0x07};  // 0x0708 = 1800 = the 30-minute duration
+  CHECK(decode_u16_le(v_1800, sizeof(v_1800), &out));
+  CHECK(out == 1800);
+
+  const uint8_t v_100[] = {0x64, 0x00};  // LED brightness full scale
+  CHECK(decode_u16_le(v_100, sizeof(v_100), &out));
+  CHECK(out == 100);
+
+  const uint8_t v_max[] = {0xFF, 0xFF};
+  CHECK(decode_u16_le(v_max, sizeof(v_max), &out));
+  CHECK(out == 0xFFFF);
+
+  const uint8_t v_long[] = {0x3C, 0x00, 0xAA, 0xAA};  // 60, trailing bytes ignored
+  CHECK(decode_u16_le(v_long, sizeof(v_long), &out));
+  CHECK(out == 60);
+}
+
 // STATE-007 / CMD-001: 4-byte little-endian decidegrees. A short payload is
 // rejected without touching the out-param.
 void test_decode_decidegrees() {
@@ -254,6 +280,7 @@ int main() {
   test_status_register_bits();
   test_vibration_register_polarity_is_inverted();
   test_display_register_polarities();
+  test_decode_u16_le();
   test_decode_decidegrees();
   test_trim_padded_ascii();
   test_encode_target_temperature_payload();

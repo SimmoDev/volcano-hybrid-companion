@@ -395,14 +395,7 @@ void VolcanoBleClient::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
         // whether it is honoured at the next arming, per STATE-005
         // (ADR-0002 requires confirming device state from the device
         // itself rather than trusting the ATT write response alone).
-        if (param->read.value_len < 2) {
-          ESP_LOGW(TAG, "Auto-shutoff duration value too short (%u bytes)", param->read.value_len);
-        } else {
-          uint16_t seconds = encode_uint16(param->read.value[1], param->read.value[0]);
-          ESP_LOGI(TAG, "Auto-shutoff duration: %u s", seconds);
-          if (this->observer_ != nullptr)
-            this->observer_->on_auto_shutoff_duration(seconds);
-        }
+        this->decode_auto_shutoff_duration_(param->read.value, param->read.value_len);
       } else if (param->read.handle == this->current_temp_handle_) {
         this->decode_current_temperature_(param->read.value, param->read.value_len);
       } else if (param->read.handle == this->target_temp_handle_) {
@@ -412,15 +405,7 @@ void VolcanoBleClient::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_
       } else if (param->read.handle == this->vibration_handle_) {
         this->decode_vibration_(param->read.value, param->read.value_len);
       } else if (param->read.handle == this->led_brightness_handle_) {
-        // CMD-002: 2-byte value, only the low byte significant.
-        if (param->read.value_len < 2) {
-          ESP_LOGW(TAG, "LED brightness value too short (%u bytes)", param->read.value_len);
-        } else {
-          uint16_t percent = encode_uint16(param->read.value[1], param->read.value[0]);
-          ESP_LOGI(TAG, "LED brightness: %u%%", percent);
-          if (this->observer_ != nullptr)
-            this->observer_->on_led_brightness(static_cast<uint8_t>(percent));
-        }
+        this->decode_led_brightness_(param->read.value, param->read.value_len);
       } else if (param->read.handle == this->hours_handle_) {
         this->decode_hours_(param->read.value, param->read.value_len);
       } else if (param->read.handle == this->minutes_handle_) {
@@ -588,14 +573,38 @@ void VolcanoBleClient::decode_status_(const uint8_t *value, uint16_t value_len) 
 
 void VolcanoBleClient::decode_countdown_(const uint8_t *value, uint16_t value_len) {
   // STATE-005: 2-byte little-endian seconds.
-  if (value_len < 2) {
+  uint16_t seconds;
+  if (!decode_u16_le(value, value_len, &seconds)) {
     ESP_LOGW(TAG, "Auto-shutoff countdown value too short (%u bytes)", value_len);
     return;
   }
-  uint16_t seconds = encode_uint16(value[1], value[0]);
   ESP_LOGI(TAG, "Auto-shutoff countdown: %u s", seconds);
   if (this->observer_ != nullptr)
     this->observer_->on_auto_shutoff_countdown(seconds);
+}
+
+void VolcanoBleClient::decode_auto_shutoff_duration_(const uint8_t *value, uint16_t value_len) {
+  // CHAR-017: 2-byte little-endian seconds, same encoding as the countdown.
+  uint16_t seconds;
+  if (!decode_u16_le(value, value_len, &seconds)) {
+    ESP_LOGW(TAG, "Auto-shutoff duration value too short (%u bytes)", value_len);
+    return;
+  }
+  ESP_LOGI(TAG, "Auto-shutoff duration: %u s", seconds);
+  if (this->observer_ != nullptr)
+    this->observer_->on_auto_shutoff_duration(seconds);
+}
+
+void VolcanoBleClient::decode_led_brightness_(const uint8_t *value, uint16_t value_len) {
+  // CMD-002: 2-byte value, only the low byte significant.
+  uint16_t percent;
+  if (!decode_u16_le(value, value_len, &percent)) {
+    ESP_LOGW(TAG, "LED brightness value too short (%u bytes)", value_len);
+    return;
+  }
+  ESP_LOGI(TAG, "LED brightness: %u%%", percent);
+  if (this->observer_ != nullptr)
+    this->observer_->on_led_brightness(static_cast<uint8_t>(percent));
 }
 
 void VolcanoBleClient::decode_current_temperature_(const uint8_t *value, uint16_t value_len) {
@@ -685,11 +694,11 @@ void VolcanoBleClient::decode_minutes_(const uint8_t *value, uint16_t value_len)
   // STATE-006: 2-byte little-endian, 0-59, the minutes component of the
   // heater-runtime meter paired with CHAR-022. It advances only while the
   // heater is on, and carries its sub-minute remainder across off periods.
-  if (value_len < 2) {
+  uint16_t minutes;
+  if (!decode_u16_le(value, value_len, &minutes)) {
     ESP_LOGW(TAG, "Minutes of operation value too short (%u bytes)", value_len);
     return;
   }
-  uint16_t minutes = encode_uint16(value[1], value[0]);
   ESP_LOGI(TAG, "Minutes of operation: %u", minutes);
   if (this->observer_ != nullptr)
     this->observer_->on_minutes_of_operation(minutes);

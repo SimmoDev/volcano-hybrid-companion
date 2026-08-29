@@ -57,7 +57,7 @@ The same command also builds and runs three further host-side tests, each coveri
 
 - `DisplayRegisterWriteQueue` (`components/volcano/display_register_write_queue.h`), the FIFO `VolcanoBleClient` uses to attribute a completed write on CHAR-009 to whichever of its two independent settings actually issued it.
 - `StaticReadQueue` (`components/volcano/static_read_queue.h`), the bookkeeping for the characteristics read once per connection rather than subscribed — which handle is due next, and whether an incoming read completion is the initial sweep's own rather than a write's read-back.
-- `wire_format.h` (`components/volcano/wire_format.h`), the value-level encode and decode: the decidegrees codec, the device-information-string trimming, each settings bit's polarity, and the confirmed-accepted write ranges — the logic where a wrong mask or a loosened bound would reach real hardware.
+- `wire_format.h` (`components/volcano/wire_format.h`), the value-level encode and decode: the decidegrees and 2-byte-scalar codecs, the device-information-string trimming, each settings bit's polarity, and the confirmed-accepted write ranges — the logic where a wrong mask or a loosened bound would reach real hardware.
 
 The `esp_ble_gattc_*` reads and writes, and the GATT event sequencing around them, are issued by `VolcanoBleClient` itself. That code, and `VolcanoComponent`, still require a real connection to verify, per [`components/volcano/README.md`](../components/volcano/README.md#building--validating).
 

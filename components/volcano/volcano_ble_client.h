@@ -73,6 +73,11 @@ class VolcanoBleClient {
   void decode_display_register_(const uint8_t *value, uint16_t value_len);
   void decode_hours_(const uint8_t *value, uint16_t value_len);
   void decode_minutes_(const uint8_t *value, uint16_t value_len);
+  // Both read once per connection and again as a write's own read-back;
+  // neither notifies. Kept as named methods like every other characteristic's
+  // decode rather than inlined at the ESP_GATTC_READ_CHAR_EVT call site.
+  void decode_auto_shutoff_duration_(const uint8_t *value, uint16_t value_len);
+  void decode_led_brightness_(const uint8_t *value, uint16_t value_len);
   // `report` is bound to the specific on_*_version()/on_serial_number()/etc.
   // observer method for the characteristic being decoded -- the five
   // device-information strings share this one decode body. `name` is for

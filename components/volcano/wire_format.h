@@ -103,6 +103,17 @@ inline bool display_units_fahrenheit_from_register(uint32_t reg) { return (reg &
 
 // --- Scalar decode ------------------------------------------------------
 
+// The auto-shutoff countdown (STATE-005), auto-shutoff duration (CMD-003),
+// LED brightness (CMD-002) and minutes of operation (STATE-006) are all
+// 2-byte little-endian values. Returns false, leaving *out untouched, if
+// the payload is too short.
+inline bool decode_u16_le(const uint8_t *value, uint16_t value_len, uint16_t *out) {
+  if (value_len < 2)
+    return false;
+  *out = static_cast<uint16_t>(value[0] | (value[1] << 8));
+  return true;
+}
+
 // STATE-007/CMD-001: both temperature characteristics share a 4-byte
 // little-endian encoding in units of 0.1 degC. Returns false, leaving
 // *out_raw untouched, if the payload is too short.
