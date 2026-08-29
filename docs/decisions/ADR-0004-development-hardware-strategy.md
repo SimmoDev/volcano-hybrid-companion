@@ -55,4 +55,4 @@ Skip the Dial migration and ship the dev board itself as the final product. Reje
 
 - Reference [ADR-0001](ADR-0001-project-vision.md) for the project phases this hardware strategy implements.
 - Reference [ADR-0002](ADR-0002-volcano-component-architecture.md) for the component boundary that makes deferring Dial-specific work safe.
-- Reference [ADR-0003](ADR-0003-esphome-as-firmware-framework.md) for the ESPHome framework choice this strategy is built on, including the still-open question of ESPHome's level of support for the Dial's hardware.
+- Reference [ADR-0003](ADR-0003-esphome-as-firmware-framework.md) for the ESPHome framework choice this strategy is built on. That ADR's Decision left ESPHome's support for the Dial's display/touch/encoder/buzzer hardware as a caveat to verify in Phase 2; [ADR-0010](ADR-0010-dial-hardware-and-ui-framework.md) has since settled it, and the resulting Dial UI is built and hardware-verified.
