@@ -2,6 +2,8 @@
 
 #ifdef USE_ESP32
 
+#include "wire_format.h"
+
 #include "esphome/core/helpers.h"
 #include "esphome/core/log.h"
 
@@ -68,68 +70,9 @@ static const char *const VIBRATION_CHARACTERISTIC_UUID = "1010000e-5354-4f52-5a2
 // CHAR-009/CMD-005: display-on-cooling and units register (SVC-005).
 static const char *const DISPLAY_REGISTER_CHARACTERISTIC_UUID = "1010000d-5354-4f52-5a26-4249434b454c";
 
-// STATE-008: bit 5 is set whenever the heater is on, clear when off.
-static const uint16_t STATUS_BIT_HEATER_ON = 0x0020;
-// STATE-008: bit 12 marks the pump specifically. Bit 13 is also pulsed by
-// the vibration alert for about a second, so it must not be used to detect
-// the pump.
-static const uint16_t STATUS_BIT_PUMP_ON = 0x1000;
-
-// CMD-003: the auto-shutoff duration range confirmed accepted. The floor is
-// the lowest value verified read back unchanged, loaded at the next arming,
-// and honoured through to an actual expiry; below it is unverified -- 0 in
-// particular may mean "disabled" on this device. The ceiling is the top of
-// the official app's own UI range, with writes at that end captured; above
-// it is untested. write_auto_shutoff_duration() refuses both rather than
-// writing an untested value (ADR-0005).
-static const uint16_t MIN_AUTO_SHUTOFF_DURATION_SECONDS = 60;
-static const uint16_t MAX_AUTO_SHUTOFF_DURATION_SECONDS = 21600;
-
-// CMD-001: the official app's UI spans 40.0-230.0 degC (400-2300 in this
-// characteristic's deci-degrees-Celsius encoding); that is the only range
-// Confirmed accepted. What the device does with a value outside it is
-// Unknown, so write_target_temperature() refuses them rather than writing
-// an untested value (ADR-0005).
-static const uint16_t MIN_TARGET_TEMPERATURE_DECIDEGREES = 400;
-static const uint16_t MAX_TARGET_TEMPERATURE_DECIDEGREES = 2300;
-
-// CMD-002: the scale the LED brightness characteristic is Confirmed to
-// use, both written and read back. 0 is a legitimate value rather than one
-// to guard against -- it switches the display off entirely rather than
-// dimming it, and any non-zero write restores it at the level written --
-// so it is allowed, and only values above the scale are refused.
-static const uint8_t MAX_LED_BRIGHTNESS_PERCENT = 100;
-
-// CHAR-010/CMD-004: the vibration setting's bit within its register.
-//
-// The polarity is inverted, and getting it backwards would silently invert
-// the whole feature: the bit is CLEAR when vibration is ENABLED and set when
-// it is disabled. CMD-004's captured writes say the same thing from the
-// write side -- `00 04 00 00` (clear the bit) turns vibration on and
-// `00 04 01 00` (set it) turns it off.
-//
-// The inversion is a property of this setting rather than of the register:
-// the units bit on the sibling register is not inverted (STATE-010), so a
-// new bit's polarity has to be established rather than assumed from this one.
-static const uint32_t VIBRATION_BIT_DISABLED = 0x0400;
-
-// CHAR-009/CMD-005: the display-on-cooling bit within its register, with the
-// same inverted polarity as the vibration bit above -- clear means the
-// device shows current temperature while cooling, set means it shows none.
-//
-// The register carries more than this: the Celsius/Fahrenheit units bit
-// (STATE-010) and a bit that pulses on every 1 degC change of current
-// temperature (STATE-009), plus bits still unidentified. None of those is
-// decoded, and the mask-and-action write form names only the bit below, so
-// writing this setting cannot disturb them.
-static const uint32_t DISPLAY_ON_COOLING_BIT_DISABLED = 0x1000;
-
-// STATE-010: the display units bit on the same register. Its polarity is
-// the opposite way round to the two settings above -- set means Fahrenheit,
-// clear means Celsius, with no inversion -- which is exactly the trap the
-// setting-bit note in docs/protocol/commands.md warns about: the inversion
-// is a property of those two settings, not of the register.
-static const uint32_t DISPLAY_UNITS_BIT_FAHRENHEIT = 0x0200;
+// The register bit masks, confirmed-accepted ranges, and the value-level
+// encode/decode they drive now live in wire_format.h, so they can be
+// host-tested (components/volcano/test/wire_format_test.cpp).
 
 // esp_ble_gattc_register_for_notify() is asynchronous: on success, completion
 // -- whether the registration itself then succeeds or fails -- always arrives
@@ -632,8 +575,8 @@ void VolcanoBleClient::decode_status_(const uint8_t *value, uint16_t value_len) 
     return;
   }
   uint16_t status = encode_uint16(value[1], value[0]);
-  bool heater_on = (status & STATUS_BIT_HEATER_ON) != 0;
-  bool pump_on = (status & STATUS_BIT_PUMP_ON) != 0;
+  bool heater_on = heater_on_from_status(status);
+  bool pump_on = pump_on_from_status(status);
   ESP_LOGI(TAG, "Heater %s, pump %s (status=0x%04x)", heater_on ? "on" : "off", pump_on ? "on" : "off", status);
   // Reported from the register rather than from whatever was last
   // commanded: the device switches its own actuators off at auto-shutoff
@@ -653,16 +596,6 @@ void VolcanoBleClient::decode_countdown_(const uint8_t *value, uint16_t value_le
   ESP_LOGI(TAG, "Auto-shutoff countdown: %u s", seconds);
   if (this->observer_ != nullptr)
     this->observer_->on_auto_shutoff_countdown(seconds);
-}
-
-// STATE-007/CMD-001: both temperature characteristics share a 4-byte
-// little-endian encoding in units of 0.1 degC.
-static bool decode_decidegrees_c(const uint8_t *value, uint16_t value_len, uint32_t *out_raw) {
-  if (value_len < 4) {
-    return false;
-  }
-  *out_raw = encode_uint32(value[3], value[2], value[1], value[0]);
-  return true;
 }
 
 void VolcanoBleClient::decode_current_temperature_(const uint8_t *value, uint16_t value_len) {
@@ -705,8 +638,7 @@ void VolcanoBleClient::decode_vibration_(const uint8_t *value, uint16_t value_le
     return;
   }
   uint32_t reg = encode_uint32(value[3], value[2], value[1], value[0]);
-  // Inverted: the bit being clear is what means enabled.
-  bool enabled = (reg & VIBRATION_BIT_DISABLED) == 0;
+  bool enabled = vibration_enabled_from_register(reg);
   ESP_LOGI(TAG, "Vibration %s (register=0x%08x)", enabled ? "on" : "off", reg);
   if (this->observer_ != nullptr)
     this->observer_->on_vibration(enabled);
@@ -718,9 +650,8 @@ void VolcanoBleClient::decode_display_register_(const uint8_t *value, uint16_t v
     return;
   }
   uint32_t reg = encode_uint32(value[3], value[2], value[1], value[0]);
-  // Inverted, as for vibration: the bit being clear is what means enabled.
-  bool enabled = (reg & DISPLAY_ON_COOLING_BIT_DISABLED) == 0;
-  bool fahrenheit = (reg & DISPLAY_UNITS_BIT_FAHRENHEIT) != 0;
+  bool enabled = display_on_cooling_enabled_from_register(reg);
+  bool fahrenheit = display_units_fahrenheit_from_register(reg);
 
   // This register notifies on every 1 degC change of current temperature
   // (STATE-009), so it arrives every few seconds throughout a run while
@@ -812,19 +743,7 @@ void VolcanoBleClient::issue_next_static_read_() {
 
 void VolcanoBleClient::decode_text_(const uint8_t *value, uint16_t value_len,
                                     void (VolcanoBleClientObserver::*report)(const std::string &), const char *name) {
-  // Fixed-width ASCII fields, padded to their full width -- with spaces on
-  // some characteristics and zero characters on others -- so both forms of
-  // padding are trimmed rather than reported as part of the value.
-  std::string text;
-  text.reserve(value_len);
-  for (uint16_t i = 0; i < value_len; i++) {
-    if (value[i] == '\0')
-      break;
-    text.push_back(static_cast<char>(value[i]));
-  }
-  while (!text.empty() && text.back() == ' ')
-    text.pop_back();
-
+  std::string text = trim_padded_ascii(value, value_len);
   ESP_LOGI(TAG, "%s: %s", name, text.c_str());
   if (this->observer_ != nullptr)
     (this->observer_->*report)(text);
@@ -841,7 +760,7 @@ void VolcanoBleClient::read_auto_shutoff_duration_() {
 }
 
 bool VolcanoBleClient::write_auto_shutoff_duration(uint16_t seconds) {
-  if (seconds < MIN_AUTO_SHUTOFF_DURATION_SECONDS || seconds > MAX_AUTO_SHUTOFF_DURATION_SECONDS) {
+  if (!auto_shutoff_duration_seconds_in_range(seconds)) {
     ESP_LOGW(TAG,
              "Refusing to set auto-shutoff duration to %u s: outside the %u-%u s range confirmed accepted (CMD-003)",
              seconds, MIN_AUTO_SHUTOFF_DURATION_SECONDS, MAX_AUTO_SHUTOFF_DURATION_SECONDS);
@@ -858,8 +777,8 @@ bool VolcanoBleClient::write_auto_shutoff_duration(uint16_t seconds) {
     ESP_LOGW(TAG, "Refusing to set auto-shutoff duration: still reading initial device state, try again shortly");
     return false;
   }
-  // CMD-003's confirmed encoding: 2-byte little-endian seconds.
-  uint8_t payload[2] = {static_cast<uint8_t>(seconds & 0xFF), static_cast<uint8_t>((seconds >> 8) & 0xFF)};
+  uint8_t payload[2];
+  encode_auto_shutoff_duration_payload(seconds, payload);
   ESP_LOGI(TAG, "Setting auto-shutoff duration to %u s", seconds);
   auto status =
       esp_ble_gattc_write_char(this->client_->get_gattc_if(), this->client_->get_conn_id(), this->duration_handle_,
@@ -872,7 +791,7 @@ bool VolcanoBleClient::write_auto_shutoff_duration(uint16_t seconds) {
 }
 
 bool VolcanoBleClient::write_led_brightness(uint8_t percent) {
-  if (percent > MAX_LED_BRIGHTNESS_PERCENT) {
+  if (!led_brightness_percent_in_range(percent)) {
     ESP_LOGW(TAG, "Refusing to set LED brightness to %u%%: outside the 0-%u scale CMD-002 records", percent,
              MAX_LED_BRIGHTNESS_PERCENT);
     return false;
@@ -888,8 +807,8 @@ bool VolcanoBleClient::write_led_brightness(uint8_t percent) {
     ESP_LOGW(TAG, "Refusing to set LED brightness: still reading initial device state, try again shortly");
     return false;
   }
-  // CMD-002's confirmed encoding: 2 bytes, only the low one significant.
-  uint8_t payload[2] = {percent, 0};
+  uint8_t payload[2];
+  encode_led_brightness_payload(percent, payload);
   ESP_LOGI(TAG, "Setting LED brightness to %u%%", percent);
   auto status = esp_ble_gattc_write_char(this->client_->get_gattc_if(), this->client_->get_conn_id(),
                                          this->led_brightness_handle_, sizeof(payload), payload,
@@ -906,19 +825,8 @@ bool VolcanoBleClient::write_vibration(bool enabled) {
     ESP_LOGW(TAG, "Vibration characteristic not resolved; not connected?");
     return false;
   }
-  // CMD-004's confirmed mask-and-action form: a 2-byte little-endian bit
-  // mask, then 00 to clear that bit or 01 to set it, then a padding byte.
-  // The write names only the bit being changed, so the register's other
-  // bits -- several of which are unidentified -- are neither read first nor
-  // disturbed.
-  //
-  // Clear enables, per VIBRATION_BIT_DISABLED above.
-  uint8_t payload[4] = {
-      static_cast<uint8_t>(VIBRATION_BIT_DISABLED & 0xFF),
-      static_cast<uint8_t>((VIBRATION_BIT_DISABLED >> 8) & 0xFF),
-      static_cast<uint8_t>(enabled ? 0x00 : 0x01),
-      0x00,
-  };
+  uint8_t payload[4];
+  encode_vibration_write(enabled, payload);
   ESP_LOGI(TAG, "Turning vibration %s", enabled ? "on" : "off");
   auto status =
       esp_ble_gattc_write_char(this->client_->get_gattc_if(), this->client_->get_conn_id(), this->vibration_handle_,
@@ -935,15 +843,8 @@ bool VolcanoBleClient::write_display_units_fahrenheit(bool fahrenheit) {
     ESP_LOGW(TAG, "Display/units register not resolved; not connected?");
     return false;
   }
-  // CMD-010's confirmed mask-and-action form, naming only the units bit.
-  // The action byte is NOT inverted here: set selects Fahrenheit, unlike
-  // the two settings below where clear enables.
-  uint8_t payload[4] = {
-      static_cast<uint8_t>(DISPLAY_UNITS_BIT_FAHRENHEIT & 0xFF),
-      static_cast<uint8_t>((DISPLAY_UNITS_BIT_FAHRENHEIT >> 8) & 0xFF),
-      static_cast<uint8_t>(fahrenheit ? 0x01 : 0x00),
-      0x00,
-  };
+  uint8_t payload[4];
+  encode_display_units_write(fahrenheit, payload);
   ESP_LOGI(TAG, "Setting display units to %s", fahrenheit ? "Fahrenheit" : "Celsius");
   auto status = esp_ble_gattc_write_char(this->client_->get_gattc_if(), this->client_->get_conn_id(),
                                          this->display_register_handle_, sizeof(payload), payload,
@@ -964,15 +865,8 @@ bool VolcanoBleClient::write_display_on_cooling(bool enabled) {
     ESP_LOGW(TAG, "Display/units register not resolved; not connected?");
     return false;
   }
-  // CMD-005's confirmed mask-and-action form, identical in shape to CMD-004
-  // and naming only the display-on-cooling bit -- so the units bit and the
-  // register's unidentified bits are left alone.
-  uint8_t payload[4] = {
-      static_cast<uint8_t>(DISPLAY_ON_COOLING_BIT_DISABLED & 0xFF),
-      static_cast<uint8_t>((DISPLAY_ON_COOLING_BIT_DISABLED >> 8) & 0xFF),
-      static_cast<uint8_t>(enabled ? 0x00 : 0x01),
-      0x00,
-  };
+  uint8_t payload[4];
+  encode_display_on_cooling_write(enabled, payload);
   ESP_LOGI(TAG, "Turning display on cooling %s", enabled ? "on" : "off");
   auto status = esp_ble_gattc_write_char(this->client_->get_gattc_if(), this->client_->get_conn_id(),
                                          this->display_register_handle_, sizeof(payload), payload,
@@ -1017,8 +911,7 @@ bool VolcanoBleClient::write_pump(bool on) {
 
 bool VolcanoBleClient::write_target_temperature(float celsius) {
   long decidegrees_signed = std::lroundf(celsius * 10.0f);
-  if (decidegrees_signed < MIN_TARGET_TEMPERATURE_DECIDEGREES ||
-      decidegrees_signed > MAX_TARGET_TEMPERATURE_DECIDEGREES) {
+  if (!target_temperature_decidegrees_in_range(decidegrees_signed)) {
     ESP_LOGW(TAG,
              "Refusing to set target temperature to %.1f C: outside the %.1f-%.1f C range confirmed accepted "
              "(CMD-001)",
@@ -1030,14 +923,8 @@ bool VolcanoBleClient::write_target_temperature(float celsius) {
     return false;
   }
   uint16_t decidegrees = static_cast<uint16_t>(decidegrees_signed);
-  // CMD-001's confirmed encoding: 4-byte little-endian deci-degrees Celsius,
-  // matching the read-side encoding decode_decidegrees_c() above decodes.
-  uint8_t payload[4] = {
-      static_cast<uint8_t>(decidegrees & 0xFF),
-      static_cast<uint8_t>((decidegrees >> 8) & 0xFF),
-      0,
-      0,
-  };
+  uint8_t payload[4];
+  encode_target_temperature_payload(decidegrees, payload);
   ESP_LOGI(TAG, "Setting target temperature to %.1f C", decidegrees / 10.0f);
   auto status =
       esp_ble_gattc_write_char(this->client_->get_gattc_if(), this->client_->get_conn_id(), this->target_temp_handle_,

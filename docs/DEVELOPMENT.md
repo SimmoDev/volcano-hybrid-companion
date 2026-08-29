@@ -53,16 +53,17 @@ cd components/volcano/test
 make test
 ```
 
-The same command also builds and runs two further host-side tests, each covering a piece of `VolcanoBleClient` that has no BLE/ESP-IDF dependency of its own, unlike the rest of that class, so its ordering guarantee is host-tested directly rather than only exercised through real hardware:
+The same command also builds and runs three further host-side tests, each covering a part of `VolcanoBleClient` that has no BLE/ESP-IDF dependency of its own, unlike the rest of that class, so it is exercised directly rather than only through real hardware:
 
 - `DisplayRegisterWriteQueue` (`components/volcano/display_register_write_queue.h`), the FIFO `VolcanoBleClient` uses to attribute a completed write on CHAR-009 to whichever of its two independent settings actually issued it.
 - `StaticReadQueue` (`components/volcano/static_read_queue.h`), the bookkeeping for the characteristics read once per connection rather than subscribed — which handle is due next, and whether an incoming read completion is the initial sweep's own rather than a write's read-back.
+- `wire_format.h` (`components/volcano/wire_format.h`), the value-level encode and decode: the decidegrees codec, the device-information-string trimming, each settings bit's polarity, and the confirmed-accepted write ranges — the logic where a wrong mask or a loosened bound would reach real hardware.
 
-Each structure only tracks ordering; the `esp_ble_gattc_*` reads and writes themselves are issued by `VolcanoBleClient`. That code, and `VolcanoComponent`, still require a real connection to verify, per [`components/volcano/README.md`](../components/volcano/README.md#building--validating).
+The `esp_ble_gattc_*` reads and writes, and the GATT event sequencing around them, are issued by `VolcanoBleClient` itself. That code, and `VolcanoComponent`, still require a real connection to verify, per [`components/volcano/README.md`](../components/volcano/README.md#building--validating).
 
 ## Continuous integration and pre-commit hooks
 
-[`.github/workflows/ci.yml`](../.github/workflows/ci.yml) runs on every push and pull request: `esphome config`/`esphome compile` against each example configuration, both sharing the same placeholder `secrets.yaml` (per "Validating the component locally" above) — the Phase 1 dev board's, and the M5Stack Dial's, which connects the volcano component over BLE, joins WiFi (for its Home page's status icons and its own `web_server` page), and serves the full ADR-0011 local UI, but has no `api:` yet (Phase 3's concern) — `make test` for `VolcanoDevice`'s host-side tests, a `clang-format --dry-run --Werror` check (see [`docs/CONVENTIONS.md`](CONVENTIONS.md#code-formatting-expectations) for the style and why it's pinned to an exact version), and `scripts/check_markdown_links.py` over every tracked `.md` file — the same check as the `check-markdown-links` pre-commit hook below, so a broken relative link is caught even without the hook installed. None of the four jobs need real hardware.
+[`.github/workflows/ci.yml`](../.github/workflows/ci.yml) runs on every push and pull request: `esphome config`/`esphome compile` against each example configuration, both sharing the same placeholder `secrets.yaml` (per "Validating the component locally" above) — the Phase 1 dev board's, and the M5Stack Dial's, which connects the volcano component over BLE, joins WiFi (for its Home page's status icons and its own `web_server` page), and serves the full ADR-0011 local UI, but has no `api:` yet (Phase 3's concern) — `make test` for the Volcano component's host-side tests, a `clang-format --dry-run --Werror` check (see [`docs/CONVENTIONS.md`](CONVENTIONS.md#code-formatting-expectations) for the style and why it's pinned to an exact version), and `scripts/check_markdown_links.py` over every tracked `.md` file — the same check as the `check-markdown-links` pre-commit hook below, so a broken relative link is caught even without the hook installed. None of the four jobs need real hardware.
 
 Three local pre-commit hooks, defined in [`.pre-commit-config.yaml`](../.pre-commit-config.yaml):
 
