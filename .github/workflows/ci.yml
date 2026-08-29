@@ -69,6 +69,21 @@ jobs:
         working-directory: components/volcano/test
         run: make test
 
+  markdown-links:
+    name: Check relative Markdown links
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      # Same script the check-markdown-links pre-commit hook runs, so a
+      # broken relative link or #anchor is caught server-side too rather
+      # than only for contributors who have pre-commit installed. No deps:
+      # the script is stdlib-only.
+      - name: check-markdown-links
+        run: python3 scripts/check_markdown_links.py $(git ls-files '*.md')
+
   clang-format:
     name: Check clang-format
     runs-on: ubuntu-latest
