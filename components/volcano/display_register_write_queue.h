@@ -24,6 +24,14 @@ namespace volcano {
 // because ATT write requests on one handle complete in the order they were
 // sent.
 //
+// Every push is matched by exactly one ESP_GATTC_WRITE_CHAR_EVT: these
+// writes use Write With Response, for which ESP-IDF always delivers a
+// completion (success or error) unless the link drops first -- and a drop
+// calls clear(). Nothing else empties the queue; in particular
+// VolcanoDevice's 5s pending-write timeout does not reach it, so that
+// Write-With-Response guarantee is what keeps a later completion from
+// popping a stale entry.
+//
 // No BLE/ESP-IDF dependency, unlike VolcanoBleClient itself, so the FIFO
 // ordering this exists to guarantee is host-testable directly -- see
 // components/volcano/test/display_register_write_queue_test.cpp.
