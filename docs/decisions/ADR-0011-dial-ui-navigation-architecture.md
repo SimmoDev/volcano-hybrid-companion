@@ -20,7 +20,7 @@ The screen itself is small: 1.28" and round, so content near the corners of a na
 
 ### Page model
 
-The UI is a fixed set of full-screen pages: **Home**, a **Navigation Menu**, **Settings**, three instances of a shared **numeric value page** (LED Brightness, Auto-Shutoff Duration, Dial Brightness), a **Dial Sound** toggle page, and **Information**. Each page optionally uses touch buttons and optionally the rotary encoder; none of them share screen space with another.
+The UI is a fixed set of full-screen pages: **Home**, a **Navigation Menu**, **Settings**, three instances of a shared **numeric value page** (LED Brightness, Auto-Shutoff Duration, Dial Brightness), a **Dial Sound** toggle page, and **Information**. Each page optionally uses touch buttons and optionally the rotary encoder; none of them share screen space with another. (This ADR's Notes record two departures the implementation made from this set: **Information** ships as two pages, **About** and **Diagnostics**, and a tenth page, **Connections**, was added.)
 
 ### Input semantics
 
@@ -33,7 +33,7 @@ The UI is a fixed set of full-screen pages: **Home**, a **Navigation Menu**, **S
 - Current temperature and target temperature, rendered in DSEG7 (ADR-0010) and coloured to echo the Volcano's own display — current in orange, target in cyan — against a dark theme. Exact colour values and layout are implementation detail, not fixed here.
 - Touch buttons for the heater and pump.
 - A small auto-shutoff countdown readout.
-- Small BLE and WiFi connection-state icons: steady colour for connected, flashing for connecting, a strikethrough variant for disconnected, using the same orange/cyan-family colour convention. These are read-only indicators, not touch targets, so the touch-sizing rule below does not apply to them.
+- Small BLE and WiFi connection-state icons: steady colour for connected, flashing for connecting, a strikethrough variant for disconnected, using the same orange/cyan-family colour convention. These are read-only indicators, not touch targets, so the touch-sizing rule below does not apply to them. (LVGL has no strikethrough glyph; the implementation signals disconnected with colour alone — see this ADR's Notes.)
 - Rotary turn adjusts target temperature, subject to the write-coalescing rule below.
 - A button press opens the Navigation Menu.
 

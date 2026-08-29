@@ -51,6 +51,8 @@ enum class ConnectionState {
 
 `READY` must mean the state model is populated, not merely that the link is up. The distinction is load-bearing: subscriptions register and then seven non-notify characteristics are read one at a time, so there is a window of seconds during which the link exists and much of the state model is still unknown. A control interface must be able to tell "not there" from "still arriving".
 
+The `CONNECTING` comment above ("link up or coming up") describes where that state begins loosely; this ADR's Notes record where the implementation actually starts it, and why.
+
 ADR-0002 names three states as "connected, disconnected, reconnecting". Reconnection is a `CONNECTING` state here; the component does not distinguish a first connection from a recovery, and no consumer has a reason to.
 
 ### The state model
@@ -83,6 +85,8 @@ Issuing a command sets the affected field's `requested()`. It is resolved by tha
 - The confirmation source reports the requested value: `requested()` clears and the confirmed value updates.
 - The confirmation source reports a **different** value: the confirmed value updates to what the device reported and `requested()` clears. This is exactly STATE-013's silent-drop signature, and it must be detectable as a distinct outcome rather than being indistinguishable from success.
 - No confirmation arrives before a timeout: `requested()` clears, the confirmed value is left untouched, and the outcome is reported as a timeout.
+
+The "different value" bullet is stated here without qualification; this ADR's Notes narrow it — a mismatch resolves `requested()` only for the read-back-confirmed fields, not the notification-only ones.
 
 A control interface may render `requested()` as a provisional value while it is outstanding. It must not treat it as device state.
 

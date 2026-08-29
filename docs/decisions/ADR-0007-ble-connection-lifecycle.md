@@ -22,7 +22,7 @@ Together these mean the choice is not a spectrum. Either the controller holds th
 
 **The Volcano component holds a persistent BLE connection.** It connects once configured and the device is advertising, maintains the connection, and re-establishes it if dropped.
 
-**Connect and disconnect are exposed as explicit commands on the component's interface**, expressed in domain terms alongside the rest of the interface per [ADR-0002](ADR-0002-volcano-component-architecture.md). Releasing the connection is a deliberate action a control interface can offer, not a side effect of device state.
+**Connect and disconnect are exposed as explicit commands on the component's interface**, expressed in domain terms alongside the rest of the interface per [ADR-0002](ADR-0002-volcano-component-architecture.md). Releasing the connection is a deliberate action a control interface can offer, not a side effect of device state. (This ADR's Notes record the settled position: they are *not* on `VolcanoDevice`'s interface — a control interface reaches release through the underlying connection directly.)
 
 **An explicit release suspends reconnection until an explicit connect.** Otherwise the reconnect loop would take the device straight back and the command would achieve nothing. The suspension does not survive a restart: after a reboot the component connects, on the reasoning that coming up with no connection and no way to know why is worse than reclaiming a link the user might no longer need.
 
