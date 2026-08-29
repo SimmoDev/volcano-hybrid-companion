@@ -102,11 +102,9 @@ volcano:
   # (state: {checked: ...}): that action goes through ESPHome's own
   # LvglComponent::lv_obj_set_state_value helper, which deliberately
   # fires the same update event a real user toggle does (its own
-  # comment: "fire an event if changed (only needed for CHECKED)"),
-  # risking exactly the kind of write-on-sync feedback loop that turned
-  # out to be caused by something else entirely on this page (see
-  # dial/hardware.yaml's on_boot group-eviction lambda) -- kept anyway
-  # as the more robust choice now that the actual cause is understood.
+  # comment: "fire an event if changed (only needed for CHECKED)") --
+  # which would drive a write back to the Volcano on every sync. The raw
+  # call updates the widget's visual state without emitting that event.
   vibration:
     id: volcano_vibration
     name: "Vibration"

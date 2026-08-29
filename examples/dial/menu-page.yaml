@@ -16,12 +16,11 @@ lvgl:
       # move the highlight directly, no extra step first).
       #
       # on_load fires on LV_EVENT_SCREEN_LOAD_START, at the *start* of
-      # the transition -- confirmed on real hardware that calling
-      # lvgl.widget.focus here doesn't stick (editing read back false
-      # immediately after, and rotation never moved the selection): the
-      # transition's own focus handling runs after this event and
-      # overwrites it. The delay pushes this past the animation
-      # (page.show's own default time), so it runs after that settles.
+      # the transition, before the transition's own focus handling runs
+      # -- an lvgl.widget.focus called directly here is overwritten by
+      # that handling and does not stick. The delay pushes this past the
+      # animation (page.show's own default time), so it runs after that
+      # settles.
       on_load:
         - delay: 100ms
         - lvgl.widget.focus:
