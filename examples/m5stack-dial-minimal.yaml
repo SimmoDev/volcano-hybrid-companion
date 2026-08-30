@@ -17,12 +17,13 @@
 #
 # web_server is present too, matching the dev-board example exactly
 # (same port/entity names/sorting weights), per ADR-0010's decision to
-# retain it unchanged on the Dial firmware -- Phase 2 scope, not
-# deferred to Phase 3 (Home Assistant/api integration specifically).
-# Every volcano entity keeps driving its own LVGL widgets via its
-# automation triggers; web_server exposure (name:/web_server: instead
-# of internal: true) is additive, not a replacement for that. No api:
-# block yet -- that's the Phase 3 concern, not this one.
+# retain it unchanged on the Dial firmware. Every volcano entity keeps
+# driving its own LVGL widgets via its automation triggers; web_server
+# exposure (name:/web_server: instead of internal: true) is additive,
+# not a replacement for that. An encrypted api: block sits alongside it
+# (dial/connectivity.yaml), added for Phase 3 per ADR-0012: it reaches
+# the same entities, and the Dial keeps full local control of the
+# Volcano with it -- and with WiFi -- absent or down.
 #
 # The Dial is built on the M5StampS3 module (ESP32-S3, 8MB flash), matching
 # the "M5Stack StampS3" PlatformIO board definition -- confirmed against the
