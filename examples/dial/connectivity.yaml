@@ -76,12 +76,20 @@ wifi:
 # once no API client has connected for 15 minutes, and ADR-0001 forbids
 # Home Assistant's reachability being load-bearing for the device.
 # Encryption key from secrets.yaml, not committed (generate your own
-# with `openssl rand -base64 32`). The Connections page has no Home
-# Assistant status row yet -- ADR-0012 places it in a later increment.
+# with `openssl rand -base64 32`).
+#
+# on_client_connected/on_client_disconnected drive the Connections
+# page's Home Assistant status line via refresh_ha_connection_status
+# (dial/scripts.yaml), which re-checks api.connected rather than
+# trusting either trigger's own direction -- see that script's comment.
 api:
   encryption:
     key: !secret api_encryption_key
   reboot_timeout: 0s
+  on_client_connected:
+    - script.execute: refresh_ha_connection_status
+  on_client_disconnected:
+    - script.execute: refresh_ha_connection_status
 
 
 # Brought back per ADR-0010's decision to retain web_server unchanged on

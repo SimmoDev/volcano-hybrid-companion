@@ -118,7 +118,7 @@ script:
               return std::string("Connected");
             if (id(ble_connecting))
               return std::string("Connecting...");
-            return std::string("Disconnected -- may be in use elsewhere");
+            return std::string("Disconnected - in use?");
   # The Connections page's own Off/On flanking-label colours for each
   # switch, same active-cyan/inactive-grey convention as Settings/Dial
   # Sound -- kept separate from refresh_ble_connection_status above since
@@ -140,6 +140,30 @@ script:
       - lvgl.label.update:
           id: connections_wifi_on_label
           text_color: !lambda "return id(wifi_enabled) ? lv_color_hex(0x00D9FF) : lv_color_hex(0x888888);"
+  # The Connections page's Home Assistant status line (ADR-0012), driven
+  # off the api component's on_client_connected/on_client_disconnected
+  # triggers (dial/connectivity.yaml). Re-checks api.connected on every
+  # event rather than tracking a per-client count, so a second client --
+  # an `esphome logs` session over the API, say -- connecting or
+  # dropping doesn't flip the line while Home Assistant itself is still
+  # connected. Indicator only: ADR-0012 gives Home Assistant no switch
+  # here, so there are no flanking Off/On labels to keep in sync the way
+  # the BLE and WiFi rows have.
+  - id: refresh_ha_connection_status
+    then:
+      - if:
+          condition:
+            api.connected:
+          then:
+            - lvgl.label.update:
+                id: connections_ha_status_label
+                text_color: 0x00CC44
+                text: "Connected"
+          else:
+            - lvgl.label.update:
+                id: connections_ha_status_label
+                text_color: 0xCC0000
+                text: "Disconnected"
   - id: refresh_time_of_operation_label
     then:
       - lvgl.label.update:

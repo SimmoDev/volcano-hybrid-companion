@@ -1,6 +1,7 @@
-# The Connections page (see ADR-0011's own Notes). BLE and WiFi
-# connection status, each with a switch to release/reconnect it,
-# independently of the other and of the Volcano's own state.
+# The Connections page (see ADR-0011's own Notes, and ADR-0012 for the
+# Home Assistant row). BLE and WiFi connection status, each with a switch
+# to release/reconnect it, plus a read-only Home Assistant status line --
+# all independent of each other and of the Volcano's own state.
 #
 # The BLE switch is what lets a user hand the Volcano's connection back
 # to the official Storz & Bickel app without power-cycling the whole
@@ -8,9 +9,10 @@
 # persistent connection make releasing it discoverable. Turning it off
 # releases the connection and suspends reconnection until switched back
 # on (see dial/connectivity.yaml's own comment on how); per ADR-0007's
-# CONN-003 note, the status text says "may be in use elsewhere" rather
-# than implying the device is absent, since a disconnected controller
-# can't tell the two apart.
+# CONN-003 note, the disconnected status text is "Disconnected - in
+# use?" -- the trailing question rather than a flat "Disconnected"
+# because a disconnected controller can't tell a device that's in use
+# by the official app from one that's simply absent.
 #
 # The WiFi switch is mainly for testing that the Dial genuinely needs
 # neither connection, per ADR-0001's Phase 2 "no external dependencies"
@@ -18,15 +20,26 @@
 # it deliberately has no third "connecting" status, the same scope call
 # the Home page's own WiFi icon already makes.
 #
-# Same caption/status/switch-row layout technique as Settings (flex
-# column, scrollable: false, tight pad_row) -- six stacked groups here
-# too (2 sections x caption+status+switch-row), the same budget Settings
-# already proved fits the round display without scrolling or clipping.
+# The Home Assistant line is indicator only -- ADR-0012 gives it no
+# switch (nothing about the api connection needs on-device control) and
+# no Home-page icon (ADR-0012 scopes the indicator to this page). It
+# just reports whether an api client is currently connected.
+#
+# Same caption/status layout technique as Settings (flex column,
+# scrollable: false, tight pad_row) -- eight stacked groups now: BLE and
+# WiFi are caption+status+switch-row (three each), Home Assistant is
+# caption+status only. Two groups past the six Settings proved fit, so
+# the BLE status text was cut to one short line to claw a line back
+# ("Disconnected - in use?" -- a longer string clips against the round
+# edge at that near-the-top row). All eight clearing the display without
+# clipping was verified on real hardware, and stays a hardware check for
+# any further change here.
 #
 # refresh_ble_connection_status/refresh_ble_switch_labels/
-# refresh_wifi_switch_labels (dial/scripts.yaml) keep this page's status
-# text/colours and the Home page's small BLE/WiFi icons in sync from one
-# place, since both surfaces render the same underlying state.
+# refresh_wifi_switch_labels/refresh_ha_connection_status
+# (dial/scripts.yaml) keep this page's status text/colours -- and the
+# Home page's small BLE/WiFi icons -- in sync from one place, since
+# those surfaces render the same underlying state.
 lvgl:
   pages:
     - id: connections_page
@@ -181,3 +194,17 @@ lvgl:
                   id: connections_wifi_on_label
                   text_color: ${cyan}
                   text: "On"
+        # Home Assistant: caption + status only, no switch row (ADR-0012).
+        # The static text/colour here is the pre-connect default; the api
+        # component's on_client_connected/on_client_disconnected triggers
+        # (dial/connectivity.yaml) drive it live via
+        # refresh_ha_connection_status. Short one-line text either way, so
+        # no long_mode: wrap / width like the BLE status label needs.
+        - label:
+            text_color: ${cyan}
+            text: "Home Assistant"
+            pad_top: 4
+        - label:
+            id: connections_ha_status_label
+            text_color: 0xCC0000
+            text: "Disconnected"
