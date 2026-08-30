@@ -33,15 +33,24 @@ ble_client:
       - script.execute: refresh_ble_connection_status
 
 
-# WiFi serves three things: the Home page's WiFi status icon, the
-# Connections page's own status/switch, and reaching web_server below
-# from a browser -- the volcano component itself is BLE-only and has no
-# dependency on it. Toggling WiFi off from the Connections page (via the
-# wifi.enable/wifi.disable actions) doesn't route through these triggers
-# for its own status text -- see that page's own comment for why.
+# WiFi serves four things: the Home page's WiFi status icon, the
+# Connections page's own status/switch, reaching web_server below from a
+# browser, and the Home Assistant `api` connection below -- the volcano
+# component itself is BLE-only and has no dependency on it. Toggling WiFi
+# off from the Connections page (via the wifi.enable/wifi.disable
+# actions) doesn't route through these triggers for its own status text
+# -- see that page's own comment for why.
+#
+# reboot_timeout is 0s: the ESPHome default reboots the device after 15
+# minutes with no WiFi association, which would undo the Connections
+# page's whole point -- a user who releases WiFi there, or whose network
+# just drops, must keep full local control of the Volcano (ADR-0001,
+# ADR-0011). Same reasoning as `api`'s reboot_timeout below. The cost is
+# losing automatic recovery from a wedged WiFi stack.
 wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
+  reboot_timeout: 0s
   on_connect:
     - lvgl.label.update:
         id: wifi_status_icon
@@ -58,6 +67,21 @@ wifi:
         id: connections_wifi_status_label
         text_color: 0xCC0000
         text: "Disconnected"
+
+
+# Home Assistant integration, per ADR-0012. Home Assistant reaches the
+# same volcano entities as web_server below; the Dial keeps full local
+# control of the Volcano with this connection absent or down, which is
+# why reboot_timeout is 0s -- the ESPHome default reboots the device
+# once no API client has connected for 15 minutes, and ADR-0001 forbids
+# Home Assistant's reachability being load-bearing for the device.
+# Encryption key from secrets.yaml, not committed (generate your own
+# with `openssl rand -base64 32`). The Connections page has no Home
+# Assistant status row yet -- ADR-0012 places it in a later increment.
+api:
+  encryption:
+    key: !secret api_encryption_key
+  reboot_timeout: 0s
 
 
 # Brought back per ADR-0010's decision to retain web_server unchanged on

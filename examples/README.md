@@ -4,17 +4,17 @@ Example ESPHome configurations that exercise the components in this repository. 
 
 ## `esp32-s3-devkit-minimal.yaml`
 
-Targets the Phase 1 development board ([ADR-0004](../docs/decisions/ADR-0004-development-hardware-strategy.md)) and exercises the `volcano` component's current BLE implementation — see [`components/volcano/README.md`](../components/volcano/README.md) for what it does. Its entities are the command controls and the state sensors described below, and it has no Home Assistant integration.
+Targets the Phase 1 development board ([ADR-0004](../docs/decisions/ADR-0004-development-hardware-strategy.md)) and exercises the `volcano` component's current BLE implementation — see [`components/volcano/README.md`](../components/volcano/README.md) for what it does. Its entities are the command controls and the state sensors described below, reachable both from the local `web_server` page and — per [ADR-0012](../docs/decisions/ADR-0012-home-assistant-integration.md) — from Home Assistant through the ESPHome `api` component.
 
 It needs a real Volcano's BLE MAC address to connect to anything. Copy [`secrets.yaml.example`](secrets.yaml.example) to `secrets.yaml` alongside it (not committed — see the repository's `.gitignore`) and set `volcano_mac_address` to your device's actual address. A placeholder value is fine for `esphome config`/`esphome compile`, but flashing it to hardware needs the real one to see anything happen.
 
-It also joins your WiFi network — set `wifi_ssid`/`wifi_password` in the same `secrets.yaml` — so a browser on that network can reach the command controls described in "Sending commands" below. The `volcano` component itself is BLE-only and has no WiFi dependency; WiFi exists in this example purely to serve that page.
+It also joins your WiFi network — set `wifi_ssid`/`wifi_password` in the same `secrets.yaml` — so a browser on that network can reach the command controls described in "Sending commands" below and so Home Assistant can connect. Home Assistant also needs `api_encryption_key` set: generate one with `openssl rand -base64 32`, or use the committed placeholder, which only satisfies `esphome config`/`esphome compile`. The `volcano` component itself is BLE-only and has no WiFi dependency; WiFi exists in this example only to serve those two interfaces.
 
 ## `m5stack-dial-minimal.yaml`
 
 Targets the Phase 2 M5Stack Dial ([ADR-0010](../docs/decisions/ADR-0010-dial-hardware-and-ui-framework.md), [ADR-0011](../docs/decisions/ADR-0011-dial-ui-navigation-architecture.md)) and is the local, standalone control surface Phase 2 builds: an LVGL touchscreen UI driven by the Dial's rotary encoder, physical button and touch panel, on top of the same `volcano` component the dev-board example exercises. Every value the component tracks — current/target temperature, heater/pump, auto-shutoff duration and countdown, LED brightness, vibration, display-on-cooling, display units, and the device-information/diagnostic strings — has a Dial page, so the Dial controls the Volcano fully on its own with no phone, browser or Home Assistant involved.
 
-It needs the same two `secrets.yaml` values as the dev-board example — `volcano_mac_address` and `wifi_ssid`/`wifi_password` — copied from [`secrets.yaml.example`](secrets.yaml.example) the same way. WiFi here serves the Home page's WiFi status icon, the Connections page's WiFi status and toggle, and the `web_server` page described below; the on-screen UI itself needs neither WiFi nor an active Volcano connection to navigate.
+It needs the same `secrets.yaml` values as the dev-board example — `volcano_mac_address`, `wifi_ssid`/`wifi_password` and `api_encryption_key` — copied from [`secrets.yaml.example`](secrets.yaml.example) the same way. WiFi here serves the Home page's WiFi status icon, the Connections page's WiFi status and toggle, the `web_server` page described below, and the Home Assistant `api` connection; the on-screen UI itself needs none of them to navigate.
 
 The config itself is split into `dial/*.yaml` packages by concern (hardware/peripherals, connectivity, shared state, the `volcano:` entities, the two physical inputs, the write-coalescing scripts, and one file per page) rather than one large file — `esphome config`/`compile`/`run` still take `m5stack-dial-minimal.yaml` itself, which assembles them via `packages:`.
 
@@ -23,6 +23,12 @@ The config itself is split into `dial/*.yaml` packages by concern (hardware/peri
 Every value that changes while a page adjusts it locally (target temperature, LED brightness, auto-shutoff duration) updates the display immediately but only writes to the Volcano once turning pauses — the same write-coalescing ADR-0011 requires, so a fast turn doesn't fire a write per detent. Re-opening one of these pages resyncs its shown value to the last one the device confirmed, so a write that never took (a dropped BLE write on a characteristic with no notification to correct it) doesn't leave a stale figure on screen. Every rotary turn plays a short click and every button press or control touch plays a short beep, muted together via the Dial Sound page; the buzzer has no real volume control, so this is on/off rather than graduated (see that page's own note in the config for why).
 
 `web_server` is present here too, unchanged from the dev-board example's page (same port, no authentication, no TLS — see "Sending commands" above for that trust model). It carries one control per value for every entity listed above, plus a "Dial firmware version" diagnostic entity for this firmware's own version (distinct from the Volcano's own firmware/BLE firmware version strings). Reaching it is optional — the Dial's own screen is the primary control surface for this config, unlike the dev-board example, where the web page is the only one.
+
+## Home Assistant
+
+Both configs declare an ESPHome `api` block ([ADR-0012](../docs/decisions/ADR-0012-home-assistant-integration.md)), so Home Assistant's ESPHome integration discovers the device over WiFi and exposes the same entities the `web_server` page carries — the `volcano` controls and sensors, plus the Dial firmware-version diagnostic on that config. Add the device in Home Assistant with the `api_encryption_key` from your `secrets.yaml`.
+
+The connection is not load-bearing. Both configs set `reboot_timeout: 0s` on `api` *and* on `wifi`, so the device never reboots for want of an API client or a WiFi association. Losing Home Assistant, or the network, or never having either, changes nothing about BLE control, the Dial UI, or the `web_server` page — the same standalone guarantee ADR-0001 requires. The trade-off is that neither component will auto-reboot to recover from a wedged network stack.
 
 ## Flashing and watching logs
 

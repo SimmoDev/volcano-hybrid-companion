@@ -1,7 +1,13 @@
 sensor:
   - platform: rotary_encoder
+    # The UI consumes this through its id and on_value below; the raw
+    # detent count is not a control surface, so it stays off both
+    # web_server and the Home Assistant api (ADR-0012: Home Assistant
+    # sees the volcano entities and the Dial firmware version, nothing
+    # more). Still named, so `esphome logs` labels it.
     name: "Dial Rotary Encoder"
     id: dial_rotary_encoder
+    internal: true
     resolution: 1
     pin_a:
       number: GPIO40
@@ -144,8 +150,12 @@ sensor:
 
 binary_sensor:
   - platform: gpio
+    # Consumed by the automations below through its id; kept off
+    # web_server and the Home Assistant api for the same reason as the
+    # rotary encoder above (ADR-0012). Still named for `esphome logs`.
     name: "Dial Button"
     id: dial_button
+    internal: true
     pin:
       number: GPIO42
       mode:
