@@ -8,7 +8,7 @@ Volcano Hybrid Companion is a standalone remote controller for the Storz & Bicke
 
 ## Current phase
 
-Phase 1 is complete: the BLE foundation and the Volcano component are implemented and hardware-verified on an ESP32-S3-WROOM-1-N16R8 development board, per [ADR-0004](decisions/ADR-0004-development-hardware-strategy.md). Phase 2 is also complete: the M5Stack Dial's local UI, built per [ADR-0010](decisions/ADR-0010-dial-hardware-and-ui-framework.md)/[ADR-0011](decisions/ADR-0011-dial-ui-navigation-architecture.md), gives the Dial full control of the Volcano with no external dependency — see [`examples/README.md`](../examples/README.md#m5stack-dial-minimalyaml) for what it does. The project is now in **Phase 3**: Home Assistant integration through the ESPHome `api` component, not yet started.
+Phase 1 is complete: the BLE foundation and the Volcano component are implemented and hardware-verified on an ESP32-S3-WROOM-1-N16R8 development board, per [ADR-0004](decisions/ADR-0004-development-hardware-strategy.md). Phase 2 is also complete: the M5Stack Dial's local UI, built per [ADR-0010](decisions/ADR-0010-dial-hardware-and-ui-framework.md)/[ADR-0011](decisions/ADR-0011-dial-ui-navigation-architecture.md), gives the Dial full control of the Volcano with no external dependency — see [`examples/README.md`](../examples/README.md#m5stack-dial-minimalyaml) for what it does. The project is now in **Phase 3**: Home Assistant integration through the ESPHome `api` component. Its integration architecture is settled in [ADR-0012](decisions/ADR-0012-home-assistant-integration.md); no example configuration declares `api:` yet, and there is no verification against a real Home Assistant instance.
 
 What Phase 1 delivered, and what Phase 2 builds on:
 
