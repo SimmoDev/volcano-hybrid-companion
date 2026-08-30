@@ -30,6 +30,8 @@ Both configs declare an ESPHome `api` block ([ADR-0012](../docs/decisions/ADR-00
 
 The connection is not load-bearing. Both configs set `reboot_timeout: 0s` on `api` *and* on `wifi`, so the device never reboots for want of an API client or a WiFi association. Losing Home Assistant, or the network, or never having either, changes nothing about BLE control, the Dial UI, or the `web_server` page — the same standalone guarantee ADR-0001 requires. The trade-off is that neither component will auto-reboot to recover from a wedged network stack.
 
+The temperature entities are always Celsius, and Home Assistant converts them per its own unit settings (system-wide, or a per-entity override) because they carry a temperature device class — see [ADR-0008](../docs/decisions/ADR-0008-temperature-units-handling.md). The Volcano's "Display in Fahrenheit" switch is the *device's own screen* setting; it does not change what these entities report, so the Volcano and Dial showing °F while Home Assistant shows °C (or the reverse) is expected, not a fault.
+
 ## Flashing and watching logs
 
 Requires the [ESPHome CLI](https://esphome.io/) and an ESP32-S3 board connected over USB. From the repository root, substituting whichever example config you're using:
