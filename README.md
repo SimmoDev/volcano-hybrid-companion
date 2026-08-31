@@ -12,6 +12,8 @@ Phase 1 and Phase 2 are both complete. The `volcano` ESPHome component connects 
 
 The M5Stack Dial's local UI is complete: every page [ADR-0011](docs/decisions/ADR-0011-dial-ui-navigation-architecture.md) names — Home, Navigation Menu, Connections, Settings, LED Brightness, Auto-Shutoff Duration, Dial Brightness, Dial Sound, About and Diagnostics — is built and verified against real hardware, per [ADR-0010](docs/decisions/ADR-0010-dial-hardware-and-ui-framework.md)'s hardware/UI framework choices and ADR-0011's navigation model. Connections is what lets a user release the BLE connection back to the official app and toggle WiFi, both independently of the Volcano. The Dial controls the Volcano fully on its own — no phone, browser, or Home Assistant required — and also retains the `web_server` page Phase 1 established, unchanged. See [`examples/README.md`](examples/README.md#m5stack-dial-minimalyaml) for what each page does. The ESP32-S3-WROOM-1-N16R8 development board remains available for isolating BLE-only issues from Dial-specific hardware, per [ADR-0004](docs/decisions/ADR-0004-development-hardware-strategy.md).
 
+Phase 3 — optional Home Assistant integration — is underway. Both example configurations now enable an encrypted ESPHome `api`, the Dial's Connections page shows Home Assistant's connection status, and the standalone guarantee has been verified on real hardware: the Dial keeps full control of the Volcano with Home Assistant stopped, the API key wrong, or WiFi absent, and never reboots for want of either. See [ADR-0012](docs/decisions/ADR-0012-home-assistant-integration.md). The `firmware/` layout and the first tagged release, `v1.0.0`, follow when Phase 3 closes.
+
 ## Documentation
 
 - [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) — how the repository is laid out and how to validate the component locally.
@@ -44,7 +46,7 @@ ESPHome provides the firmware framework this project is built on, and also provi
 - Add rotary encoder input, touchscreen, and a local UI.
 - The Dial should fully control the Volcano with no external dependencies.
 
-**Phase 3 — Home Assistant integration**
+**Phase 3 — Home Assistant integration (in progress)**
 - Add Home Assistant integration through the ESPHome API.
 - Home Assistant is an additional, optional control interface — never a requirement.
 - The device must keep controlling the Volcano if Home Assistant is unreachable.
