@@ -17,7 +17,7 @@ repos:
         language: system
         files: \.md$
       - id: readme-staleness-nudge
-        name: Nudge if components/volcano/, docs/decisions/ or examples/ changed without README.md
+        name: Nudge about state-describing docs a code/ADR/example change skips
         description: Advisory only -- never fails the commit.
         entry: python3 scripts/check_readme_sync.py
         language: system
