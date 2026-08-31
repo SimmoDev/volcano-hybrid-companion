@@ -1,13 +1,14 @@
 # Firmware
 
 The device firmware this project ships. One target so far: the M5Stack
-Dial. Unlike the configs under [`examples/`](../examples/README.md) — which
-are compile checks and a BLE-only test scaffold — this is the
+Dial. The config under [`examples/`](../examples/README.md) is a compile
+check and BLE-only test surface for the `volcano` component; this is the
 configuration meant to be flashed to a device and used.
 
-The first tagged release is `v1.0.0`, cut when Phase 3 (Home Assistant
-integration, [ADR-0012](../docs/decisions/ADR-0012-home-assistant-integration.md))
-closed. See the root [README.md](../README.md) for the phase history.
+The project is at its first tagged release, `v1.0.0`. See the root
+[README.md](../README.md) for the phase history and
+[ADR-0012](../docs/decisions/ADR-0012-home-assistant-integration.md) for
+the Home Assistant integration this release completes.
 
 ## `m5stack-dial.yaml`
 
@@ -74,7 +75,7 @@ esphome logs firmware/m5stack-dial.yaml
 
 This config declares no `ota:` block, so every reflash is over USB — there is no over-the-air update path. That is a deliberate omission to keep the config lean; a Dial mounted somewhere awkward to reach would want `ota:` (with `safe_mode`) added.
 
-Watch for the `[volcano]` log tag: it logs heater/pump state, the auto-shutoff countdown, and current/target temperature on connect and whenever they change, including changes made at the device's own panel. Each `on_*` handler across the packages also logs at `DEBUG`, so `esphome logs` is a direct way to re-confirm a given peripheral still works.
+Watch for the `[volcano]` log tag: it logs heater/pump state, the auto-shutoff countdown, and current/target temperature on connect and whenever they change, including changes made at the device's own panel. Each `on_*` handler across the packages also logs at `DEBUG`, so `esphome logs` shows each peripheral responding to input.
 
 ## Troubleshooting
 

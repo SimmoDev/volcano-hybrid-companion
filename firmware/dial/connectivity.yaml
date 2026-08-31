@@ -9,7 +9,7 @@
 # switch -- so this handler doesn't need to duplicate that logic.
 #
 # Releasing/reconnecting the connection itself (the Connections page's own
-# switch, firmware/dial/connections-page.yaml) calls
+# switch, dial/connections-page.yaml) calls
 # id(volcano_ble_client).set_enabled() directly via lambda -- not exposed
 # as a YAML action by ble_client itself, the same "call the raw API when
 # no automation action exists" pattern dial/hardware.yaml's on_boot

@@ -107,7 +107,7 @@ volcano-hybrid-companion/
 └── README.md
 ```
 
-The M5Stack Dial configuration became device firmware under `firmware/` when Phase 3 closed, at the project's first versioned release, `v1.0.0`. The dev-board scaffold stays under `examples/` — see [ADR-0004](docs/decisions/ADR-0004-development-hardware-strategy.md) for why that hardware is kept available.
+`firmware/` holds the M5Stack Dial configuration the project ships (`m5stack-dial.yaml`, split into `dial/*.yaml` packages). `examples/` holds a single dev-board configuration that exercises the `volcano` component in isolation — a compile check and BLE-only test surface, not device firmware — kept available for BLE work per [ADR-0004](docs/decisions/ADR-0004-development-hardware-strategy.md).
 
 ## Contributing
 

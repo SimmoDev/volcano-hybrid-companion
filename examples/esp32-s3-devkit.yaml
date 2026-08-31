@@ -185,15 +185,15 @@ volcano:
 # connection -- the volcano component itself is BLE-only and has no
 # dependency on it. Credentials come from secrets.yaml, not committed.
 #
-# reboot_timeout is 0s, matching the Dial config (dial/connectivity.yaml)
-# and the `api` block below: ADR-0001 forbids the device rebooting for
-# want of a network, and Home Assistant is unreachable precisely when
-# WiFi is down. The ESPHome default reboots after 15 minutes with no WiFi
-# association. This board's only control surfaces are network ones, so
-# here the effect is simply that a wedged-WiFi dev board doesn't cycle
-# while you work on it -- the Dial, with a local UI to keep alive, is
-# where it matters most. The cost is losing automatic recovery from a
-# wedged WiFi stack.
+# reboot_timeout is 0s, matching the Dial firmware
+# (firmware/dial/connectivity.yaml) and the `api` block below: ADR-0001
+# forbids the device rebooting for want of a network, and Home Assistant
+# is unreachable precisely when WiFi is down. The ESPHome default reboots
+# after 15 minutes with no WiFi association. This board's only control
+# surfaces are network ones, so here the effect is simply that a
+# wedged-WiFi dev board doesn't cycle while you work on it -- the Dial,
+# with a local UI to keep alive, is where it matters most. The cost is
+# losing automatic recovery from a wedged WiFi stack.
 wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
