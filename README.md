@@ -88,6 +88,10 @@ These constraints apply for the life of the project, not just Phase 1:
 - Touch interface
 - Rotary encoder
 
+**Phase 3 (in progress)**
+- ESPHome native API, encrypted
+- Home Assistant integration
+
 ## Planned Repository Structure
 
 `firmware/` does not exist yet, and won't until Phase 3 (Home Assistant integration) is complete: it's created once the full basic implementation is in place, at which point the project also bumps to its first versioned release, v1.0.0. Until then, the Dial's working configuration continues to live under `examples/`, alongside the dev-board scaffold — see the Status section above.
@@ -104,7 +108,7 @@ volcano-hybrid-companion/
 
 ## Contributing
 
-Not yet open for contributions. Both Phase 1 (the BLE foundation) and Phase 2 (the M5Stack Dial UI) are now complete, but the project doesn't yet have a contribution process — issue triage, review expectations, and so on — defined.
+Not yet open for contributions. Phase 1 (the BLE foundation) and Phase 2 (the M5Stack Dial UI) are complete and Phase 3 (optional Home Assistant integration) is in progress, but the project doesn't yet have a contribution process — issue triage, review expectations, and so on — defined.
 
 ## Licence
 
