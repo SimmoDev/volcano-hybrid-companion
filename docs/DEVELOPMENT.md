@@ -28,7 +28,7 @@ What Phase 1 delivered, and what Phase 2 builds on:
 
 ## Validating the component locally
 
-The current example configuration is [`examples/esp32-s3-devkit-minimal.yaml`](../examples/esp32-s3-devkit-minimal.yaml). It loads the `volcano` component and targets the Phase 1 development board, with two-way number/switch controls and read-only state sensors — see [`examples/README.md`](../examples/README.md) for what they do. It reads a BLE MAC address from `examples/secrets.yaml` (not committed — copy it from [`examples/secrets.yaml.example`](../examples/secrets.yaml.example)), but `esphome config`/`esphome compile` below need only a placeholder value, not a real device.
+The current example configuration is [`examples/esp32-s3-devkit-minimal.yaml`](../examples/esp32-s3-devkit-minimal.yaml). It loads the `volcano` component and targets the Phase 1 development board, with two-way number/switch controls and read-only state sensors — see [`examples/README.md`](../examples/README.md) for what they do. It reads its BLE MAC address, WiFi credentials and API encryption key from `examples/secrets.yaml` (not committed — copy [`examples/secrets.yaml.example`](../examples/secrets.yaml.example) to it). `esphome config`/`esphome compile` below need every one of those keys present but not real — the example file's placeholders satisfy them, with no device attached.
 
 Requires the [ESPHome CLI](https://esphome.io/) installed locally. From the repository root:
 
