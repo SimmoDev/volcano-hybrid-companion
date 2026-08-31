@@ -29,7 +29,7 @@ jobs:
       # real device -- see docs/DEVELOPMENT.md. secrets.yaml itself is
       # gitignored in both trees, so CI creates each fresh from its
       # committed example: examples/ for the dev-board scaffold,
-      # firmware/ for the shipped Dial config.
+      # firmware/ for the Dial firmware config.
       - name: Create placeholder secrets.yaml
         run: |
           cp examples/secrets.yaml.example examples/secrets.yaml
@@ -54,7 +54,7 @@ jobs:
         run: esphome config examples/esp32-s3-devkit.yaml
       - name: esphome compile (dev board)
         run: esphome compile examples/esp32-s3-devkit.yaml
-      # The shipped Dial firmware (firmware/m5stack-dial.yaml), reading
+      # The Dial firmware (firmware/m5stack-dial.yaml), reading
       # firmware/secrets.yaml created above -- its ble_client needs
       # volcano_mac_address, its wifi (for the Home page's WiFi status
       # icon and its own web_server page) needs wifi_ssid/wifi_password,

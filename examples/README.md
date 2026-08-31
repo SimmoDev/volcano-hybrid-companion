@@ -1,6 +1,6 @@
 # Examples
 
-An example ESPHome configuration that exercises the `volcano` component. The shipped device firmware lives under [`firmware/`](../firmware/README.md); what is here is a scaffold — a compile check and a BLE-only test surface for the component on the Phase 1 development board. It is still a working config you can flash to real hardware — see [`docs/DEVELOPMENT.md`](../docs/DEVELOPMENT.md#validating-the-component-locally) for validating that it loads and compiles without a physical device. This document covers the next step: getting it running on real hardware and watching what it does.
+An example ESPHome configuration that exercises the `volcano` component. The device firmware the project will ship lives under [`firmware/`](../firmware/README.md); what is here is a scaffold — a compile check and a BLE-only test surface for the component on the Phase 1 development board. It is still a working config you can flash to real hardware — see [`docs/DEVELOPMENT.md`](../docs/DEVELOPMENT.md#validating-the-component-locally) for validating that it loads and compiles without a physical device. This document covers the next step: getting it running on real hardware and watching what it does.
 
 ## `esp32-s3-devkit.yaml`
 

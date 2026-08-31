@@ -3,8 +3,8 @@
 # two-way number/switch controls (auto-shutoff duration, heater/pump
 # on/off, target temperature, and more), on the Phase 1 development board
 # (ADR-0004). This is a compile check and a BLE-only test scaffold, not
-# device firmware -- the shipped firmware is the M5Stack Dial config under
-# firmware/. Its state and controls are reachable both
+# device firmware -- that is the M5Stack Dial config under firmware/.
+# Its state and controls are reachable both
 # from the local web_server page and, per ADR-0012, from Home Assistant
 # through the ESPHome `api` component. See components/volcano/README.md
 # and ADR-0002/ADR-0003/ADR-0007 for the architecture this follows.
