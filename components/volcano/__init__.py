@@ -7,6 +7,7 @@ from esphome.const import (
     CONF_ID,
     CONF_MAX_VALUE,
     CONF_MIN_VALUE,
+    CONF_RESTORE_MODE,
     CONF_STEP,
     CONF_TARGET_TEMPERATURE,
     DEVICE_CLASS_CONNECTIVITY,
@@ -116,6 +117,30 @@ def _number_range_schema(default_min, default_max):
         cv.Optional(CONF_STEP, default=1.0): cv.positive_not_null_float,
     }
 
+
+# restore_mode is locked to DISABLED for every volcano switch, not merely
+# defaulted to it. ESPHome's switch_schema(default_restore_mode=...) leaves
+# the key overridable in YAML; these switches must never restore a state at
+# boot. A restored heater or pump switch would actuate real hardware, and a
+# restored setting switch would re-assert a stale value, before the device
+# has reported what it is actually doing -- state always comes from the
+# device (ADR-0002, ADR-0009), never from persisted switch state.
+def _restore_mode_disabled_only(value):
+    restore_mode = cv.enum(switch.RESTORE_MODES, upper=True, space="_")(value)
+    if restore_mode != "DISABLED":
+        raise cv.Invalid(
+            "restore_mode is fixed to DISABLED for volcano switches and cannot "
+            "be overridden -- see components/volcano/README.md"
+        )
+    return restore_mode
+
+
+def _volcano_switch_schema(class_, **kwargs):
+    return switch.switch_schema(class_, **kwargs).extend(
+        {cv.Optional(CONF_RESTORE_MODE, default="DISABLED"): _restore_mode_disabled_only}
+    )
+
+
 CONFIG_SCHEMA = (
     cv.Schema(
         {
@@ -176,22 +201,21 @@ CONFIG_SCHEMA = (
             cv.Optional(CONF_CONNECTED): binary_sensor.binary_sensor_schema(
                 device_class=DEVICE_CLASS_CONNECTIVITY,
             ),
-            # DISABLED restore mode, deliberately: any other mode makes the
-            # switch apply a remembered state at boot, which would actuate
-            # the heater or pump before the status register has reported
-            # what the device is actually doing. State comes from the
-            # device, never from what was last commanded.
-            cv.Optional(CONF_HEATER): switch.switch_schema(
+            # restore_mode is locked to DISABLED for every switch below --
+            # see _volcano_switch_schema() above for why a switch that
+            # restored a state at boot would actuate the heater or pump
+            # before the status register has reported what the device is
+            # actually doing. State comes from the device, never from what
+            # was last commanded.
+            cv.Optional(CONF_HEATER): _volcano_switch_schema(
                 VolcanoHeaterSwitch,
                 icon=ICON_RADIATOR,
                 device_class=DEVICE_CLASS_SWITCH,
-                default_restore_mode="DISABLED",
             ),
-            cv.Optional(CONF_PUMP): switch.switch_schema(
+            cv.Optional(CONF_PUMP): _volcano_switch_schema(
                 VolcanoPumpSwitch,
                 icon=ICON_FAN,
                 device_class=DEVICE_CLASS_SWITCH,
-                default_restore_mode="DISABLED",
             ),
             # The heater-runtime meter (STATE-001/STATE-006), a pair:
             # minutes counts 0-59 and carries into hours. Both advance only
@@ -213,26 +237,24 @@ CONFIG_SCHEMA = (
                 entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
             ),
             # A setting rather than an actuator, so it groups with the
-            # other settings rather than with Heat and Air. Same DISABLED
-            # restore mode and same no-optimistic-publish rule as those:
-            # the state shown is the register's, not what was requested.
-            cv.Optional(CONF_VIBRATION): switch.switch_schema(
+            # other settings rather than with Heat and Air. Same locked
+            # DISABLED restore mode and same no-optimistic-publish rule as
+            # those: the state shown is the register's, not what was
+            # requested.
+            cv.Optional(CONF_VIBRATION): _volcano_switch_schema(
                 VolcanoVibrationSwitch,
                 icon="mdi:vibrate",
                 entity_category=ENTITY_CATEGORY_CONFIG,
-                default_restore_mode="DISABLED",
             ),
-            cv.Optional(CONF_DISPLAY_ON_COOLING): switch.switch_schema(
+            cv.Optional(CONF_DISPLAY_ON_COOLING): _volcano_switch_schema(
                 VolcanoDisplayOnCoolingSwitch,
                 icon="mdi:snowflake",
                 entity_category=ENTITY_CATEGORY_CONFIG,
-                default_restore_mode="DISABLED",
             ),
-            cv.Optional(CONF_DISPLAY_UNITS_FAHRENHEIT): switch.switch_schema(
+            cv.Optional(CONF_DISPLAY_UNITS_FAHRENHEIT): _volcano_switch_schema(
                 VolcanoDisplayUnitsSwitch,
                 icon="mdi:temperature-fahrenheit",
                 entity_category=ENTITY_CATEGORY_CONFIG,
-                default_restore_mode="DISABLED",
             ),
             # Device information: fixed per unit, read once per connection,
             # never written. Diagnostic rather than primary state, so they
