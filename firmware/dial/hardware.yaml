@@ -1,12 +1,13 @@
 esphome:
-  name: volcano-dial-scaffold
+  name: volcano-hybrid-dial
   # ESPHOME_PROJECT_VERSION (used on dial/info-pages.yaml's About page)
   # is compiled from this -- our own firmware's version, distinct from
   # the Volcano's own firmware/BLE firmware versions the volcano
-  # component reports.
+  # component reports. Tracks the repository's tagged releases: 1.0.0 is
+  # the first, cut when Phase 3 (ADR-0012) closed.
   project:
     name: "volcano-hybrid-companion.dial"
-    version: "0.1.0"
+    version: "1.0.0"
   on_boot:
     then:
       # Publishes once -- ESPHOME_PROJECT_VERSION is a compile-time
@@ -207,7 +208,7 @@ touchscreen:
     # pattern above has.
 
 
-# DSEG7 Classic Bold (SIL OFL 1.1 -- see examples/fonts/DSEG-LICENSE.txt),
+# DSEG7 Classic Bold (SIL OFL 1.1 -- see firmware/fonts/DSEG-LICENSE.txt),
 # chosen per ADR-0010/ADR-0011 so the Home page's temperature readouts
 # echo the Volcano's own digital display. One size for both temperatures
 # -- the device's own panel shows current and target at the same size,

@@ -7,7 +7,7 @@ on:
 
 jobs:
   esphome:
-    name: Validate and compile the example ESPHome configs
+    name: Validate and compile the ESPHome configs
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -25,11 +25,15 @@ jobs:
       - name: Get installed ESPHome version
         id: esphome_version
         run: echo "version=$(esphome version | head -n1 | awk '{print $2}')" >> "$GITHUB_OUTPUT"
-      # esphome config/compile need only a placeholder value here, not a
+      # esphome config/compile need only placeholder values here, not a
       # real device -- see docs/DEVELOPMENT.md. secrets.yaml itself is
-      # gitignored, so CI creates it fresh from the committed example.
+      # gitignored in both trees, so CI creates each fresh from its
+      # committed example: examples/ for the dev-board scaffold,
+      # firmware/ for the shipped Dial config.
       - name: Create placeholder secrets.yaml
-        run: cp examples/secrets.yaml.example examples/secrets.yaml
+        run: |
+          cp examples/secrets.yaml.example examples/secrets.yaml
+          cp firmware/secrets.yaml.example firmware/secrets.yaml
       # Recent ESPHome releases fetch their own ESP-IDF toolchain into
       # ~/.cache/esphome rather than using PlatformIO's ~/.platformio --
       # confirmed by actually running this job locally with `act` rather
@@ -50,16 +54,17 @@ jobs:
         run: esphome config examples/esp32-s3-devkit.yaml
       - name: esphome compile (dev board)
         run: esphome compile examples/esp32-s3-devkit.yaml
-      # Shares the same placeholder secrets.yaml created above -- this
-      # config's ble_client needs volcano_mac_address, its wifi (for the
-      # Home page's WiFi status icon and its own web_server page) needs
-      # wifi_ssid/wifi_password, and its api: block (added in Phase 3 per
-      # ADR-0012, and validated here against the example key) needs
-      # api_encryption_key. web_server is retained per ADR-0010.
-      - name: esphome config (M5Stack Dial)
-        run: esphome config examples/m5stack-dial-minimal.yaml
-      - name: esphome compile (M5Stack Dial)
-        run: esphome compile examples/m5stack-dial-minimal.yaml
+      # The shipped Dial firmware (firmware/m5stack-dial.yaml), reading
+      # firmware/secrets.yaml created above -- its ble_client needs
+      # volcano_mac_address, its wifi (for the Home page's WiFi status
+      # icon and its own web_server page) needs wifi_ssid/wifi_password,
+      # and its api: block (Phase 3 per ADR-0012, validated here against
+      # the example key) needs api_encryption_key. web_server is retained
+      # per ADR-0010.
+      - name: esphome config (M5Stack Dial firmware)
+        run: esphome config firmware/m5stack-dial.yaml
+      - name: esphome compile (M5Stack Dial firmware)
+        run: esphome compile firmware/m5stack-dial.yaml
 
   volcano-device-tests:
     name: Volcano component host-side tests

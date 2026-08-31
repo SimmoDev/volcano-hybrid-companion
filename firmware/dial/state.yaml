@@ -17,7 +17,7 @@
 # The LED Brightness/Auto-Shutoff Duration/Dial Brightness pages' own
 # pending_*/*_step pairs come from dial/numeric-value-page.yaml's
 # template instead of being declared here -- see that file and each
-# page's own !include vars in m5stack-dial-minimal.yaml.
+# page's own !include vars in m5stack-dial.yaml.
 globals:
   - id: ble_connecting
     type: bool

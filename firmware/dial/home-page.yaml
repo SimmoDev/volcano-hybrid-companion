@@ -57,7 +57,7 @@ lvgl:
             text: "--:--"
         # LV_SYMBOL_BLUETOOTH/LV_SYMBOL_WIFI (LVGL's own bundled icon
         # glyphs, no separate font asset needed -- confirmed present in
-        # the vendored LVGL source under examples/.esphome/build/) written
+        # the vendored LVGL source under this config's .esphome/build/) written
         # as \u escapes since both are Private Use Area codepoints. No
         # strikethrough variant exists in LVGL's built-in set, so
         # DISCONNECTED is colour-only (steady red) rather than a crossed-

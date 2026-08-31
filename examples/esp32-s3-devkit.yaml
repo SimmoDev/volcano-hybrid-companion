@@ -156,7 +156,7 @@ volcano:
   # sharing a screenshot or a log, in the same way as the BLE address.
   #
   # Weights offset by 100 from the (none)/config groups' own 5-90 range,
-  # matching the M5Stack Dial example's identical scheme (examples/dial/
+  # matching the M5Stack Dial firmware's identical scheme (firmware/dial/
   # volcano-entities.yaml) exactly -- see that file's own comment for why
   # the offset exists, and for the ordering these weights follow (matching
   # the Dial's About/Diagnostics pages' own layout).

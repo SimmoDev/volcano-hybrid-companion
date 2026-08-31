@@ -1,13 +1,13 @@
 # ADR-0011's shared rotary-adjusted numeric-value page template,
 # instantiated three times (LED Brightness, Auto-Shutoff Duration,
-# Dial Brightness) via !include vars in m5stack-dial-minimal.yaml.
+# Dial Brightness) via !include vars in m5stack-dial.yaml.
 # Covers what's genuinely identical across all three: the write-
 # coalescing pending/step globals, the commit/refresh script skeleton,
 # and the page layout (caption, value, unit, step-size button row).
 # What differs per instance -- the commit script's actual write
 # (number.set: on a VolcanoDevice field for two of three, globals.set:/
 # output.set_level: for Dial Brightness's local backlight; see
-# m5stack-dial-minimal.yaml's own dial_brightness_page !include vars),
+# m5stack-dial.yaml's own dial_brightness_page !include vars),
 # the refresh label's exact format, pending_id's initial_value (NaN for
 # the two VolcanoDevice fields, which start unknown until the device's
 # first report; a real default for Dial Brightness, which on_boot seeds

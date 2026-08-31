@@ -57,7 +57,7 @@ script:
   # commit/refresh pairs -- same shape as commit_target_temperature/
   # refresh_target_temp_label above, but generated from
   # dial/numeric-value-page.yaml's shared template (see that file and
-  # each page's own !include vars in m5stack-dial-minimal.yaml) rather
+  # each page's own !include vars in m5stack-dial.yaml) rather
   # than declared here, since they're one part of that page template,
   # not a standalone script.
   # Dial Sound's flank-label colours (Off/On, same active-cyan/inactive-grey
