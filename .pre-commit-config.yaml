@@ -19,7 +19,7 @@ repos:
       - id: readme-staleness-nudge
         name: Nudge about state-describing docs a code/ADR/example change skips
         description: Advisory only -- never fails the commit.
-        entry: python3 scripts/check_readme_sync.py
+        entry: python3 scripts/check_readme_staleness.py
         language: system
         pass_filenames: false
         always_run: true
