@@ -28,12 +28,12 @@
 # Same caption/status layout technique as Settings (flex column,
 # scrollable: false, tight pad_row) -- eight stacked groups now: BLE and
 # WiFi are caption+status+switch-row (three each), Home Assistant is
-# caption+status only. Two groups past the six Settings proved fit, so
-# the BLE status text was cut to one short line to claw a line back
+# caption+status only. That is two groups past the six the Settings page
+# proved fit, so the BLE status text is held to one short line
 # ("Disconnected - in use?" -- a longer string clips against the round
-# edge at that near-the-top row). All eight clearing the display without
-# clipping was verified on real hardware, and stays a hardware check for
-# any further change here.
+# edge at that near-the-top row). All eight clear the display without
+# clipping on real hardware, and that stays a hardware check for any
+# further change here.
 #
 # refresh_ble_connection_status/refresh_ble_switch_labels/
 # refresh_wifi_switch_labels/refresh_ha_connection_status
