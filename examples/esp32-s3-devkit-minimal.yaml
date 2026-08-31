@@ -13,8 +13,10 @@
 # address as `volcano_mac_address`, your WiFi credentials as
 # `wifi_ssid`/`wifi_password`, and an `api_encryption_key` (see the
 # comments above `api` and `web_server` below). The example file's
-# placeholders satisfy `esphome config`/`compile`; flashing to hardware
-# needs real values.
+# placeholders satisfy `esphome config`/`compile`. To run on hardware,
+# `volcano_mac_address` and the WiFi credentials need real values; the
+# shared `api_encryption_key` dummy technically works but is public, so
+# replace it too (see `api` below).
 
 esphome:
   name: volcano-dev-scaffold
@@ -180,11 +182,15 @@ volcano:
 # connection -- the volcano component itself is BLE-only and has no
 # dependency on it. Credentials come from secrets.yaml, not committed.
 #
-# reboot_timeout is 0s for the same ADR-0001 reason as `api` below: the
-# ESPHome default reboots the device after 15 minutes without a WiFi
-# association, which would break control of the Volcano whenever the
-# network is simply down. The cost is losing that automatic recovery
-# from a wedged WiFi stack.
+# reboot_timeout is 0s, matching the Dial config (dial/connectivity.yaml)
+# and the `api` block below: ADR-0001 forbids the device rebooting for
+# want of a network, and Home Assistant is unreachable precisely when
+# WiFi is down. The ESPHome default reboots after 15 minutes with no WiFi
+# association. This board's only control surfaces are network ones, so
+# here the effect is simply that a wedged-WiFi dev board doesn't cycle
+# while you work on it -- the Dial, with a local UI to keep alive, is
+# where it matters most. The cost is losing automatic recovery from a
+# wedged WiFi stack.
 wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
