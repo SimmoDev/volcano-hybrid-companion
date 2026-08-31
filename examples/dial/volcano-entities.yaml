@@ -6,10 +6,11 @@ volcano:
   # but also named and given a sorting_weight (matching the dev-board
   # example, esp32-s3-devkit-minimal.yaml, exactly) to expose it on
   # dial/connectivity.yaml's web_server page, per ADR-0010's decision to
-  # retain web_server unchanged on the Dial. name:/web_server: and the
-  # automation triggers are independent: removing internal: true doesn't
-  # touch how these already drive the LVGL UI, it only makes the entity
-  # externally visible too.
+  # retain web_server unchanged on the Dial -- and, through the api:
+  # block that same file declares, to Home Assistant (ADR-0012). name:,
+  # web_server: and the automation triggers are independent: removing
+  # internal: true doesn't touch how these already drive the LVGL UI, it
+  # only makes the entity externally visible too.
   connected:
     id: volcano_connected
     name: "Connected"

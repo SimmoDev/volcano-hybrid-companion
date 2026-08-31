@@ -48,7 +48,8 @@ ble_client:
 volcano:
   id: volcano_component
   ble_client_id: volcano_ble_client
-  # Optional -- exposes decoded state on the web_server page below,
+  # Optional -- exposes decoded state on the web_server page below and,
+  # through the api: block further down, to Home Assistant (ADR-0012),
   # including on-panel changes. Everything the device lets us both read
   # and write is a single two-way control rather than a readout plus
   # separate setters.
