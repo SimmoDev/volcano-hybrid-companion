@@ -146,9 +146,15 @@ script:
   # event rather than tracking a per-client count, so a second client --
   # an `esphome logs` session over the API, say -- connecting or
   # dropping doesn't flip the line while Home Assistant itself is still
-  # connected. Indicator only: ADR-0012 gives Home Assistant no switch
-  # here, so there are no flanking Off/On labels to keep in sync the way
-  # the BLE and WiFi rows have.
+  # connected. api.connected is true for *any* API client, so the
+  # converse also holds: with Home Assistant down but an `esphome logs`
+  # session attached, the line still reads Connected. ADR-0012 scopes
+  # this row to "whether an API client is currently connected", not to
+  # Home Assistant specifically -- deliberate, and ESPHome exposes no
+  # per-client identity to filter on in any case. Indicator only:
+  # ADR-0012 gives Home Assistant no switch here, so there are no
+  # flanking Off/On labels to keep in sync the way the BLE and WiFi
+  # rows have.
   - id: refresh_ha_connection_status
     then:
       - if:
