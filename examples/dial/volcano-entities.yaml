@@ -4,7 +4,7 @@ volcano:
   # Every entity below is consumed directly by the Home/Settings/etc.
   # LVGL widgets via its own automation triggers, exactly as before --
   # but also named and given a sorting_weight (matching the dev-board
-  # example, esp32-s3-devkit-minimal.yaml, exactly) to expose it on
+  # example, esp32-s3-devkit.yaml, exactly) to expose it on
   # dial/connectivity.yaml's web_server page, per ADR-0010's decision to
   # retain web_server unchanged on the Dial -- and, through the api:
   # block that same file declares, to Home Assistant (ADR-0012). name:,

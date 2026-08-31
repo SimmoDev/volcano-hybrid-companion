@@ -94,7 +94,7 @@ api:
 
 # Brought back per ADR-0010's decision to retain web_server unchanged on
 # the Dial firmware, matching the dev-board example
-# (esp32-s3-devkit-minimal.yaml) exactly -- same port/local/version, same
+# (esp32-s3-devkit.yaml) exactly -- same port/local/version, same
 # entity names and sorting_weight values, for a manual-testing control
 # surface independent of the Dial's own LVGL UI. Same trust model as that
 # example: no authentication, no TLS, fine on a trusted home network.

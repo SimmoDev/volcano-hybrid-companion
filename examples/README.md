@@ -2,7 +2,7 @@
 
 Example ESPHome configurations that exercise the components in this repository. These are working configs you can flash to real hardware, not just compile checks — see [`docs/DEVELOPMENT.md`](../docs/DEVELOPMENT.md#validating-the-component-locally) for validating that a config loads and compiles without a physical device. This document covers the next step: getting one running on real hardware and watching what it does.
 
-## `esp32-s3-devkit-minimal.yaml`
+## `esp32-s3-devkit.yaml`
 
 Targets the Phase 1 development board ([ADR-0004](../docs/decisions/ADR-0004-development-hardware-strategy.md)) and exercises the `volcano` component's current BLE implementation — see [`components/volcano/README.md`](../components/volcano/README.md) for what it does. Its entities are the command controls and the state sensors described below, reachable both from the local `web_server` page and — per [ADR-0012](../docs/decisions/ADR-0012-home-assistant-integration.md) — from Home Assistant through the ESPHome `api` component.
 
@@ -37,15 +37,15 @@ The temperature entities are always Celsius, and Home Assistant converts them pe
 Requires the [ESPHome CLI](https://esphome.io/) and an ESP32-S3 board connected over USB. From the repository root, substituting whichever example config you're using:
 
 ```sh
-esphome run examples/esp32-s3-devkit-minimal.yaml
+esphome run examples/esp32-s3-devkit.yaml
 esphome run examples/m5stack-dial-minimal.yaml
 ```
 
 This compiles, flashes over USB, and opens the log monitor in one step — it'll prompt you to pick a serial port on first run. To flash and watch logs as separate steps instead:
 
 ```sh
-esphome upload examples/esp32-s3-devkit-minimal.yaml
-esphome logs examples/esp32-s3-devkit-minimal.yaml
+esphome upload examples/esp32-s3-devkit.yaml
+esphome logs examples/esp32-s3-devkit.yaml
 ```
 
 `esphome logs` also re-attaches to an already-running device without reflashing it, which is the faster way back in after the first flash.
@@ -56,7 +56,7 @@ Watch for the `[volcano]` log tag: it logs heater/pump state, the auto-shutoff c
 
 ## Sending commands and watching state (`web_server`)
 
-Both example configs serve the same kind of local `web_server` page, described here for `esp32-s3-devkit-minimal.yaml`; the Dial's page is identical in shape (see above for its one extra entity). Once connected to WiFi, the device serves a local page at `http://<device-ip-or-hostname>/` (`volcano-dev-scaffold.local` by default, or check `esphome logs` for the IP it picked up on connect). The page has no authentication and no TLS; fine on a trusted home network for this development example, not something to expose beyond it.
+Both example configs serve the same kind of local `web_server` page, described here for `esp32-s3-devkit.yaml`; the Dial's page is identical in shape (see above for its one extra entity). Once connected to WiFi, the device serves a local page at `http://<device-ip-or-hostname>/` (`volcano-dev-scaffold.local` by default, or check `esphome logs` for the IP it picked up on connect). The page has no authentication and no TLS; fine on a trusted home network for this development example, not something to expose beyond it.
 
 It exposes one control per value: a "Connected" binary sensor; "Heat" and "Air" switches for the heater and pump; number controls for the target temperature (°C), the auto-shutoff duration (minutes) and LED brightness (0–100); vibration, display-on-cooling and Fahrenheit toggles; read-only sensors for the current temperature and the auto-shutoff countdown; and a diagnostic group — the heater-runtime meter (hours and minutes of operation) and five fixed device-information strings (serial number, power supply, product line, firmware version and BLE firmware version), the strings read once when the connection is established. That list is a functional inventory, not the page's layout order — see the note on `sorting_weight` below for how the entities are actually grouped on screen. The two switches are named after the labels on the Volcano's own panel rather than this project's own terminology, so the two read the same side by side — see [`docs/CONVENTIONS.md`](../docs/CONVENTIONS.md#device-actuators-heater-and-pump-except-on-a-label).
 

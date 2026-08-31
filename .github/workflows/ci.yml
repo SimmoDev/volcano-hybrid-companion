@@ -47,9 +47,9 @@ jobs:
           restore-keys: |
             esphome-toolchains-${{ runner.os }}-
       - name: esphome config (dev board)
-        run: esphome config examples/esp32-s3-devkit-minimal.yaml
+        run: esphome config examples/esp32-s3-devkit.yaml
       - name: esphome compile (dev board)
-        run: esphome compile examples/esp32-s3-devkit-minimal.yaml
+        run: esphome compile examples/esp32-s3-devkit.yaml
       # Shares the same placeholder secrets.yaml created above -- this
       # config's ble_client needs volcano_mac_address, its wifi (for the
       # Home page's WiFi status icon and its own web_server page) needs
