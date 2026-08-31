@@ -39,13 +39,21 @@
 # refresh_wifi_switch_labels/refresh_ha_connection_status
 # (dial/scripts.yaml) keep this page's status text/colours -- and the
 # Home page's small BLE/WiFi icons -- in sync from one place, since
-# those surfaces render the same underlying state.
+# those surfaces render the same underlying state. They run on every
+# connection event and once on page load (on_load below), so an event
+# that landed before this page's widgets existed can't leave a row
+# showing stale text.
 lvgl:
   pages:
     - id: connections_page
       bg_color: ${black}
       bg_opa: cover
       scrollable: false
+      on_load:
+        - script.execute: refresh_ble_connection_status
+        - script.execute: refresh_ble_switch_labels
+        - script.execute: refresh_wifi_switch_labels
+        - script.execute: refresh_ha_connection_status
       layout:
         type: flex
         flex_flow: column
@@ -200,6 +208,11 @@ lvgl:
         # (dial/connectivity.yaml) drive it live via
         # refresh_ha_connection_status. Short one-line text either way, so
         # no long_mode: wrap / width like the BLE status label needs.
+        #
+        # The caption stays "Home Assistant" for user recognition even
+        # though the line actually tracks any api client -- an `esphome
+        # logs` session counts too. ESPHome exposes no per-client identity
+        # to filter on; see refresh_ha_connection_status's own comment.
         - label:
             text_color: ${cyan}
             text: "Home Assistant"
