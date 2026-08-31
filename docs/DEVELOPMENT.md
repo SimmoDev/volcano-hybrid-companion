@@ -22,7 +22,7 @@ What Phase 1 delivered, and what Phase 2 builds on:
 
 - **`components/volcano/`** — the Volcano ESPHome external component. See [`components/volcano/README.md`](../components/volcano/README.md) for its current implementation status and component-specific build notes.
 - **`examples/`** — example ESPHome YAML configurations that exercise the components in this repository; they are not production device firmware. See [`examples/README.md`](../examples/README.md) for what each one does and how to flash it to real hardware.
-- **`docs/decisions/`** — the ADR series. Each ADR records one architectural decision and its reasoning; see [ADR-0001](decisions/ADR-0001-project-vision.md) onward for the full set.
+- **`docs/decisions/`** — the ADR series. Each ADR records one architectural decision and its reasoning; see the [ADR index](decisions/README.md) for the full set.
 - **`docs/protocol/`** — Volcano BLE protocol findings, recorded per [ADR-0006](decisions/ADR-0006-protocol-documentation-structure.md).
 - **`docs/CONVENTIONS.md`** — the living reference for terminology, spelling, Markdown/naming conventions, and commit message style used across this repository.
 
