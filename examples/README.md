@@ -8,7 +8,7 @@ Targets the Phase 1 development board ([ADR-0004](../docs/decisions/ADR-0004-dev
 
 It needs a real Volcano's BLE MAC address to connect to anything. Copy [`secrets.yaml.example`](secrets.yaml.example) to `secrets.yaml` alongside it (not committed — see the repository's `.gitignore`) and set `volcano_mac_address` to your device's actual address. A placeholder value is fine for `esphome config`/`esphome compile`, but flashing it to hardware needs the real one to see anything happen.
 
-It also joins your WiFi network — set `wifi_ssid`/`wifi_password` in the same `secrets.yaml` — so a browser on that network can reach the command controls described in "Sending commands" below and so Home Assistant can connect. Home Assistant also needs `api_encryption_key` set: generate one with `openssl rand -base64 32`, or use the committed placeholder, which only satisfies `esphome config`/`esphome compile`. The `volcano` component itself is BLE-only and has no WiFi dependency; WiFi exists in this example only to serve those two interfaces.
+It also joins your WiFi network — set `wifi_ssid`/`wifi_password` in the same `secrets.yaml` — so a browser on that network can reach the command controls described in "Sending commands" below and so Home Assistant can connect. Home Assistant also needs `api_encryption_key` set: generate one with `openssl rand -base64 32`. The committed placeholder is a valid key and works on real hardware too, but it is public — a device left with it has an API anyone with this repository can reach, so replace it for anything on a network you do not fully trust. The `volcano` component itself is BLE-only and has no WiFi dependency; WiFi exists in this example only to serve those two interfaces.
 
 ## `m5stack-dial-minimal.yaml`
 
