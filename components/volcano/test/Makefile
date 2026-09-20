@@ -17,11 +17,12 @@ BUILD := build
 
 .PHONY: test clean
 test: $(BUILD)/volcano_device_test $(BUILD)/display_register_write_queue_test $(BUILD)/static_read_queue_test \
-      $(BUILD)/wire_format_test
+      $(BUILD)/wire_format_test $(BUILD)/pairing_test
 	$(BUILD)/volcano_device_test
 	$(BUILD)/display_register_write_queue_test
 	$(BUILD)/static_read_queue_test
 	$(BUILD)/wire_format_test
+	$(BUILD)/pairing_test
 
 $(BUILD)/volcano_device_test: volcano_device_test.cpp fakes/volcano_ble_client.h \
                               fakes/esphome/core/optional.h fakes/esphome/core/hal.h fakes/esphome/core/log.h \
@@ -29,7 +30,7 @@ $(BUILD)/volcano_device_test: volcano_device_test.cpp fakes/volcano_ble_client.h
 	cp ../volcano_device.cpp $(BUILD)/volcano_device.cpp
 	$(CXX) $(CXXFLAGS) volcano_device_test.cpp $(BUILD)/volcano_device.cpp -o $@
 
-# display_register_write_queue.h, static_read_queue.h and wire_format.h each
+# display_register_write_queue.h, static_read_queue.h, wire_format.h and pairing.h each
 # have no BLE/ESP-IDF dependency of their own (unlike volcano_ble_client.h,
 # which they are part of), so they build directly against the real headers
 # with no staging trick needed -- see each header's own comment.
@@ -43,6 +44,9 @@ $(BUILD)/static_read_queue_test: static_read_queue_test.cpp ../static_read_queue
 
 $(BUILD)/wire_format_test: wire_format_test.cpp ../wire_format.h | $(BUILD)
 	$(CXX) $(CXXFLAGS) wire_format_test.cpp -o $@
+
+$(BUILD)/pairing_test: pairing_test.cpp ../pairing.h | $(BUILD)
+	$(CXX) $(CXXFLAGS) pairing_test.cpp -o $@
 
 $(BUILD):
 	mkdir -p $(BUILD)

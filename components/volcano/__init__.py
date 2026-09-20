@@ -1,13 +1,24 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome.components import ble_client, binary_sensor, number, sensor, switch, text_sensor
+from esphome.components import (
+    ble_client,
+    binary_sensor,
+    esp32_ble_tracker,
+    number,
+    sensor,
+    switch,
+    text,
+    text_sensor,
+)
 from esphome.const import (
+    CONF_ADDRESS,
     CONF_CURRENT_TEMPERATURE,
     CONF_HEATER,
     CONF_ID,
     CONF_MAX_VALUE,
     CONF_MIN_VALUE,
     CONF_RESTORE_MODE,
+    CONF_STATUS,
     CONF_STEP,
     CONF_TARGET_TEMPERATURE,
     DEVICE_CLASS_CONNECTIVITY,
@@ -49,7 +60,7 @@ from esphome.const import (
 
 CODEOWNERS = ["@SimmoDev"]
 DEPENDENCIES = ["ble_client"]
-AUTO_LOAD = ["binary_sensor", "sensor", "number", "switch", "text_sensor"]
+AUTO_LOAD = ["binary_sensor", "sensor", "number", "switch", "text", "text_sensor"]
 
 CONF_PUMP = "pump"
 CONF_CONNECTED = "connected"
@@ -66,6 +77,8 @@ CONF_DISPLAY_UNITS_FAHRENHEIT = "display_units_fahrenheit"
 CONF_LED_BRIGHTNESS = "led_brightness"
 CONF_HOURS_OF_OPERATION = "hours_of_operation"
 CONF_MINUTES_OF_OPERATION = "minutes_of_operation"
+CONF_PAIRING = "pairing"
+CONF_SEARCH_DURATION = "search_duration"
 
 volcano_ns = cg.esphome_ns.namespace("volcano")
 VolcanoComponent = volcano_ns.class_(
@@ -94,6 +107,17 @@ VolcanoHeaterSwitch = volcano_ns.class_(
 )
 VolcanoPumpSwitch = volcano_ns.class_(
     "VolcanoPumpSwitch", switch.Switch, cg.Parented.template(VolcanoComponent)
+)
+
+# ADR-0013: finds the Volcano at runtime instead of taking its address from a
+# compile-time `mac_address`. Not a Volcano domain concept -- it never touches
+# a characteristic -- so it is its own class beside VolcanoComponent, per
+# ADR-0011's Pairing page note.
+VolcanoPairing = volcano_ns.class_(
+    "VolcanoPairing", cg.Component, esp32_ble_tracker.ESPBTDeviceListener
+)
+VolcanoAddressText = volcano_ns.class_(
+    "VolcanoAddressText", text.Text, cg.Parented.template(VolcanoPairing)
 )
 
 # Defaults for the three writable number entities are the ranges the
@@ -141,10 +165,43 @@ def _volcano_switch_schema(class_, **kwargs):
     )
 
 
+PAIRING_SCHEMA = (
+    cv.Schema(
+        {
+            cv.GenerateID(): cv.declare_id(VolcanoPairing),
+            # How long a scan runs before it decides between one, several and
+            # none (ADR-0013). Long enough for a second unit to turn up
+            # before the first is adopted without asking.
+            cv.Optional(CONF_SEARCH_DURATION, default="10s"): cv.All(
+                cv.positive_time_period_milliseconds,
+                cv.Range(min=cv.TimePeriod(milliseconds=1000)),
+            ),
+            # The paired unit's address, for correcting or setting it from a
+            # web_server page or Home Assistant. Empty while unpaired;
+            # writing an empty string forgets the current unit.
+            cv.Optional(CONF_ADDRESS): text.text_schema(
+                VolcanoAddressText,
+                icon=ICON_BLUETOOTH,
+                entity_category=ENTITY_CATEGORY_CONFIG,
+                mode="TEXT",
+            ),
+            cv.Optional(CONF_STATUS): text_sensor.text_sensor_schema(
+                icon=ICON_BLUETOOTH,
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+            ),
+        }
+    )
+    .extend(cv.COMPONENT_SCHEMA)
+    .extend(esp32_ble_tracker.ESP_BLE_DEVICE_SCHEMA)
+)
+
 CONFIG_SCHEMA = (
     cv.Schema(
         {
             cv.GenerateID(): cv.declare_id(VolcanoComponent),
+            # Optional: the dev-board example keeps its compile-time
+            # `mac_address` and has no use for this.
+            cv.Optional(CONF_PAIRING): PAIRING_SCHEMA,
             cv.Optional(CONF_CURRENT_TEMPERATURE): sensor.sensor_schema(
                 unit_of_measurement=UNIT_CELSIUS,
                 icon=ICON_THERMOMETER,
@@ -376,3 +433,21 @@ async def to_code(config):
     ):
         if entry := config.get(key):
             cg.add(setter(await text_sensor.new_text_sensor(entry)))
+
+    if pairing_config := config.get(CONF_PAIRING):
+        pairing = cg.new_Pvariable(pairing_config[CONF_ID])
+        await cg.register_component(pairing, pairing_config)
+        await esp32_ble_tracker.register_ble_device(pairing, pairing_config)
+        parent = await cg.get_variable(config[ble_client.CONF_BLE_CLIENT_ID])
+        cg.add(pairing.set_ble_client(parent))
+        cg.add(
+            pairing.set_scan_window_ms(pairing_config[CONF_SEARCH_DURATION].total_milliseconds)
+        )
+        if address_config := pairing_config.get(CONF_ADDRESS):
+            address_text = await text.new_text(address_config, min_length=0, max_length=17)
+            await cg.register_parented(address_text, pairing)
+            cg.add(pairing.set_address_text(address_text))
+        if status_config := pairing_config.get(CONF_STATUS):
+            cg.add(
+                pairing.set_status_text_sensor(await text_sensor.new_text_sensor(status_config))
+            )

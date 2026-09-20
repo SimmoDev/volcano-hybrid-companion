@@ -118,6 +118,40 @@ Entities default to an entity category reflecting what they are, so a UI can gro
 
 None of the five switches ever publishes optimistically — the state shown is the one the device reported, not the one that was requested — and their restore mode is fixed to `DISABLED`. Restoring a remembered state would actuate the heater or pump at boot, before the device has said what it is actually doing. None of them can represent "unknown" either (see "Optional entities" above): each holds whatever it last published across a disconnect, with `connected` as the signal that a held value may no longer reflect the device.
 
+## Pairing
+
+The address above can also be found at runtime instead of written into the configuration, per [ADR-0013](../../docs/decisions/ADR-0013-release-and-distribution.md) — which is what lets one prebuilt image serve every Volcano. Add an optional `pairing:` block:
+
+```yaml
+ble_client:
+  - mac_address: "00:00:00:00:00:00"   # a placeholder; pairing sets the real one
+    id: volcano_ble_client
+
+volcano:
+  ble_client_id: volcano_ble_client
+  pairing:
+    id: volcano_pairing
+    search_duration: 10s      # optional, this is the default
+    address:                  # optional: the paired address, editable
+      name: "Volcano address"
+    status:                   # optional: how pairing has got on
+      name: "Pairing status"
+```
+
+`ble_client` still requires a `mac_address`, so give it the all-zero placeholder; with `pairing:` present the real address is set on that client at boot, and the placeholder is never used. With no address known the client has nothing to match and never connects, so a device that has never been paired still boots and runs everything else — only Volcano control waits.
+
+Discovery scans for the Volcano's advertisement and recognises it by two things seen under the same address: the manufacturer data carrying a serial number, and the `S&B VOLCANO H` name in the scan response ([ADV-001](../../docs/protocol/gatt-services.md#adv-001--advertising-and-discovery)). Either alone is not enough — the manufacturer data's company ID identifies Storz & Bickel, not the product. When the search closes:
+
+- **one Volcano** seen is paired with straight away and its address stored, so every later boot uses it directly with no scan;
+- **several** are held for a choice, listed strongest signal first and identified by serial number;
+- **none** leaves the status at `Not found`. A Volcano held by another client, such as the official app, stops advertising ([CONN-003](../../docs/protocol/gatt-services.md#conn-003--single-connection-at-a-time)) and looks exactly like one that is off.
+
+`address` shows the paired address, empty while unpaired. Writing a valid `AA:BB:CC:DD:EE:FF` to it pairs with that unit directly, and writing an empty string forgets the current one and searches again. `status` reads `Searching`, `Choose one:` followed by the serial numbers on offer, `Not found` or `Paired`.
+
+A control interface with its own UI drives the same operations from a lambda, the way ESPHome's own components with no YAML action are driven elsewhere in this project: `id(volcano_pairing).rescan()`, `.select(index)`, `.forget()`, and `.state()`, `.candidate_count()`, `.candidate_serial(i)`, `.candidate_address_str(i)` and `.address_str()` to read where pairing has got to. `rescan()` is refused while paired — `forget()` first — so a stray press cannot drop the current unit.
+
+Pairing is Dial-side plumbing, not a Volcano domain concept: `VolcanoPairing` (`volcano_pairing.h`/`.cpp`) never touches a characteristic and `VolcanoDevice` never learns how the address was chosen. Its decisions — the identification rule and the one/several/none outcome — live in `pairing.h`, with no ESPHome dependency.
+
 ## Notification limits
 
 Every characteristic this component subscribes to consumes one of a fixed pool of GATT notification registrations, shared across everything on the same GATT client interface. The pool holds 12 by default; the component currently uses 8 of them, so a configuration that adds further notifying characteristics of its own can exhaust it. Registrations beyond the limit fail with `ESP_GATT_NO_RESOURCES` (status 128) — the failure is logged, but the characteristic simply never notifies afterwards.
@@ -135,4 +169,4 @@ Setting `CONFIG_BT_GATTC_NOTIF_REG_MAX` through `sdkconfig_options` instead does
 
 See [`docs/DEVELOPMENT.md`](../../docs/DEVELOPMENT.md#validating-the-component-locally) for how to validate this component against the example configuration.
 
-`VolcanoDevice` additionally has its own host-side tests, needing neither ESPHome nor hardware, and so do the parts of `VolcanoBleClient` with no BLE/ESP-IDF dependency of their own: `DisplayRegisterWriteQueue` (the FIFO behind CHAR-009's two independent settings), `StaticReadQueue` (the ordering of the once-per-connection reads), and `wire_format.h` (the value-level encode/decode, each settings bit's polarity, and the confirmed-accepted write ranges). See [`test/`](test/) and [`docs/DEVELOPMENT.md`](../../docs/DEVELOPMENT.md#testing-volcanodevice).
+`VolcanoDevice` additionally has its own host-side tests, needing neither ESPHome nor hardware, and so do the parts of `VolcanoBleClient` with no BLE/ESP-IDF dependency of their own: `DisplayRegisterWriteQueue` (the FIFO behind CHAR-009's two independent settings), `StaticReadQueue` (the ordering of the once-per-connection reads), `wire_format.h` (the value-level encode/decode, each settings bit's polarity, and the confirmed-accepted write ranges), and `pairing.h` (recognising a Volcano from its advertisement, and the one/several/none decision). See [`test/`](test/) and [`docs/DEVELOPMENT.md`](../../docs/DEVELOPMENT.md#testing-volcanodevice).
