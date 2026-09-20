@@ -74,7 +74,8 @@ esphome:
       # Every touch-only focusable widget must be listed here: Home's
       # Heat/Air buttons, Settings' three switches, the three numeric
       # pages' step-size buttons, the Dial Sound switch, and the
-      # Connections page's two switches. The encoder and button stay
+      # Connections page's two switches, the Pairing page's action button.
+      # The encoder and button stay
       # reserved for temperature adjustment and menu navigation (ADR-0011).
       - lambda: |-
           lv_group_remove_obj(id(heat_button));
@@ -92,6 +93,7 @@ esphome:
           lv_group_remove_obj(id(sound_switch));
           lv_group_remove_obj(id(connections_ble_switch));
           lv_group_remove_obj(id(connections_wifi_switch));
+          lv_group_remove_obj(id(pairing_action_button));
 
 
 # ESPHome's default flash_write_interval (60s) batches restore_value

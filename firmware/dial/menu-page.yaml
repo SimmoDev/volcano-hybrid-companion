@@ -66,6 +66,7 @@ lvgl:
             options:
               - "Home"
               - "Connections"
+              - "Pairing"
               - "Settings"
               - "LED Brightness"
               - "Auto-Shutoff Duration"

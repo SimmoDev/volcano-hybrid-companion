@@ -148,7 +148,7 @@ Discovery scans for the Volcano's advertisement and recognises it by two things 
 
 `address` shows the paired address, empty while unpaired. Writing a valid `AA:BB:CC:DD:EE:FF` to it pairs with that unit directly, and writing an empty string forgets the current one and searches again. `status` reads `Searching`, `Choose one:` followed by the serial numbers on offer, `Not found` or `Paired`.
 
-A control interface with its own UI drives the same operations from a lambda, the way ESPHome's own components with no YAML action are driven elsewhere in this project: `id(volcano_pairing).rescan()`, `.select(index)`, `.forget()`, and `.state()`, `.candidate_count()`, `.candidate_serial(i)`, `.candidate_address_str(i)` and `.address_str()` to read where pairing has got to. `rescan()` is refused while paired — `forget()` first — so a stray press cannot drop the current unit.
+A control interface with its own UI drives the same operations from a lambda, the way ESPHome's own components with no YAML action are driven elsewhere in this project: `id(volcano_pairing).rescan()`, `.select(index)`, `.forget()`, and `.state()`, `.candidate_count()`, `.candidate_serial(i)`, `.candidate_rssi(i)`, `.candidate_address_str(i)` and `.address_str()` to read where pairing has got to. `rescan()` is refused while paired — `forget()` first — so a stray press cannot drop the current unit.
 
 Pairing is Dial-side plumbing, not a Volcano domain concept: `VolcanoPairing` (`volcano_pairing.h`/`.cpp`) never touches a characteristic and `VolcanoDevice` never learns how the address was chosen. Its decisions — the identification rule and the one/several/none outcome — live in `pairing.h`, with no ESPHome dependency.
 

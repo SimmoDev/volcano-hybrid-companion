@@ -9,6 +9,18 @@ volcano:
   # pairing has got on. Weights continue the config (address) and
   # diagnostic (status) groups' own ranges -- see the note on
   # dial_firmware_version_text_sensor below.
+  #
+  # Both entities also drive the Pairing page (dial/pairing-page.yaml),
+  # as every entity here drives its own widgets: status changes whenever
+  # the state or the candidates do, and address covers a change of unit
+  # that leaves the status as it was.
+  #
+  # The status's first publish is also the first-run check: with no Volcano
+  # paired the Dial opens the Pairing page rather than leaving the user to
+  # find it (ADR-0011). It is made here, not from on_boot, because
+  # on_boot runs before the pairing component has set up and read what is
+  # stored, so it would always see "unpaired". A page opened that way hands
+  # back to Home once a Volcano is paired; one the user opened does not.
   pairing:
     id: volcano_pairing
     address:
@@ -16,11 +28,33 @@ volcano:
       name: "Volcano address"
       web_server:
         sorting_weight: 100
+      on_value:
+        - script.execute: refresh_pairing_page
     status:
       id: volcano_pairing_status
       name: "Pairing status"
       web_server:
         sorting_weight: 190
+      on_value:
+        - if:
+            condition:
+              and:
+                - lambda: "return !id(pairing_boot_checked);"
+                - lambda: "return !id(volcano_pairing).paired();"
+            then:
+              - globals.set:
+                  id: pairing_auto_opened
+                  value: "true"
+              - lvgl.page.show: pairing_page
+        - globals.set:
+            id: pairing_boot_checked
+            value: "true"
+        - script.execute: refresh_pairing_page
+        - if:
+            condition:
+              lambda: "return id(pairing_auto_opened) && id(volcano_pairing).paired();"
+            then:
+              - script.execute: return_home_after_first_run_pairing
   # Every entity below is consumed directly by the Home/Settings/etc.
   # LVGL widgets via its own automation triggers, exactly as before --
   # but also named and given a sorting_weight (matching the dev-board

@@ -1,0 +1,143 @@
+# The Pairing page (see ADR-0011's own Notes, and ADR-0013 for the
+# discovery it fronts): where the user establishes *which* Volcano the Dial
+# controls. Connections manages the links to a device that is already
+# known; this page is for the one-off business of finding it, and is
+# opened directly on a boot with none paired (see dial/volcano-entities.yaml),
+# and in that case it returns to Home once a Volcano is paired. A visit the
+# user chose from the Menu stays on the page.
+#
+# One layout, four states, all driven by refresh_pairing_page
+# (dial/scripts.yaml) from the volcano: pairing block's own entities, the
+# same entity-drives-widget shape every other page uses:
+#   Searching   status only; the button is hidden.
+#   Choose one  a roller of the Volcanos found, strongest first, and a
+#               Search again button.
+#   Not found   what to check, and a Search again button.
+#   Paired      the paired address, and a Hold to forget button.
+#
+# Controls, per ADR-0011's input semantics. Turning scrolls the roller and
+# the physical button confirms it while choosing; everywhere else the
+# button returns to the Menu, as on every non-Home page (dial/input.yaml).
+# Opening this page while the last search found nothing starts a fresh
+# one, so a search can be repeated without touching the screen.
+#
+# The action button is touch-only, like Home's Heat/Air, so it is evicted
+# from the encoder's group in dial/hardware.yaml. Forget is a long press
+# because it drops the link to the Volcano, which may be heating: a stray
+# touch must not do that. A long press is still followed by a click on
+# release, so the click handler only acts in the two states where it means
+# Search again.
+#
+# Only the roller stays in the encoder's group -- it is the one widget here
+# the encoder is meant to drive, and is put into edit mode by the refresh
+# script whenever it appears, so the first turn scrolls it (see the Menu's
+# own on_load for why that needs a delay).
+lvgl:
+  pages:
+    - id: pairing_page
+      bg_color: ${black}
+      bg_opa: cover
+      scrollable: false
+      on_unload:
+        - globals.set:
+            id: pairing_auto_opened
+            value: "false"
+      on_load:
+        - if:
+            condition:
+              lambda: "return id(volcano_pairing).state() == volcano::VolcanoPairing::State::NOT_FOUND;"
+            then:
+              - lambda: "id(volcano_pairing).rescan();"
+        - delay: 100ms
+        - script.execute: refresh_pairing_page
+      layout:
+        type: flex
+        flex_flow: column
+        flex_align_main: center
+        flex_align_cross: center
+        flex_align_track: center
+        pad_row: 6
+      widgets:
+        - label:
+            text_color: ${cyan}
+            text: "Pairing"
+        - label:
+            id: pairing_status_label
+            text_color: ${orange}
+            text_align: center
+            long_mode: wrap
+            width: 90%
+            text: "Searching..."
+        - label:
+            id: pairing_detail_label
+            text_color: ${dim_grey}
+            text_align: center
+            long_mode: wrap
+            width: 90%
+            text: ""
+        # Styled as the Menu's roller is, with the same flat outline
+        # overrides (see that file for why they are siblings, not under
+        # main:). The single option is a placeholder: the real ones are
+        # set from the pairing state, since they are not known at build.
+        - roller:
+            id: pairing_roller
+            hidden: true
+            width: 90%
+            height: 64px
+            visible_row_count: 2
+            bg_color: ${black}
+            bg_opa: cover
+            border_width: 0
+            text_color: ${white}
+            selected:
+              bg_color: ${dark_grey}
+              text_color: ${cyan}
+            focused:
+              outline_width: 0
+            focus_key:
+              outline_width: 0
+            edited:
+              outline_width: 0
+            options:
+              - "-"
+            # Touch only, guarded on the indev as the Menu's is; the
+            # physical button is handled by dial_button's on_release.
+            on_click:
+              - if:
+                  condition:
+                    lambda: "return lv_indev_get_type(lv_indev_get_act()) == LV_INDEV_TYPE_POINTER;"
+                  then:
+                    - rtttl.play: "beep:d=16,o=5,b=160:c,e"
+                    - lambda: "id(volcano_pairing).select(id(pairing_roller).get_selected_index());"
+        - button:
+            id: pairing_action_button
+            hidden: true
+            width: 70%
+            height: 34
+            radius: circle
+            shadow_width: 0
+            outline_width: 0
+            bg_color: ${dark_grey}
+            click_focusable: false
+            widgets:
+              - label:
+                  id: pairing_action_label
+                  text: "Search again"
+                  align: center
+            on_click:
+              - if:
+                  condition:
+                    lambda: |-
+                      using State = volcano::VolcanoPairing::State;
+                      const State state = id(volcano_pairing).state();
+                      return state == State::NOT_FOUND || state == State::CHOOSING;
+                  then:
+                    - rtttl.play: "beep:d=16,o=5,b=160:c,e"
+                    - lambda: "id(volcano_pairing).rescan();"
+            on_long_press:
+              - if:
+                  condition:
+                    lambda: "return id(volcano_pairing).paired();"
+                  then:
+                    - rtttl.play: "beep:d=16,o=5,b=160:c,e"
+                    - lambda: "id(volcano_pairing).forget();"

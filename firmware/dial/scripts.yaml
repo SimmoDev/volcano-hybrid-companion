@@ -213,44 +213,166 @@ script:
                 else:
                   - if:
                       condition:
-                        lambda: "return id(nav_menu_roller).get_selected_index() == 2;"  # Settings
+                        lambda: "return id(nav_menu_roller).get_selected_index() == 2;"  # Pairing
                       then:
-                        - lvgl.page.show: settings_page
+                        - lvgl.page.show: pairing_page
                       else:
                         - if:
                             condition:
-                              lambda: "return id(nav_menu_roller).get_selected_index() == 3;"  # LED Brightness
+                              lambda: "return id(nav_menu_roller).get_selected_index() == 3;"  # Settings
                             then:
-                              - lvgl.page.show: led_brightness_page
+                              - lvgl.page.show: settings_page
                             else:
                               - if:
                                   condition:
-                                    lambda: "return id(nav_menu_roller).get_selected_index() == 4;"  # Auto-Shutoff Duration
+                                    lambda: "return id(nav_menu_roller).get_selected_index() == 4;"  # LED Brightness
                                   then:
-                                    - lvgl.page.show: auto_shutoff_duration_page
+                                    - lvgl.page.show: led_brightness_page
                                   else:
                                     - if:
                                         condition:
-                                          lambda: "return id(nav_menu_roller).get_selected_index() == 5;"  # Dial Brightness
+                                          lambda: "return id(nav_menu_roller).get_selected_index() == 5;"  # Auto-Shutoff Duration
                                         then:
-                                          - lvgl.page.show: dial_brightness_page
+                                          - lvgl.page.show: auto_shutoff_duration_page
                                         else:
                                           - if:
                                               condition:
-                                                lambda: "return id(nav_menu_roller).get_selected_index() == 6;"  # Dial Sound
+                                                lambda: "return id(nav_menu_roller).get_selected_index() == 6;"  # Dial Brightness
                                               then:
-                                                - lvgl.page.show: sound_page
+                                                - lvgl.page.show: dial_brightness_page
                                               else:
                                                 - if:
                                                     condition:
-                                                      lambda: "return id(nav_menu_roller).get_selected_index() == 7;"  # Diagnostics
+                                                      lambda: "return id(nav_menu_roller).get_selected_index() == 7;"  # Dial Sound
                                                     then:
-                                                      - lvgl.page.show: diagnostics_page
+                                                      - lvgl.page.show: sound_page
                                                     else:
-                                                      # Only index 8 ("About") left
-                                                      # among the current options --
-                                                      # add another explicit branch
-                                                      # here, not a new bare else,
-                                                      # once a tenth option exists.
-                                                      - lvgl.page.show: about_page
+                                                      - if:
+                                                          condition:
+                                                            lambda: "return id(nav_menu_roller).get_selected_index() == 8;"  # Diagnostics
+                                                          then:
+                                                            - lvgl.page.show: diagnostics_page
+                                                          else:
+                                                            # Only index 9 ("About") left among the current
+                                                            # options -- add another explicit branch here, not a new
+                                                            # bare else, once an eleventh option exists.
+                                                            - lvgl.page.show: about_page
 
+  # Hands the Pairing page back to Home once a Volcano is paired, but only
+  # when the Dial opened the page itself on a first run (pairing_auto_opened,
+  # dial/state.yaml). The pause lets "Paired" be seen first, and is why the
+  # conditions are checked again after it: the user may have left the page
+  # in the meantime, which clears the flag, and must not be moved on from
+  # wherever they have gone. restart, so a second pairing inside the pause
+  # just restarts it.
+  - id: return_home_after_first_run_pairing
+    mode: restart
+    then:
+      - delay: 1500ms
+      - if:
+          condition:
+            and:
+              - lambda: "return id(pairing_auto_opened) && id(volcano_pairing).paired();"
+              - lvgl.page.is_showing: pairing_page
+          then:
+            - lvgl.page.show: home_page
+
+  # Renders the Pairing page from the pairing state (dial/pairing-page.yaml):
+  # what the status line says and in what colour, whether the roller of
+  # Volcanos found and the action button are showing, and what the button
+  # reads. Runs on every change of the pairing entities and once on page
+  # load, so a change that landed while another page was showing can't
+  # leave this one stale.
+  #
+  # The roller's options are the Volcanos found, so they are only set
+  # while choosing, and only when they differ from what it already holds --
+  # setting them resets its scroll position, which must not happen under a
+  # user who is turning it. The candidate list is stable once a window has
+  # closed, so in practice that is once.
+  #
+  # Focuses the roller into edit mode only while this page is showing and
+  # choosing, so a turn scrolls it straight away; done here, not on_load,
+  # because the choice can arrive while the page is already open. On
+  # another page the focus is left alone, as the encoder must stay with
+  # the Menu's roller there.
+  - id: refresh_pairing_page
+    then:
+      - lambda: |-
+          using State = volcano::VolcanoPairing::State;
+          const State state = id(volcano_pairing).state();
+          const char *status = "";
+          const char *detail = "";
+          const char *action = nullptr;
+          uint32_t colour = 0xFFFFFF;
+          bool choosing = false;
+          switch (state) {
+            case State::SCANNING:
+              status = "Searching...";
+              colour = 0xFFA500;
+              detail = "Volcano on and in range";
+              break;
+            case State::CHOOSING:
+              status = "Choose one";
+              colour = 0x00D9FF;
+              detail = "Turn, then press";
+              action = "Search again";
+              choosing = true;
+              break;
+            case State::NOT_FOUND:
+              status = "Not found";
+              colour = 0xCC0000;
+              // CONN-003: a Volcano held by another client stops
+              // advertising, and looks exactly like one that is off.
+              detail = "Is it on, and not in use?";
+              action = "Search again";
+              break;
+            case State::PAIRED:
+              status = "Paired";
+              colour = 0x00CC44;
+              action = "Hold to forget";
+              break;
+          }
+          const std::string address = id(volcano_pairing).address_str();
+          lv_label_set_text(id(pairing_status_label), status);
+          lv_obj_set_style_text_color(id(pairing_status_label), lv_color_hex(colour), 0);
+          lv_label_set_text(id(pairing_detail_label), state == State::PAIRED ? address.c_str() : detail);
+
+          if (choosing) {
+            std::string options;
+            for (size_t i = 0; i < id(volcano_pairing).candidate_count(); i++) {
+              char buf[40];
+              snprintf(buf, sizeof(buf), "%s  %d dBm", id(volcano_pairing).candidate_serial(i),
+                       id(volcano_pairing).candidate_rssi(i));
+              if (!options.empty())
+                options += '\n';
+              options += buf;
+            }
+            // LVGL's own call, not the ESPHome roller's set_options(): that
+            // wrapper's signature has changed between ESPHome releases, and
+            // LVGL copies the string, so nothing here has to outlive it.
+            // The wrapper's cached copy of the options goes stale as a
+            // result, which is harmless: only the selected index is read
+            // back from this roller.
+            const char *shown = lv_roller_get_options(id(pairing_roller).obj);
+            if (shown == nullptr || options != shown)
+              lv_roller_set_options(id(pairing_roller).obj, options.c_str(), LV_ROLLER_MODE_NORMAL);
+            lv_obj_remove_flag(id(pairing_roller).obj, LV_OBJ_FLAG_HIDDEN);
+          } else {
+            lv_obj_add_flag(id(pairing_roller).obj, LV_OBJ_FLAG_HIDDEN);
+          }
+
+          if (action != nullptr) {
+            lv_label_set_text(id(pairing_action_label), action);
+            lv_obj_remove_flag(id(pairing_action_button), LV_OBJ_FLAG_HIDDEN);
+          } else {
+            lv_obj_add_flag(id(pairing_action_button), LV_OBJ_FLAG_HIDDEN);
+          }
+      - if:
+          condition:
+            and:
+              - lvgl.page.is_showing: pairing_page
+              - lambda: "return id(volcano_pairing).state() == volcano::VolcanoPairing::State::CHOOSING;"
+          then:
+            - lvgl.widget.focus:
+                id: pairing_roller
+                editing: true

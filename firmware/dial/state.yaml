@@ -78,3 +78,22 @@ globals:
     type: bool
     restore_value: false
     initial_value: "true"
+  # Pairing page (dial/pairing-page.yaml): whether the first-run check for
+  # "no Volcano paired yet" has been made. It is made once, on the first
+  # publish of the pairing status (dial/volcano-entities.yaml), and never
+  # again: a Dial that is later unpaired by the user is already on the
+  # Pairing page doing it, and must not be pulled back to it from wherever
+  # else they have navigated.
+  - id: pairing_boot_checked
+    type: bool
+    restore_value: false
+    initial_value: "false"
+  # Whether the Pairing page is showing because the Dial opened it itself
+  # (the first-run check above) rather than the user choosing it from the
+  # Menu. Only then does a successful pairing hand back to Home -- a user
+  # who came to the page deliberately stays on it. Cleared as soon as the
+  # page is left by any route, so it can't outlive that visit.
+  - id: pairing_auto_opened
+    type: bool
+    restore_value: false
+    initial_value: "false"

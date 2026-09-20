@@ -83,6 +83,7 @@ class VolcanoPairing : public Component, public esp32_ble_tracker::ESPBTDeviceLi
   std::string address_str() const;
   size_t candidate_count() const { return this->selector_.candidate_count(); }
   const char *candidate_serial(size_t index) const { return this->selector_.candidate_serial(index); }
+  int candidate_rssi(size_t index) const { return this->selector_.candidate_rssi(index); }
   std::string candidate_address_str(size_t index) const;
   // One line describing where pairing has got to, for the status entity.
   std::string status_text() const;

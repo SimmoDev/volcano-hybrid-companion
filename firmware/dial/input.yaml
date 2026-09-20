@@ -206,5 +206,19 @@ binary_sensor:
                 then:
                   - script.execute: confirm_menu_selection
                 else:
-                  - lvgl.page.show: menu_page
+                  # The Pairing page is the one other page where the
+                  # button confirms rather than leaves: while a choice
+                  # of Volcanos is on offer it pairs with the highlighted
+                  # one, as it does for the Menu's roller. In every other
+                  # state of that page it returns to the Menu like the
+                  # rest.
+                  - if:
+                      condition:
+                        and:
+                          - lvgl.page.is_showing: pairing_page
+                          - lambda: "return id(volcano_pairing).state() == volcano::VolcanoPairing::State::CHOOSING;"
+                      then:
+                        - lambda: "id(volcano_pairing).select(id(pairing_roller).get_selected_index());"
+                      else:
+                        - lvgl.page.show: menu_page
 
