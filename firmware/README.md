@@ -30,12 +30,13 @@ browser or Home Assistant involved.
 
 Copy [`secrets.yaml.example`](secrets.yaml.example) to `secrets.yaml`
 alongside it (not committed — see the repository's `.gitignore`) and set
-`volcano_mac_address`, `wifi_ssid`/`wifi_password` and
-`api_encryption_key`. A placeholder value is fine for `esphome
-config`/`esphome compile`; flashing to hardware needs the real
-`volcano_mac_address` and WiFi credentials, and a generated
+`wifi_ssid`/`wifi_password` and `api_encryption_key`. A placeholder
+value is fine for `esphome config`/`esphome compile`; flashing to
+hardware needs the real WiFi credentials and a generated
 `api_encryption_key` (the committed placeholder is public — see that
-file's own comment). WiFi serves the Home page's WiFi status icon, the
+file's own comment). There is no Volcano address to set: the Dial finds
+the Volcano itself, by scanning, the first time it boots — see "Pairing"
+below. WiFi serves the Home page's WiFi status icon, the
 Connections page's WiFi status and toggle, the `web_server` page below,
 and the Home Assistant `api` connection; the on-screen UI itself needs
 none of them to navigate.
@@ -82,9 +83,15 @@ This config declares no `ota:` block, so every reflash is over USB — there is 
 
 Watch for the `[volcano]` log tag: it logs heater/pump state, the auto-shutoff countdown, and current/target temperature on connect and whenever they change, including changes made at the device's own panel. Each `on_*` handler across the packages also logs at `DEBUG`, so `esphome logs` shows each peripheral responding to input.
 
+## Pairing
+
+The Dial is not told which Volcano to control at build time. On first boot, with none paired, it scans for one for about ten seconds ([ADR-0013](../docs/decisions/ADR-0013-release-and-distribution.md)): if exactly one Volcano Hybrid is in range it pairs with it and stores its address, so every later boot connects directly with no scan. Two or more are held for a choice by serial number; none leaves the status at `Not found`. Nothing about this blocks the rest of the Dial — an unpaired Dial boots and runs its local UI, and only Volcano control waits.
+
+Until the Pairing page is built ([ADR-0011](../docs/decisions/ADR-0011-dial-ui-navigation-architecture.md)), pairing is visible and correctable from the `web_server` page and Home Assistant: `Pairing status` reports where it has got to, and `Volcano address` shows the paired address, accepts one typed in, and forgets the unit when set to an empty string. The component's own documentation, [`components/volcano/README.md`](../components/volcano/README.md#pairing), covers the mechanism.
+
 ## Troubleshooting
 
-**Nothing from the Volcano — no connection, no decoded state.** The device accepts only one connection at a time and stops advertising while connected ([CONN-003](../docs/protocol/gatt-services.md#conn-003--single-connection-at-a-time)); make sure it isn't already connected to the official app, and that `volcano_mac_address` in `secrets.yaml` is correct. The Connections page's BLE row shows `Disconnected - in use?` in this case.
+**Nothing from the Volcano — no connection, no decoded state.** The device accepts only one connection at a time and stops advertising while connected ([CONN-003](../docs/protocol/gatt-services.md#conn-003--single-connection-at-a-time)); make sure it isn't already connected to the official app. If the `Volcano address` entity on the `web_server` page is empty, the Dial has not paired yet — the `Pairing status` entity says why, and rebooting it (or writing an empty address, which forgets the unit) searches again. The Connections page's BLE row shows `Disconnected - in use?` when the Dial has an address but cannot connect.
 
 **Home Assistant doesn't discover the Dial, or the `web_server` page is unreachable.** Check `wifi_ssid`/`wifi_password` in `secrets.yaml`, and that the machine is on the same network the Dial joined — `esphome logs` prints the IP once WiFi connects. `<hostname>.local` (`volcano-hybrid-dial.local` by default) needs mDNS, which not every network/browser combination has; the numeric IP always works. The Connections page's WiFi and Home Assistant rows show the current state on-screen.
 

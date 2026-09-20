@@ -18,8 +18,15 @@
 # (confirmed by reading ble_client's own source), which is what actually
 # suspends reconnection per ADR-0007 -- the plain ble_client.disconnect
 # automation action alone would not.
+#
+# mac_address is a placeholder: ble_client's schema requires one, but the
+# Volcano's real address is not known at build time. volcano's pairing:
+# block (dial/volcano-entities.yaml) finds the unit by scanning, stores
+# its address, and sets it on this client at boot (ADR-0013). Until an
+# address is known the client has nothing to match, so it never connects
+# -- the Dial still boots and runs its local UI.
 ble_client:
-  - mac_address: !secret volcano_mac_address
+  - mac_address: "00:00:00:00:00:00"
     id: volcano_ble_client
     on_connect:
       - globals.set:

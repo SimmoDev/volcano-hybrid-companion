@@ -55,9 +55,9 @@ jobs:
       - name: esphome compile (dev board)
         run: esphome compile examples/esp32-s3-devkit.yaml
       # The Dial firmware (firmware/m5stack-dial.yaml), reading
-      # firmware/secrets.yaml created above -- its ble_client needs
-      # volcano_mac_address, its wifi (for the Home page's WiFi status
-      # icon and its own web_server page) needs wifi_ssid/wifi_password,
+      # firmware/secrets.yaml created above -- its wifi (for the Home
+      # page's WiFi status icon and its own web_server page) needs
+      # wifi_ssid/wifi_password,
       # and its api: block (Phase 3 per ADR-0012, validated here against
       # the example key) needs api_encryption_key. web_server is retained
       # per ADR-0010.

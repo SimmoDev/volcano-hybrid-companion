@@ -1,6 +1,26 @@
 volcano:
   id: volcano_component
   ble_client_id: volcano_ble_client
+  # Finds the Volcano at runtime rather than from a compile-time address
+  # (ADR-0013): scans for it, stores the address it settles on, and sets
+  # that on volcano_ble_client. `address` lets that address be set or
+  # corrected from the web_server page or Home Assistant, and an empty
+  # value forgets the current unit and scans again; `status` reports how
+  # pairing has got on. Weights continue the config (address) and
+  # diagnostic (status) groups' own ranges -- see the note on
+  # dial_firmware_version_text_sensor below.
+  pairing:
+    id: volcano_pairing
+    address:
+      id: volcano_address
+      name: "Volcano address"
+      web_server:
+        sorting_weight: 100
+    status:
+      id: volcano_pairing_status
+      name: "Pairing status"
+      web_server:
+        sorting_weight: 190
   # Every entity below is consumed directly by the Home/Settings/etc.
   # LVGL widgets via its own automation triggers, exactly as before --
   # but also named and given a sorting_weight (matching the dev-board
