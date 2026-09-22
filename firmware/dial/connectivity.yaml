@@ -143,6 +143,32 @@ web_server:
   version: 3
 
 
+# Lets the Dial be updated over the network instead of only over USB
+# (ADR-0013). `esphome run`/`esphome upload` use this automatically once
+# given the device's IP or hostname instead of a serial port; Home
+# Assistant also surfaces it as an update entity.
+#
+# No password: this trusts the same network web_server above already
+# does ("no authentication, no TLS -- fine on a trusted home network",
+# per that block's own comment), rather than reintroducing a compile-time
+# secret for the one thing here that would need one -- the legacy
+# password this platform offers is a fixed value with no runtime
+# provisioning story of its own, unlike WiFi and the API key above.
+#
+# safe_mode: is not declared here because `ota:` already auto-loads it
+# with defaults worth keeping as-is: ten bad boots inside five minutes
+# trips it, and a boot that stays up a minute is marked good. Recovery
+# from a bad update doesn't wait on that, though -- ESP-IDF's own
+# bootloader rollback (on by default, confirmed by reading esp32's own
+# component source) reverts to the previous partition on the very next
+# boot if the new one is never marked good, which a crash loop never is.
+# Every value already on this device -- the pairing, WiFi and API-key
+# state above -- survives either path unharmed, since none of it lives
+# in the app partition an update replaces.
+ota:
+  - platform: esphome
+
+
 # Closes the two provisioning paths above after a fixed window, rather
 # than leaving WiFi-improv listening and the API's bootstrap key
 # answering indefinitely on a device its owner never got around to

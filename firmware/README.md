@@ -66,22 +66,22 @@ The temperature entities are always Celsius, and Home Assistant converts them pe
 
 ## Flashing and watching logs
 
-Requires the [ESPHome CLI](https://esphome.io/) and the Dial connected over USB-C. From the repository root:
+Requires the [ESPHome CLI](https://esphome.io/). The first flash needs the Dial connected over USB-C — from the repository root:
 
 ```sh
 esphome run firmware/m5stack-dial.yaml
 ```
 
-This compiles, flashes over USB, and opens the log monitor in one step — it prompts for a serial port on first run. To flash and watch logs as separate steps:
+This compiles, flashes, and opens the log monitor in one step — it prompts for how to reach the device on first run (a serial port, or, once the Dial has been flashed with WiFi already provisioned, its IP/hostname over the network). To flash and watch logs as separate steps:
 
 ```sh
 esphome upload firmware/m5stack-dial.yaml
 esphome logs firmware/m5stack-dial.yaml
 ```
 
-`esphome logs` also re-attaches to an already-running device without reflashing it.
+`esphome logs` also re-attaches to an already-running device without reflashing it; over the network it needs [ADR-0012](../docs/decisions/ADR-0012-home-assistant-integration.md)'s `api` connection, so it doesn't work with WiFi provisioned but Home Assistant/API access otherwise unreachable.
 
-This config declares no `ota:` block, so every reflash is over USB — there is no over-the-air update path. That is a deliberate omission while the firmware is CLI-flashed; Phase 4 ([ADR-0013](../docs/decisions/ADR-0013-release-and-distribution.md)) adds `ota:` with `safe_mode` for the release, so an installed Dial can be updated without a USB cable.
+Every later update can go out over the network — `ota:` ([ADR-0013](../docs/decisions/ADR-0013-release-and-distribution.md)) is enabled, on the same trust model as `web_server` above (no password; a trusted home network is assumed). Recovery from a bad update needs no attention: if the new firmware never reports itself healthy — a minute of uptime — the bootloader reverts to the one it replaced on the very next boot, and a device stuck in a genuine boot loop drops into a minimal recovery mode after ten failed boots that accepts one more update without running anything else. Verified on real hardware: an update pushed over the network while running, landing and taking over cleanly with the Volcano still connected and paired throughout.
 
 Watch for the `[volcano]` log tag: it logs heater/pump state, the auto-shutoff countdown, and current/target temperature on connect and whenever they change, including changes made at the device's own panel. Each `on_*` handler across the packages also logs at `DEBUG`, so `esphome logs` shows each peripheral responding to input.
 
