@@ -8,9 +8,10 @@ configuration meant to be flashed to a device and used.
 The firmware is feature-complete and versioned `1.0.0`, but the project
 is not yet released. Every value a shared image cannot carry — the
 Volcano's address, WiFi credentials, the Home Assistant API key — is now
-supplied at runtime rather than compiled in; what remains of Phase 4 is
-packaging the firmware itself as a browser-flashable download and an
-over-the-air update path — see
+supplied at runtime rather than compiled in, and the firmware carries an
+over-the-air update path (see "Flashing and watching logs" below); what
+remains of Phase 4 is packaging the firmware itself as a
+browser-flashable download — see
 [ADR-0013](../docs/decisions/ADR-0013-release-and-distribution.md). Until
 that exists, flashing needs the ESPHome CLI, as below. See the root
 [README.md](../README.md) for the phase history and
