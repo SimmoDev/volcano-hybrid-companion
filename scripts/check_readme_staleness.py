@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 """Pre-commit hook: advisory nudge, not a block. If a commit touches
-components/volcano/, docs/decisions/, an example config, or a firmware config,
-this names each of the state-describing docs (root README.md,
-docs/DEVELOPMENT.md, examples/README.md, firmware/README.md) the commit does
+components/volcano/, docs/decisions/, an example config, a firmware config,
+the install page, or a release/pages workflow, this names each of the
+state-describing docs (root README.md, docs/DEVELOPMENT.md,
+examples/README.md, firmware/README.md, install/README.md) the commit does
 not also touch, so a claim in one of them isn't left stale.
 
-A change to component code, an ADR, an example config, or a firmware config
-can silently outdate a claim in one of those docs -- implementation status,
-phase, capability, or what a config's entities are and do. Touching a doc is
-only a precondition the hook can check, not proof its relevant sentences were
+A change to component code, an ADR, an example config, a firmware config, the
+install page, or a release/pages workflow can silently outdate a claim in one
+of those docs -- implementation status, phase, capability, deployment status,
+or what a config's entities are and do. Touching a doc is only a
+precondition the hook can check, not proof its relevant sentences were
 re-read, and not every trigger change makes every doc stale -- so this only
 ever prints, never fails the commit. It nudges about each untouched doc
 individually rather than falling silent as soon as any one of them is staged,
@@ -24,12 +26,15 @@ TRIGGER_PREFIXES = (
     "docs/decisions/",
     "examples/",
     "firmware/",
+    "install/",
+    ".github/workflows/",
 )
 TARGET_DOCS = (
     "README.md",
     "docs/DEVELOPMENT.md",
     "examples/README.md",
     "firmware/README.md",
+    "install/README.md",
 )
 
 
@@ -56,8 +61,9 @@ def main() -> int:
             "NOTE: this commit touches " + " or ".join(TRIGGER_PREFIXES) + " "
             "but not " + ", ".join(untouched) + ". "
             "If this changes what's true about the project's current state "
-            "(implementation status, phase, capability, or what an example's "
-            "entities are/do), check " + subject + " before committing.",
+            "(implementation status, phase, capability, deployment status, or "
+            "what an example's entities are/do), check " + subject + " before "
+            "committing.",
             file=sys.stderr,
         )
     return 0
