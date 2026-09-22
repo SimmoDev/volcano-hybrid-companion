@@ -1,0 +1,108 @@
+name: Release
+
+# Builds the Dial's factory image and, for a real version tag, drafts a
+# GitHub Release carrying it -- Phase 4's exit artefact, per ADR-0013
+# (docs/decisions/ADR-0013-release-and-distribution.md). Not yet exercised
+# for a real tag: the project isn't released. workflow_dispatch exists so
+# this pipeline itself can be tried without pushing one.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+env:
+  # Pinned independently of ci.yml's own unpinned `pip install esphome`
+  # (see that job's own comment for why it stays unpinned): a release
+  # build needs the same tagged commit to keep producing the same binary
+  # if rebuilt later, which an unpinned install can't promise. Bump this
+  # by hand when cutting a release against a newer ESPHome -- an ordinary
+  # dependency-pin bump, not a change to CI's own policy.
+  ESPHOME_VERSION: "2026.9.0"
+
+jobs:
+  build:
+    name: Build the Dial factory image
+    runs-on: ubuntu-latest
+    # Only this job needs write access, and only to create a Release --
+    # the default token is otherwise read-only in this repository.
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        # Full history, not the default shallow clone: --generate-notes
+        # below needs the previous tag to summarise commits since it.
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Install ESPHome ${{ env.ESPHOME_VERSION }}
+        run: pip install esphome==${{ env.ESPHOME_VERSION }}
+      # A tagged release must build the firmware version it claims to be.
+      # dial/hardware.yaml's own `version:` (what ends up in the Dial
+      # firmware version diagnostic on-device) and the git tag naming this
+      # release are two independent places the same number lives, with
+      # nothing tying them together automatically -- this catches a tag
+      # pushed without bumping that string, or the reverse, before either
+      # reaches a Release rather than after. Skipped for workflow_dispatch,
+      # which has no tag to check against.
+      - name: Check the tag matches dial/hardware.yaml's firmware version
+        if: github.ref_type == 'tag'
+        run: |
+          tag_version="${GITHUB_REF_NAME#v}"
+          firmware_version="$(grep -oP 'version:\s*"\K[0-9.]+' firmware/dial/hardware.yaml)"
+          echo "Tag $GITHUB_REF_NAME -> $tag_version; dial/hardware.yaml -> $firmware_version"
+          if [ "$tag_version" != "$firmware_version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME doesn't match dial/hardware.yaml's version \"$firmware_version\" -- bump one or the other."
+            exit 1
+          fi
+      # No placeholder secrets.yaml is created here, unlike ci.yml's own
+      # setup step: nothing in this configuration reads a compile-time
+      # secret any more (WiFi and the API key are both provisioned at
+      # runtime, ADR-0013), and the dev-board scaffold under examples/ --
+      # which still does -- isn't part of this release.
+      - name: Cache ESPHome/PlatformIO toolchains
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cache/esphome
+            ~/.platformio
+          key: release-esphome-toolchains-${{ runner.os }}-${{ env.ESPHOME_VERSION }}
+      - name: Compile the Dial factory image
+        run: esphome compile firmware/m5stack-dial.yaml
+      # firmware.factory.bin is the full image a first flash needs
+      # (bootloader + partition table + app); firmware.ota.bin is the
+      # smaller app-only image firmware.factory.bin's future users won't
+      # need again once they have it, and firmware.elf carries debug
+      # symbols for anyone decoding a crash backtrace from a released
+      # build -- not needed to flash anything, kept alongside the other
+      # two for that one purpose. Renamed with the ref so multiple
+      # versions' artifacts/assets are never ambiguous side by side.
+      - name: Collect build outputs
+        run: |
+          build_dir="firmware/.esphome/build/volcano-hybrid-dial/build"
+          mkdir -p release
+          cp "$build_dir/firmware.factory.bin" "release/volcano-hybrid-dial-${GITHUB_REF_NAME}.factory.bin"
+          cp "$build_dir/firmware.ota.bin" "release/volcano-hybrid-dial-${GITHUB_REF_NAME}.ota.bin"
+          cp "$build_dir/firmware.elf" "release/volcano-hybrid-dial-${GITHUB_REF_NAME}.elf"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: volcano-hybrid-dial-${{ github.ref_name }}
+          path: release/
+      # Only a real tag publishes a Release, and only as a draft -- held
+      # for a person to review and publish by hand, not auto-published
+      # the moment a tag is pushed. workflow_dispatch (no tag) stops at
+      # the workflow artifact above, for trying this pipeline itself
+      # without cutting anything.
+      - name: Draft a GitHub Release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            release/*.factory.bin release/*.ota.bin release/*.elf \
+            --draft \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes
