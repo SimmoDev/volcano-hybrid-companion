@@ -6,11 +6,10 @@ install button, which flashes `firmware/m5stack-dial.yaml`'s factory image over
 WebSerial with no ESPHome toolchain needed. Deployed to GitHub Pages by
 [`.github/workflows/pages.yml`](../.github/workflows/pages.yml).
 
-**Not live yet.** GitHub Pages isn't enabled for this repository (Settings →
-Pages → Source: GitHub Actions is what `pages.yml` expects), and no release
-has been cut for it to point at — see the checklist in ADR-0013's Notes.
-Pushing `pages.yml` to `main` does not by itself publish anything; nothing
-here becomes reachable until Pages is enabled.
+**Live** at https://simmodev.github.io/volcano-hybrid-companion/. The install
+button itself has nothing to flash yet, though — no release has been cut for
+`manifest.json` to point at, so it will fail until one exists — see the
+checklist in ADR-0013's Notes.
 
 ## Files
 

@@ -122,7 +122,7 @@ volcano-hybrid-companion/
 └── README.md
 ```
 
-`firmware/` holds the M5Stack Dial configuration the project will ship (`m5stack-dial.yaml`, split into `dial/*.yaml` packages). `examples/` holds a single dev-board configuration that exercises the `volcano` component in isolation — a compile check and BLE-only test surface, not device firmware — kept available for BLE work per [ADR-0004](docs/decisions/ADR-0004-development-hardware-strategy.md). `install/` is not live yet — see its own [README](install/README.md).
+`firmware/` holds the M5Stack Dial configuration the project will ship (`m5stack-dial.yaml`, split into `dial/*.yaml` packages). `examples/` holds a single dev-board configuration that exercises the `volcano` component in isolation — a compile check and BLE-only test surface, not device firmware — kept available for BLE work per [ADR-0004](docs/decisions/ADR-0004-development-hardware-strategy.md). `install/` is live at https://simmodev.github.io/volcano-hybrid-companion/, though its install button has nothing to flash yet — see its own [README](install/README.md).
 
 ## Contributing
 

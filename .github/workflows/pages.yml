@@ -1,9 +1,9 @@
 name: Pages
 
 # Publishes install/ (the browser install page, see install/README.md) to
-# GitHub Pages. Not live yet: this needs Pages enabled for this repository
-# (Settings -> Pages -> Source: GitHub Actions) before any run here actually
-# publishes anything -- pushing this workflow file does not do that itself.
+# GitHub Pages. Live at https://simmodev.github.io/volcano-hybrid-companion/ --
+# though the install button itself has nothing to flash yet, since no release
+# exists for manifest.json to point at.
 
 on:
   push:
