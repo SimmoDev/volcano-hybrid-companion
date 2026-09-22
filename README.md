@@ -23,6 +23,7 @@ Phase 4 — release and distribution — is in progress, per [ADR-0013](docs/dec
 - [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) — how the repository is laid out and how to validate the component locally.
 - [`firmware/README.md`](firmware/README.md) — the shipped M5Stack Dial firmware: what each page does, its Home Assistant integration, and how to flash it.
 - [`examples/README.md`](examples/README.md) — the dev-board scaffold config that exercises the `volcano` component in isolation, and how to flash it.
+- [`install/README.md`](install/README.md) — the browser install page: what it does and how it's deployed.
 - [`docs/protocol/`](docs/protocol/README.md) — what is known about the Volcano Hybrid's BLE protocol, and what is still open.
 - [`docs/decisions/`](docs/decisions/README.md) — the ADR series recording each architectural decision and its reasoning.
 - [`docs/CONVENTIONS.md`](docs/CONVENTIONS.md) — terminology, spelling, Markdown and naming conventions, and commit message style.
