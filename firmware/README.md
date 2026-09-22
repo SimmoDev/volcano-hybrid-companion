@@ -6,11 +6,13 @@ check and BLE-only test surface for the `volcano` component; this is the
 configuration meant to be flashed to a device and used.
 
 The firmware is feature-complete and versioned `1.0.0`, but the project
-is not yet released: packaging it as a browser-flashable download, with
-WiFi and device details entered on the device instead of compiled in, is
-Phase 4 — see
+is not yet released. Every value a shared image cannot carry — the
+Volcano's address, WiFi credentials, the Home Assistant API key — is now
+supplied at runtime rather than compiled in; what remains of Phase 4 is
+packaging the firmware itself as a browser-flashable download and an
+over-the-air update path — see
 [ADR-0013](../docs/decisions/ADR-0013-release-and-distribution.md). Until
-then, flashing needs the ESPHome CLI, as below. See the root
+that exists, flashing needs the ESPHome CLI, as below. See the root
 [README.md](../README.md) for the phase history and
 [ADR-0012](../docs/decisions/ADR-0012-home-assistant-integration.md) for
 the Home Assistant integration.
@@ -28,18 +30,14 @@ display units, and the device-information/diagnostic strings — has a Dial
 page, so the Dial controls the Volcano fully on its own with no phone,
 browser or Home Assistant involved.
 
-Copy [`secrets.yaml.example`](secrets.yaml.example) to `secrets.yaml`
-alongside it (not committed — see the repository's `.gitignore`) and set
-`wifi_ssid`/`wifi_password` and `api_encryption_key`. A placeholder
-value is fine for `esphome config`/`esphome compile`; flashing to
-hardware needs the real WiFi credentials and a generated
-`api_encryption_key` (the committed placeholder is public — see that
-file's own comment). There is no Volcano address to set: the Dial finds
-the Volcano itself, by scanning, the first time it boots — see "Pairing"
-below. WiFi serves the Home page's WiFi status icon, the
-Connections page's WiFi status and toggle, the `web_server` page below,
-and the Home Assistant `api` connection; the on-screen UI itself needs
-none of them to navigate.
+No secrets file is needed to build or flash this configuration —
+nothing in it reads `!secret` at all. The Volcano's address, WiFi
+credentials and the Home Assistant API key are all supplied on the
+device at runtime instead: see "Onboarding" and "Pairing" below. WiFi
+serves the Home page's WiFi status icon, the Connections page's WiFi
+status and toggle, the `web_server` page below, and the Home Assistant
+`api` connection; the on-screen UI itself needs none of them to
+navigate.
 
 The config is split into `dial/*.yaml` packages by concern
 (hardware/peripherals, connectivity, shared state, the `volcano:`
@@ -56,7 +54,7 @@ Every value that changes while a page adjusts it locally (target temperature, LE
 
 ## Home Assistant
 
-The `api` block ([ADR-0012](../docs/decisions/ADR-0012-home-assistant-integration.md)) lets Home Assistant's ESPHome integration discover the Dial over WiFi and expose the same entities the `web_server` page carries — the `volcano` controls and sensors, plus the Dial firmware-version diagnostic. The Dial's own raw rotary-encoder and button inputs are kept off it. Add the device in Home Assistant with the `api_encryption_key` from your `secrets.yaml`. This was verified on real hardware: discovery, control from Home Assistant, and changes reflecting both ways across the Volcano's panel, the Dial, the `web_server` page and Home Assistant.
+The `api` block ([ADR-0012](../docs/decisions/ADR-0012-home-assistant-integration.md)) lets Home Assistant's ESPHome integration discover the Dial over WiFi and expose the same entities the `web_server` page carries — the `volcano` controls and sensors, plus the Dial firmware-version diagnostic. The Dial's own raw rotary-encoder and button inputs are kept off it. Add the device in Home Assistant: with no key compiled in, its own "Add device" flow completes the bootstrap handshake described in "Onboarding" below and keeps the key it agrees on, no manual entry needed. This was verified on real hardware: discovery, control from Home Assistant, and changes reflecting both ways across the Volcano's panel, the Dial, the `web_server` page and Home Assistant.
 
 The connection is not load-bearing. The config sets `reboot_timeout: 0s` on `api` *and* on `wifi`, so the Dial never reboots for want of an API client or a WiFi association. Losing Home Assistant, or the network, or never having either, changes nothing about BLE control, the Dial UI, or the `web_server` page — the standalone guarantee ADR-0001 requires. The trade-off is that neither component will auto-reboot to recover from a wedged network stack. This too was checked on hardware: with Home Assistant stopped, with the wrong key, and with WiFi absent, the Dial kept full control of the Volcano in every case, with no reboot.
 
@@ -83,6 +81,16 @@ This config declares no `ota:` block, so every reflash is over USB — there is 
 
 Watch for the `[volcano]` log tag: it logs heater/pump state, the auto-shutoff countdown, and current/target temperature on connect and whenever they change, including changes made at the device's own panel. Each `on_*` handler across the packages also logs at `DEBUG`, so `esphome logs` shows each peripheral responding to input.
 
+## Onboarding
+
+WiFi credentials and the Home Assistant API's per-device encryption key are both supplied at runtime, not compiled in ([ADR-0013](../docs/decisions/ADR-0013-release-and-distribution.md)). Neither blocks the rest of the Dial — an unprovisioned device still boots and runs its local UI and Volcano control fully; only WiFi and Home Assistant wait.
+
+**WiFi** is provisioned over the same USB connection used to flash the Dial, via the [Improv Wi-Fi](https://www.improv-wifi.com/serial/) protocol (`improv_serial`): a tool that speaks Improv over serial scans for networks, connects to the one chosen, and the result is saved to flash — every later boot reads it back from there, with no further setup. The eventual browser install page (the rest of Phase 4) offers this as a step right after flashing; meanwhile [ESPHome's own dashboard](https://esphome.io/guides/getting_started_hassio.html) has a "Configure Wi-Fi" button that speaks the same protocol over the same serial port `esphome logs` uses.
+
+**The API encryption key** is generated on first connection rather than baked in: `api:` boots with no key at all, accepting one bootstrap connection — Home Assistant's own "Add device" flow, or ESPHome dashboard's "Adopt" — which agrees a real, per-device key that is then saved to flash and used exclusively from then on. No released image ever carries a key that would unlock a second device.
+
+Both close after a fixed window (20 minutes by default) if neither is set up, rather than answering indefinitely — a power cycle reopens it. Watch for the `[provisioning]` log tag: it logs the window closing, if it does.
+
 ## Pairing
 
 The Dial is not told which Volcano to control at build time. On first boot, with none paired, it scans for one for about ten seconds ([ADR-0013](../docs/decisions/ADR-0013-release-and-distribution.md)) and opens the Pairing page so the search is on screen, returning to Home once a Volcano is paired: if exactly one Volcano Hybrid is in range it pairs with it and stores its address, so every later boot connects directly with no scan. Two or more are offered as a list, strongest signal first and identified by serial number — turn the dial and press it, or touch one, to choose. None leaves the page at `Not found`. Nothing about this blocks the rest of the Dial — an unpaired Dial boots and runs its local UI, and only Volcano control waits.
@@ -93,6 +101,6 @@ The Pairing page ([ADR-0011](../docs/decisions/ADR-0011-dial-ui-navigation-archi
 
 **Nothing from the Volcano — no connection, no decoded state.** The device accepts only one connection at a time and stops advertising while connected ([CONN-003](../docs/protocol/gatt-services.md#conn-003--single-connection-at-a-time)); make sure it isn't already connected to the official app. If the Pairing page (or the `Volcano address` entity on the `web_server` page) shows no address, the Dial has not paired yet — the page says why, and `Search again` on it, or opening it, searches again. The Connections page's BLE row shows `Disconnected - in use?` when the Dial has an address but cannot connect.
 
-**Home Assistant doesn't discover the Dial, or the `web_server` page is unreachable.** Check `wifi_ssid`/`wifi_password` in `secrets.yaml`, and that the machine is on the same network the Dial joined — `esphome logs` prints the IP once WiFi connects. `<hostname>.local` (`volcano-hybrid-dial.local` by default) needs mDNS, which not every network/browser combination has; the numeric IP always works. The Connections page's WiFi and Home Assistant rows show the current state on-screen.
+**Home Assistant doesn't discover the Dial, or the `web_server` page is unreachable.** Check whether WiFi has actually been provisioned yet — see "Onboarding" above; a device that has never been given a network, or whose provisioning window closed before it was, needs a fresh Improv session (power-cycle it first if the window already closed). Once connected, check that the machine is on the same network the Dial joined — `esphome logs` prints the IP once WiFi connects. `<hostname>.local` (`volcano-hybrid-dial.local` by default) needs mDNS, which not every network/browser combination has; the numeric IP always works. The Connections page's WiFi and Home Assistant rows show the current state on-screen.
 
 **The screen briefly wipes on a page change.** Expected: LVGL's draw buffer is trimmed to fit BLE and `web_server` in RAM on this PSRAM-less board (see `dial/hardware.yaml`'s comment above its `lvgl:` block), so a full-screen redraw takes several flush passes.

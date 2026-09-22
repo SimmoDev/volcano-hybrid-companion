@@ -54,9 +54,13 @@ ble_client:
 # just drops, must keep full local control of the Volcano (ADR-0001,
 # ADR-0011). Same reasoning as `api`'s reboot_timeout below. The cost is
 # losing automatic recovery from a wedged WiFi stack.
+#
+# No ssid/password here: WiFi is provisioned at runtime rather than
+# compiled in (ADR-0013), by improv_serial below. A device that has
+# never been given a network still reaches this block's on_disconnect
+# default (steady red), and reboot_timeout: 0s above already keeps it
+# from being rebooted for want of one.
 wifi:
-  ssid: !secret wifi_ssid
-  password: !secret wifi_password
   reboot_timeout: 0s
   on_connect:
     - lvgl.label.update:
@@ -76,14 +80,37 @@ wifi:
         text: "Disconnected"
 
 
+# Provisions WiFi over the same USB connection used to flash the Dial
+# (ADR-0013), rather than a captive portal's own AP and web form: scans
+# for networks, connects, and saves the credentials to flash once
+# connected, entirely within ESPHome's own improv_serial -- nothing here
+# drives it. Speaks the Improv protocol (https://www.improv-wifi.com/serial/)
+# that ESP Web Tools' browser flasher already knows, so Phase 4's install
+# page offers "Configure Wi-Fi" as a step straight after flashing with no
+# further work here; meanwhile it is reachable from `esphome dashboard`'s
+# own Improv button, or by any Improv-serial client, over the same port
+# `esphome logs` uses.
+#
+# No next_url: that is a link this device hands back once provisioning
+# succeeds, for a client to offer as "open" -- Phase 4's install page is
+# the natural target, and doesn't exist yet.
+improv_serial:
+
+
 # Home Assistant integration, per ADR-0012. Home Assistant reaches the
 # same volcano entities as web_server below; the Dial keeps full local
 # control of the Volcano with this connection absent or down, which is
 # why reboot_timeout is 0s -- the ESPHome default reboots the device
 # once no API client has connected for 15 minutes, and ADR-0001 forbids
 # Home Assistant's reachability being load-bearing for the device.
-# Encryption key from secrets.yaml, not committed (generate your own
-# with `openssl rand -base64 32`).
+#
+# No compiled-in key (ADR-0013): `encryption:` with no `key:` boots the
+# device unprovisioned. It accepts one bootstrap connection -- Home
+# Assistant's own onboarding, or ESPHome dashboard's "Adopt" -- which
+# pushes a real per-device key that ESPHome then saves to flash and uses
+# exclusively from then on (confirmed by reading api_server.cpp's
+# set_noise_psk/update_noise_psk_). No image ever ships a key that would
+# unlock more than one device.
 #
 # on_client_connected/on_client_disconnected drive the Connections
 # page's Home Assistant status line via refresh_ha_connection_status
@@ -91,7 +118,6 @@ wifi:
 # trusting either trigger's own direction -- see that script's comment.
 api:
   encryption:
-    key: !secret api_encryption_key
   reboot_timeout: 0s
   on_client_connected:
     - script.execute: refresh_ha_connection_status
@@ -115,6 +141,26 @@ web_server:
   port: 80
   local: true
   version: 3
+
+
+# Closes the two provisioning paths above after a fixed window, rather
+# than leaving WiFi-improv listening and the API's bootstrap key
+# answering indefinitely on a device its owner never got around to
+# setting up (ADR-0013). ESPHome's own provisioning: component tracks
+# every source that needs it -- api (registers itself once its
+# encryption has no key) and network connectivity, which provisioning:
+# tracks built in -- and closes the window once every one of them is
+# either satisfied or the timeout below elapses; a power cycle reopens
+# it (confirmed by reading provisioning.cpp). 20 minutes is generous for
+# an unhurried first setup without leaving the bootstrap key open
+# forever on a device that was put down mid-way through.
+#
+# Gates only WiFi/API onboarding, never the Volcano connection: BLE
+# pairing and control run over their own path regardless (ADR-0001's
+# standalone guarantee, the same carve-out api/wifi's own
+# reboot_timeout above makes).
+provisioning:
+  timeout: 20min
 
 
 # Blinks the BLE status icon while CONNECTING (ble_connecting, set by
