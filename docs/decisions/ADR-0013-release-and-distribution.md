@@ -82,7 +82,7 @@ Rejected as the primary path: a desktop flasher is a per-OS artefact to build, s
 - The dev-board scaffold under `examples/` is out of scope: it stays a from-source compile and BLE-test surface, keeps its `secrets.yaml` flow, and gains neither runtime onboarding nor `ota:`.
 - **Phase 4 exit checklist.** The Decision points above, consolidated as the gate for cutting the release:
   - [x] The Dial factory image builds reproducibly from a tagged commit.
-  - [x] A published install page flashes that image over WebSerial and completes WiFi provisioning.
+  - [ ] A published install page flashes that image over WebSerial and completes WiFi provisioning.
   - [x] The Volcano BLE address is set on-device, with no compile-time substitution required.
   - [x] Each install uses its own API encryption key; no shared key ships in the image.
   - [x] The Dial firmware carries `ota:` with `safe_mode`, verified by an over-the-air update on real hardware.
