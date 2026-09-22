@@ -214,7 +214,15 @@ volcano:
             if (std::isnan(x))
               return std::string("--:--");
             int total = (int) x;
-            char buf[8];
+            // Clamped to CMD-003's confirmed 0-21600s range so GCC's
+            // -Wformat-truncation can see the printed width is bounded --
+            // an unconstrained int cast from a float otherwise reads as
+            // able to need far more than 12 bytes to print.
+            if (total < 0)
+              total = 0;
+            if (total > 21600)
+              total = 21600;
+            char buf[12];
             snprintf(buf, sizeof(buf), "%02d:%02d", total / 60, total % 60);
             return std::string(buf);
   # Rotary-adjusted per ADR-0011's shared numeric-page template, same
