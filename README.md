@@ -117,11 +117,12 @@ volcano-hybrid-companion/
 │   └── volcano/      # Volcano component, as an ESPHome external component
 ├── firmware/         # Shipped device firmware (the M5Stack Dial config)
 ├── examples/         # Dev-board scaffold config for exercising the component
+├── install/          # The browser install page (ESP Web Tools), for GitHub Pages
 ├── docs/             # Design decisions, protocol notes, architecture
 └── README.md
 ```
 
-`firmware/` holds the M5Stack Dial configuration the project will ship (`m5stack-dial.yaml`, split into `dial/*.yaml` packages). `examples/` holds a single dev-board configuration that exercises the `volcano` component in isolation — a compile check and BLE-only test surface, not device firmware — kept available for BLE work per [ADR-0004](docs/decisions/ADR-0004-development-hardware-strategy.md).
+`firmware/` holds the M5Stack Dial configuration the project will ship (`m5stack-dial.yaml`, split into `dial/*.yaml` packages). `examples/` holds a single dev-board configuration that exercises the `volcano` component in isolation — a compile check and BLE-only test surface, not device firmware — kept available for BLE work per [ADR-0004](docs/decisions/ADR-0004-development-hardware-strategy.md). `install/` is not live yet — see its own [README](install/README.md).
 
 ## Contributing
 

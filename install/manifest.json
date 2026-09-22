@@ -1,0 +1,17 @@
+{
+  "name": "Volcano Hybrid Companion — M5Stack Dial",
+  "version": "1.0.0",
+  "new_install_prompt_erase": false,
+  "new_install_improv_wait_time": 10,
+  "builds": [
+    {
+      "chipFamily": "ESP32-S3",
+      "parts": [
+        {
+          "path": "https://github.com/SimmoDev/volcano-hybrid-companion/releases/latest/download/volcano-hybrid-dial.factory.bin",
+          "offset": 0
+        }
+      ]
+    }
+  ]
+}

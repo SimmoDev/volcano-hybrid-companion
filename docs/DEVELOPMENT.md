@@ -72,6 +72,8 @@ The `esp_ble_gattc_*` reads and writes, and the GATT event sequencing around the
 
 [`.github/workflows/release.yml`](../.github/workflows/release.yml) is separate: it builds the Dial's factory image against a pinned ESPHome version (unlike `ci.yml`'s own deliberately unpinned install — a release needs the same tagged commit to keep producing the same binary later) and, for a real `v*` tag, drafts a GitHub Release carrying it, after checking the tag matches `dial/hardware.yaml`'s own version string. `workflow_dispatch` runs the build alone, for trying the pipeline without a tag. See [ADR-0013](decisions/ADR-0013-release-and-distribution.md). Not yet exercised for a real tag — the project isn't released.
 
+[`.github/workflows/pages.yml`](../.github/workflows/pages.yml) deploys [`install/`](../install/README.md) — the browser install page — to GitHub Pages on a push that touches it. Not live: GitHub Pages isn't enabled for the repository yet, so this workflow succeeding publishes nothing until it is.
+
 Three local pre-commit hooks, defined in [`.pre-commit-config.yaml`](../.pre-commit-config.yaml):
 
 - **`clang-format`** — reformats `components/volcano/`'s C++ in place, matching the CI check exactly (same pinned version). See [`docs/CONVENTIONS.md`](CONVENTIONS.md#code-formatting-expectations).

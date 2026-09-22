@@ -1,0 +1,42 @@
+name: Pages
+
+# Publishes install/ (the browser install page, see install/README.md) to
+# GitHub Pages. Not live yet: this needs Pages enabled for this repository
+# (Settings -> Pages -> Source: GitHub Actions) before any run here actually
+# publishes anything -- pushing this workflow file does not do that itself.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "install/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Only one deployment at a time; a second push while one is still running
+# waits for it rather than racing it, but never cancels a deployment
+# already in flight partway through.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy the install page
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: install/
+      - id: deployment
+        uses: actions/deploy-pages@v5
