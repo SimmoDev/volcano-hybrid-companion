@@ -54,7 +54,6 @@ jobs:
         run: esphome config examples/esp32-s3-devkit.yaml
       - name: esphome compile (dev board)
         run: esphome compile examples/esp32-s3-devkit.yaml
-      # The Dial firmware (firmware/m5stack-dial.yaml), reading
       # The Dial firmware (firmware/m5stack-dial.yaml) needs no secrets.yaml
       # of its own to validate/compile -- WiFi and the api: block's
       # encryption key are both provisioned at runtime (ADR-0013), not
