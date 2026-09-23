@@ -84,11 +84,11 @@ jobs:
       # two for that one purpose.
       #
       # Unversioned filenames, deliberately, unlike the workflow
-      # artifact's own name below: install/manifest.json (the browser
-      # install page's own page, install/README.md) points at these by
-      # GitHub's stable .../releases/latest/download/<name> alias, so it
-      # never needs touching again as later releases replace this one --
-      # a versioned filename here would break that alias every time.
+      # artifact's own name below: the browser install page
+      # (install/README.md) fetches this exact filename by pattern every
+      # time a release publishes, to work around a CORS gap in GitHub's own
+      # release asset hosting -- see that file's own comment. A versioned
+      # filename here would break that match every time.
       - name: Collect build outputs
         run: |
           build_dir="firmware/.esphome/build/volcano-hybrid-dial/build"

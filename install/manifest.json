@@ -8,7 +8,7 @@
       "chipFamily": "ESP32-S3",
       "parts": [
         {
-          "path": "https://github.com/SimmoDev/volcano-hybrid-companion/releases/latest/download/volcano-hybrid-dial.factory.bin",
+          "path": "firmware/volcano-hybrid-dial.factory.bin",
           "offset": 0
         }
       ]

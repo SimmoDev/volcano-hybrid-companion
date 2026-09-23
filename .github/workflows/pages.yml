@@ -1,9 +1,11 @@
 name: Pages
 
 # Publishes install/ (the browser install page, see install/README.md) to
-# GitHub Pages. Live at https://simmodev.github.io/volcano-hybrid-companion/ --
-# though the install button itself has nothing to flash yet, since no release
-# exists for manifest.json to point at.
+# GitHub Pages, plus the latest published release's factory image fetched
+# in at deploy time -- see the "Stage the site" step for why that's part of
+# this workflow rather than a static file in install/ itself.
+#
+# Live at https://simmodev.github.io/volcano-hybrid-companion/.
 
 on:
   push:
@@ -11,6 +13,11 @@ on:
     paths:
       - "install/**"
       - ".github/workflows/pages.yml"
+  # Refreshes the hosted factory image the moment a new release goes live,
+  # not just when install/ itself changes -- otherwise the page would keep
+  # serving whatever release was current the last time someone touched it.
+  release:
+    types: [published]
   workflow_dispatch:
 
 permissions:
@@ -34,9 +41,32 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v7
+      # The factory image is fetched here rather than referenced by URL in
+      # manifest.json, because ESP Web Tools reads it via fetch(), which
+      # enforces CORS -- and GitHub's release asset storage does not send
+      # an Access-Control-Allow-Origin header on the final (signed,
+      # redirected-to) response, confirmed by reading it directly. A plain
+      # download (curl, or a browser's own top-level navigation) isn't
+      # subject to that and works fine, which is what made this look fine
+      # under earlier, non-fetch() checks. Serving it from this same origin
+      # instead sidesteps CORS entirely -- a same-origin request needs no
+      # such header. `gh release download` with no tag targets whatever
+      # release is currently latest (GitHub's own definition: excludes
+      # drafts and prereleases), the same one manifest.json used to name by
+      # URL, so nothing else about which build gets served has changed.
+      - name: Stage the site
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p _site/firmware
+          cp -r install/. _site/
+          gh release download --repo "${{ github.repository }}" \
+            --pattern "volcano-hybrid-dial.factory.bin" \
+            --output _site/firmware/volcano-hybrid-dial.factory.bin \
+            --clobber
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
         with:
-          path: install/
+          path: _site/
       - id: deployment
         uses: actions/deploy-pages@v5
