@@ -5,18 +5,19 @@ Dial. The config under [`examples/`](../examples/README.md) is a compile
 check and BLE-only test surface for the `volcano` component; this is the
 configuration meant to be flashed to a device and used.
 
-The firmware is feature-complete and versioned `1.0.0`, but the project
-is not yet released. Every value a shared image cannot carry — the
-Volcano's address, WiFi credentials, the Home Assistant API key — is now
-supplied at runtime rather than compiled in, and the firmware carries an
-over-the-air update path (see "Flashing and watching logs" below); what
-remains of Phase 4 is packaging the firmware itself as a
-browser-flashable download — see
+The firmware is feature-complete and versioned `1.0.0`. Every value a
+shared image cannot carry — the Volcano's address, WiFi credentials, the
+Home Assistant API key — is supplied at runtime rather than compiled in,
+and the firmware carries an over-the-air update path (see "Flashing and
+watching logs" below). `v1.0.0` is tagged and built, and that build is
+drafted as a GitHub Release; the project is not released until that
+draft is published — see
 [ADR-0013](../docs/decisions/ADR-0013-release-and-distribution.md). Until
-that exists, flashing needs the ESPHome CLI, as below. See the root
-[README.md](../README.md) for the phase history and
-[ADR-0012](../docs/decisions/ADR-0012-home-assistant-integration.md) for
-the Home Assistant integration.
+then, flashing needs the ESPHome CLI, as below — the browser install
+page ([`install/`](../install/README.md)) is live but has nothing to
+flash yet. See the root [README.md](../README.md) for the phase history
+and [ADR-0012](../docs/decisions/ADR-0012-home-assistant-integration.md)
+for the Home Assistant integration.
 
 ## `m5stack-dial.yaml`
 
