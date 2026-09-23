@@ -27,6 +27,7 @@ Phase 4 — release and distribution — is complete, per [ADR-0013](docs/decisi
 - [`docs/protocol/`](docs/protocol/README.md) — what is known about the Volcano Hybrid's BLE protocol, and what is still open.
 - [`docs/decisions/`](docs/decisions/README.md) — the ADR series recording each architectural decision and its reasoning.
 - [`docs/CONVENTIONS.md`](docs/CONVENTIONS.md) — terminology, spelling, Markdown and naming conventions, and commit message style.
+- [CONTRIBUTING.md](CONTRIBUTING.md) — how to report a bug or protocol finding, and what a pull request needs.
 
 ## Goals
 
@@ -127,7 +128,7 @@ volcano-hybrid-companion/
 
 ## Contributing
 
-Not yet open for contributions. All four phases are complete and the project is released — see "Status" above. There is not yet a contribution process — issue triage, review expectations, and so on — defined.
+Open to contributions — see [CONTRIBUTING.md](CONTRIBUTING.md) for what kind of change goes through an issue first, what can go straight to a PR, and where the existing conventions live.
 
 ## Licence
 
