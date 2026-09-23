@@ -25,21 +25,17 @@ whatever release is currently newest.
 
 ## Why the factory image isn't just linked from GitHub Releases
 
-The first version of this page pointed `manifest.json` at
-`.../releases/latest/download/volcano-hybrid-dial.factory.bin` directly —
-GitHub's own stable alias for "whichever release is newest," which looked
-like it worked: a plain download, or pasting the URL into a browser tab,
-both succeeded. It didn't actually work from the install button, which
-failed with "Failed to fetch."
-
-The difference is `fetch()`, which is how ESP Web Tools actually reads the
-image's bytes to flash it, and which — unlike a plain download or a
-top-level navigation — enforces CORS. GitHub's release asset storage
-redirects to a signed Azure Blob Storage URL that carries no
-`Access-Control-Allow-Origin` header at all (confirmed by reading its
-response headers directly), so a browser refuses to let cross-origin
-JavaScript read it, even though *fetching* it in every other sense works
-fine.
+A URL like `.../releases/latest/download/volcano-hybrid-dial.factory.bin`
+— GitHub's own stable alias for "whichever release is newest" — looks like
+it should work here: a plain download, or pasting it into a browser tab,
+both fetch it successfully. It doesn't work from the install button,
+though. ESP Web Tools reads the image's bytes via `fetch()`, which —
+unlike a plain download or a top-level navigation — enforces CORS, and
+GitHub's release asset storage redirects to a signed Azure Blob Storage
+URL that carries no `Access-Control-Allow-Origin` header at all (confirmed
+by reading its response headers directly), so a browser refuses to let
+cross-origin JavaScript read it, even though *fetching* it in every other
+sense works fine.
 
 [`.github/workflows/pages.yml`](../.github/workflows/pages.yml) works
 around this by downloading the latest release's factory image itself (a
