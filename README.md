@@ -8,7 +8,7 @@ This project is **not affiliated with, endorsed by, or supported by Storz & Bick
 
 ## Status
 
-Phases 1–3 are complete and verified against real hardware: the BLE foundation, the M5Stack Dial's local UI, and the optional Home Assistant integration. Phase 4 — packaging the Dial firmware as a browser-flashable release a Volcano owner can install without a development environment — is nearly done, per [ADR-0013](docs/decisions/ADR-0013-release-and-distribution.md). `v1.0.0` is tagged and its build is drafted as a GitHub Release, not yet published; the project is not released until that draft is.
+**All four phases are complete, and the project is released.** `v1.0.0` is tagged, built, and published as a [GitHub Release](https://github.com/SimmoDev/volcano-hybrid-companion/releases/tag/v1.0.0) — **[install it from your browser](https://simmodev.github.io/volcano-hybrid-companion/)**, no development environment needed (Chrome or Edge on a desktop; see [`firmware/README.md`](firmware/README.md#installing) for why, and the from-source alternative if that's not you).
 
 The `volcano` ESPHome component connects to the device and reads the auto-shutoff countdown, current temperature, the heater-runtime meter and the device-information strings, and both reports and sets heater and pump state, the target temperature, the auto-shutoff duration, LED brightness, and the vibration, display-on-cooling and display-units settings — all verified against real hardware. Per [ADR-0009](docs/decisions/ADR-0009-volcano-abstraction-layer-interface.md), the component is split into a BLE communication layer (`VolcanoBleClient`), the hardware-independent Volcano abstraction layer control interfaces depend on (`VolcanoDevice`), and a thin ESPHome integration (`VolcanoComponent`) — also verified against real hardware. BLE protocol discovery continues as a living document — see [`docs/protocol/`](docs/protocol/README.md) for recorded findings.
 
@@ -16,7 +16,7 @@ The M5Stack Dial's local UI is complete: every page [ADR-0011](docs/decisions/AD
 
 Phase 3 — optional Home Assistant integration — is complete. Both ESPHome configurations enable an encrypted `api`, the Dial's Connections page shows Home Assistant's connection status, and the standalone guarantee is verified against real hardware: the Dial keeps full control of the Volcano with Home Assistant stopped, the API key wrong, or WiFi absent, and never reboots for want of either. See [ADR-0012](docs/decisions/ADR-0012-home-assistant-integration.md).
 
-Phase 4 — release and distribution — is nearly done, per [ADR-0013](docs/decisions/ADR-0013-release-and-distribution.md). Device-specific configuration has moved from compile time to runtime, verified against real hardware: the Volcano's address is found by scanning rather than given at build time (see "Pairing" in [`firmware/README.md`](firmware/README.md#pairing)), and WiFi credentials and the Home Assistant API key are both provisioned on-device after flashing rather than compiled into `secrets.yaml` (see "Onboarding" there). The Dial firmware also carries an over-the-air update path, hardware-verified (see "Flashing and watching logs" there). The firmware itself is now packaged as a browser-flashable image too — [`install/`](install/README.md) is live, and `v1.0.0` is tagged and built, drafted as a GitHub Release. What remains is publishing that draft; until it is, the install page has nothing to flash and the ESPHome toolchain is still the only way to get the firmware onto a device.
+Phase 4 — release and distribution — is complete, per [ADR-0013](docs/decisions/ADR-0013-release-and-distribution.md). Device-specific configuration has moved from compile time to runtime, verified against real hardware: the Volcano's address is found by scanning rather than given at build time (see "Pairing" in [`firmware/README.md`](firmware/README.md#pairing)), and WiFi credentials and the Home Assistant API key are both provisioned on-device after flashing rather than compiled into `secrets.yaml` (see "Onboarding" there). The Dial firmware also carries an over-the-air update path, hardware-verified (see "Flashing and watching logs" there). The firmware itself is packaged as a browser-flashable image, served from [`install/`](install/README.md), and `v1.0.0` is tagged and published as a GitHub Release with that image attached. A full install through the published page — flashing a freshly erased Dial, then its own WiFi-provisioning prompt — was verified end to end on real hardware.
 
 ## Documentation
 
@@ -57,7 +57,7 @@ ESPHome provides the firmware framework this project is built on, and also provi
 - Home Assistant is an additional, optional control interface — never a requirement.
 - The device must keep controlling the Volcano if Home Assistant is unreachable.
 
-**Phase 4 — Release and distribution (in progress)**
+**Phase 4 — Release and distribution (complete)**
 - Package the Dial firmware as a prebuilt binary, flashable from a web browser with no ESPHome toolchain.
 - Move WiFi credentials, the Volcano's BLE address, and the API encryption key from compile time to on-device setup.
 - Add an over-the-air update path to the Dial firmware.
@@ -104,7 +104,7 @@ These constraints apply for the life of the project, not just Phase 1:
 - ESPHome native API, encrypted
 - Home Assistant integration
 
-**Phase 4 (in progress)**
+**Phase 4 (complete)**
 - Browser-based flashing (WebSerial / ESP Web Tools)
 - GitHub Releases and a hosted install page
 - On-device provisioning
@@ -123,11 +123,11 @@ volcano-hybrid-companion/
 └── README.md
 ```
 
-`firmware/` holds the M5Stack Dial configuration the project will ship (`m5stack-dial.yaml`, split into `dial/*.yaml` packages). `examples/` holds a single dev-board configuration that exercises the `volcano` component in isolation — a compile check and BLE-only test surface, not device firmware — kept available for BLE work per [ADR-0004](docs/decisions/ADR-0004-development-hardware-strategy.md). `install/` is live at https://simmodev.github.io/volcano-hybrid-companion/, though its install button has nothing to flash yet — see its own [README](install/README.md).
+`firmware/` holds the M5Stack Dial configuration the project will ship (`m5stack-dial.yaml`, split into `dial/*.yaml` packages). `examples/` holds a single dev-board configuration that exercises the `volcano` component in isolation — a compile check and BLE-only test surface, not device firmware — kept available for BLE work per [ADR-0004](docs/decisions/ADR-0004-development-hardware-strategy.md). `install/` is live at https://simmodev.github.io/volcano-hybrid-companion/ — see its own [README](install/README.md).
 
 ## Contributing
 
-Not yet open for contributions. Phases 1–3 — the BLE foundation, the M5Stack Dial UI, and the optional Home Assistant integration — are complete, and Phase 4 (packaging the first release) is nearly done — see "Status" above. There is not yet a contribution process — issue triage, review expectations, and so on — defined.
+Not yet open for contributions. All four phases are complete and the project is released — see "Status" above. There is not yet a contribution process — issue triage, review expectations, and so on — defined.
 
 ## Licence
 

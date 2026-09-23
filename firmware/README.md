@@ -5,19 +5,37 @@ Dial. The config under [`examples/`](../examples/README.md) is a compile
 check and BLE-only test surface for the `volcano` component; this is the
 configuration meant to be flashed to a device and used.
 
-The firmware is feature-complete and versioned `1.0.0`. Every value a
+The firmware is feature-complete and released as `v1.0.0`. Every value a
 shared image cannot carry — the Volcano's address, WiFi credentials, the
 Home Assistant API key — is supplied at runtime rather than compiled in,
 and the firmware carries an over-the-air update path (see "Flashing and
-watching logs" below). `v1.0.0` is tagged and built, and that build is
-drafted as a GitHub Release; the project is not released until that
-draft is published — see
-[ADR-0013](../docs/decisions/ADR-0013-release-and-distribution.md). Until
-then, flashing needs the ESPHome CLI, as below — the browser install
-page ([`install/`](../install/README.md)) is live but has nothing to
-flash yet. See the root [README.md](../README.md) for the phase history
-and [ADR-0012](../docs/decisions/ADR-0012-home-assistant-integration.md)
-for the Home Assistant integration.
+watching logs" below). See "Installing" below to get it onto a device,
+[ADR-0013](../docs/decisions/ADR-0013-release-and-distribution.md) for
+how the release itself is built and shipped, the root
+[README.md](../README.md) for the phase history, and
+[ADR-0012](../docs/decisions/ADR-0012-home-assistant-integration.md) for
+the Home Assistant integration.
+
+## Installing
+
+**[Flash it from your browser](https://simmodev.github.io/volcano-hybrid-companion/)** — the
+normal path, and the one this project's install page ([`install/`](../install/README.md))
+exists for. No ESPHome toolchain, no checkout of this repository: connect
+the Dial over USB-C and click Install.
+
+This needs **Chrome or Edge, on a desktop** — Web Serial, the browser
+feature it depends on, doesn't exist in Firefox, Safari, or any mobile
+browser, on any platform. That's a limitation of Web Serial itself, not
+something this project can work around. On one of those, or without a
+Chromium browser at all, build and flash from source instead — see
+"Flashing and watching logs" below.
+
+Right after flashing, the same button offers to connect the Dial to
+WiFi over that same USB connection — see "Onboarding" below for what
+that step actually does. Once it has a network, the Dial finds its
+Volcano itself; nothing else to enter by hand. Verified on real
+hardware: a full install through this exact page, from a freshly
+erased device, ending with the Dial connected to WiFi and paired.
 
 ## `m5stack-dial.yaml`
 
@@ -68,7 +86,11 @@ The temperature entities are always Celsius, and Home Assistant converts them pe
 
 ## Flashing and watching logs
 
-Requires the [ESPHome CLI](https://esphome.io/). The first flash needs the Dial connected over USB-C — from the repository root:
+The from-source alternative to "Installing" above — needed on a browser
+Web Serial doesn't support, or for building from a checkout of this
+repository rather than a released binary. Requires the
+[ESPHome CLI](https://esphome.io/). The first flash needs the Dial
+connected over USB-C — from the repository root:
 
 ```sh
 esphome run firmware/m5stack-dial.yaml
@@ -91,7 +113,7 @@ Watch for the `[volcano]` log tag: it logs heater/pump state, the auto-shutoff c
 
 WiFi credentials and the Home Assistant API's per-device encryption key are both supplied at runtime, not compiled in ([ADR-0013](../docs/decisions/ADR-0013-release-and-distribution.md)). Neither blocks the rest of the Dial — an unprovisioned device still boots and runs its local UI and Volcano control fully; only WiFi and Home Assistant wait.
 
-**WiFi** is provisioned over the same USB connection used to flash the Dial, via the [Improv Wi-Fi](https://www.improv-wifi.com/serial/) protocol (`improv_serial`): a tool that speaks Improv over serial scans for networks, connects to the one chosen, and the result is saved to flash — every later boot reads it back from there, with no further setup. The browser install page ([`install/`](../install/README.md), live but with nothing to flash yet) offers this as a step right after flashing; meanwhile [ESPHome's own dashboard](https://esphome.io/guides/getting_started_hassio.html) has a "Configure Wi-Fi" button that speaks the same protocol over the same serial port `esphome logs` uses.
+**WiFi** is provisioned over the same USB connection used to flash the Dial, via the [Improv Wi-Fi](https://www.improv-wifi.com/serial/) protocol (`improv_serial`): a tool that speaks Improv over serial scans for networks, connects to the one chosen, and the result is saved to flash — every later boot reads it back from there, with no further setup. The browser install page ([`install/`](../install/README.md)) offers this as a step right after flashing; meanwhile [ESPHome's own dashboard](https://esphome.io/guides/getting_started_hassio.html) has a "Configure Wi-Fi" button that speaks the same protocol over the same serial port `esphome logs` uses.
 
 **The API encryption key** is generated on first connection rather than baked in: `api:` boots with no key at all, accepting one bootstrap connection — Home Assistant's own "Add device" flow, or ESPHome dashboard's "Adopt" — which agrees a real, per-device key that is then saved to flash and used exclusively from then on. No released image ever carries a key that would unlock a second device.
 
